@@ -169,7 +169,9 @@ export function usePaneTabInteractions({
     const group = enabled ? getPaneTabGroup(paneId) : undefined;
 
     if (!group || group.tabs.length <= 1) {
-      if (xOffset >= paneWidth - MENU_BUTTON_WIDTH && xOffset <= paneWidth - BORDER_PREFIX) {
+      // Widen the zone to cover tmux < 3.6 where a 2-column right border
+      // suffix shifts #[align=right] content left (see BORDER_SUFFIX_COMPAT).
+      if (xOffset >= paneWidth - MENU_BUTTON_WIDTH - BORDER_PREFIX && xOffset <= paneWidth - 1) {
         onMenuButtonClickRef.current?.(paneId, screenX, screenY);
         return true;
       }

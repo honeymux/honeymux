@@ -168,5 +168,32 @@ describe("pane tab drag helpers", () => {
     it("returns -3 for the menu button hit zone", () => {
       expect(hitTestPaneTab(overflowTabs, 19, 20, 2)).toBe(-3);
     });
+
+    it("returns -3 for menu button at tmux < 3.6 position (2-col right border suffix)", () => {
+      // tmux < 3.6 uses format_draw width = sx-4 instead of sx-2 (commit
+      // 9a8f46e554d8), shifting #[align=right] content 2 cells left.
+      // Use wider pane (maxWidth=78) so overflow indicator doesn't overlap.
+      const wideTabs: PaneTab[] = [
+        { label: "one", paneId: "%1" },
+        { label: "two", paneId: "%2" },
+      ];
+      // maxWidth=78: menu zone adjusted=[72,77], glyph at 75 (3.6+) or 73 (<3.6)
+      expect(hitTestPaneTab(wideTabs, 74, 78, 0)).toBe(-3); // adjusted=72, compat lower edge
+      expect(hitTestPaneTab(wideTabs, 75, 78, 0)).toBe(-3); // adjusted=73, ≡ on tmux <3.6
+      expect(hitTestPaneTab(wideTabs, 77, 78, 0)).toBe(-3); // adjusted=75, ≡ on tmux 3.6+
+    });
+
+    it("returns -1 past the left edge of the compat menu zone", () => {
+      const wideTabs: PaneTab[] = [
+        { label: "one", paneId: "%1" },
+        { label: "two", paneId: "%2" },
+      ];
+      expect(hitTestPaneTab(wideTabs, 73, 78, 0)).toBe(-1); // adjusted=71, outside
+    });
+
+    it("returns -3 at the right edge of the menu zone (trailing border char)", () => {
+      // maxWidth=20: adjusted=19 is the rightmost column of the format area
+      expect(hitTestPaneTab(overflowTabs, 21, 20, 2)).toBe(-3); // adjusted=19
+    });
   });
 });

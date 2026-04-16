@@ -26,6 +26,15 @@ const PROTECTED_LABEL_LEN = 8;
 /** tmux prepends 2 border chars before the format string. */
 export const BORDER_PREFIX = 2;
 
+/**
+ * Extra right-side margin present in tmux < 3.6.  Commit 9a8f46e554d8
+ * (2025-02-26) changed screen_redraw_make_pane_status from `sx - 4` to
+ * `sx + sb_w - 2`, eliminating a 2-column right border suffix.  On older
+ * tmux the #[align=right] content lands 2 cells further left because the
+ * format_draw width is narrower.
+ */
+const BORDER_SUFFIX_COMPAT = 2;
+
 /** Reserved columns for the menu button area: " ≡ ─". */
 export const MENU_BUTTON_WIDTH = 1 + MENU_GLYPH_COLS + 1 + 1;
 
@@ -206,7 +215,7 @@ export function hitTestPaneTab(tabs: PaneTab[], xOffset: number, maxWidth = 0, a
   const visibleCount = maxWidth > 0 ? computePaneTabVisible(tabs, maxWidth) : tabs.length;
   const hasOverflow = visibleCount < tabs.length;
 
-  if (maxWidth > 0 && adjusted >= maxWidth - MENU_BUTTON_WIDTH && adjusted <= maxWidth - BORDER_PREFIX) {
+  if (maxWidth > 0 && adjusted >= maxWidth - MENU_BUTTON_WIDTH - BORDER_SUFFIX_COMPAT && adjusted <= maxWidth - 1) {
     return -3;
   }
 
