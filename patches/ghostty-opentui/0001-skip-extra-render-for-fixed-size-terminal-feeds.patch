@@ -1,0 +1,70 @@
+--- a/src/terminal-buffer.test.tsx
++++ b/src/terminal-buffer.test.tsx
+@@ -787,6 +787,37 @@
+       expect(output).toContain("Done!")
+     })
+ 
++    it("should avoid scheduling an extra render for fixed-size feeds", async () => {
++      const ref = { current: null as GhosttyTerminalRenderable | null }
++
++      const { renderOnce } = await testRender(
++        <ghostty-terminal
++          ref={(r: GhosttyTerminalRenderable) => { ref.current = r }}
++          cols={40}
++          height={10}
++          persistent
++          rows={10}
++          width={40}
++        />,
++        { width: 40, height: 10 }
++      )
++
++      await renderOnce()
++
++      let renderRequests = 0
++      const terminal = ref.current!
++      const originalRequestRender = terminal.requestRender.bind(terminal)
++      terminal.requestRender = () => {
++        renderRequests += 1
++        originalRequestRender()
++      }
++
++      terminal.feed("Hello")
++      await renderOnce()
++
++      expect(renderRequests).toBe(1)
++    })
++
+     it("should reset terminal in persistent mode", async () => {
+       const ref = { current: null as GhosttyTerminalRenderable | null }
+       
+--- a/src/terminal-buffer.ts
++++ b/src/terminal-buffer.ts
+@@ -593,6 +593,18 @@
+     this.ctx.setCursorPosition(0, 0, false)
+   }
+ 
++  private syncTextInfoAfterAnsiUpdate(): void {
++    this.refreshLocalSelection()
++
++    const hasFixedViewport = typeof this._width === "number" && typeof this._height === "number"
++    if (!hasFixedViewport) {
++      this.updateTextInfo()
++      return
++    }
++
++    this.emit("line-info-change")
++  }
++
+   private renderTerminalCursor(): void {
+     if (!this._renderCursor.visible || (this._focusable && !this._focused)) {
+       this.hideTerminalCursor()
+@@ -651,7 +663,7 @@
+       }
+ 
+       this.textBuffer.setStyledText(terminalDataToStyledText(data, this._highlights))
+-      this.updateTextInfo()
++      this.syncTextInfoAfterAnsiUpdate()
+       if (this._showCursor) {
+         const cursorY = Math.max(0, (data.totalLines - data.rows) + data.cursor[1] - data.offset)
+         this._renderCursor.x = data.cursor[0]

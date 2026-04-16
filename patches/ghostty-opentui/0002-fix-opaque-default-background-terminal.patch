@@ -1,0 +1,98 @@
+diff --git a/src/lib.zig b/src/lib.zig
+index 530b7f4..25e0c3a 100644
+--- a/src/lib.zig
++++ b/src/lib.zig
+@@ -81,7 +81,8 @@ fn getStyleFromCell(
+         else => null,
+     };
+ 
+-    // If the background color matches the terminal's default background, treat it as transparent
++    // If the background color matches the terminal's default background, treat it as transparent.
++    // Consumers can provide an explicit default bg at the renderable level instead.
+     if (bg) |cell_bg| {
+         if (terminal_bg) |term_bg| {
+             if (cell_bg.r == term_bg.r and cell_bg.g == term_bg.g and cell_bg.b == term_bg.b) {
+@@ -170,7 +171,7 @@ pub fn writeJsonOutput(
+     try writer.writeAll("{");
+     try writer.print("\"cols\":{},\"rows\":{},", .{ screen.pages.cols, screen.pages.rows });
+     try writer.print("\"cursor\":[{},{}],", .{ screen.cursor.x, screen.cursor.y });
+-    try writer.print("\"cursorVisible\":{},", .{ cursor_visible });
++    try writer.print("\"cursorVisible\":{},", .{cursor_visible});
+     try writer.print("\"cursorStyle\":\"{s}\",", .{cursor_style_name});
+     try writer.print("\"offset\":{},\"totalLines\":{},", .{ offset, total_lines });
+     try writer.writeAll("\"lines\":[");
+@@ -946,6 +947,28 @@ test "normal text does not get trailing padding" {
+     try testing.expect(std.mem.indexOf(u8, json, ",5]") != null);
+ }
+ 
++test "getStyleFromCell treats backgrounds matching the terminal background as transparent" {
++    const alloc = testing.allocator;
++
++    var t: ghostty_vt.Terminal = try .init(alloc, .{ .cols = 80, .rows = 24 });
++    defer t.deinit(alloc);
++
++    var stream = t.vtStream();
++    defer stream.deinit();
++
++    const terminal_bg = color.RGB{ .r = 0x1e, .g = 0x1e, .b = 0x1e };
++    try stream.nextSlice("\x1b[48;2;30;30;30mX");
++
++    const screen = t.screens.active;
++    const palette = &t.colors.palette.current;
++    var row_iter = screen.pages.rowIterator(.right_down, .{ .screen = .{} }, null);
++    const pin = row_iter.next().?;
++    const cells = pin.cells(.all);
++    const style = getStyleFromCell(&cells[0], pin, palette, terminal_bg);
++
++    try testing.expect(style.bg == null);
++}
++
+ test "background color with EL extends to full line width" {
+     const alloc = testing.allocator;
+ 
+diff --git a/src/terminal-buffer.test.tsx b/src/terminal-buffer.test.tsx
+index 6d64a06..5a1047a 100644
+--- a/src/terminal-buffer.test.tsx
++++ b/src/terminal-buffer.test.tsx
+@@ -87,6 +87,27 @@ describe("GhosttyTerminalRenderable", () => {
+ `)
+   })
+ 
++  it("should honor explicit default fg/bg props for plain terminal text", async () => {
++    const { renderOnce, captureSpans } = await testRender(
++      <ghostty-terminal ansi="Hello" bg="#010203" cols={20} fg="#f0e0d0" rows={5} style={{ width: 20, height: 5 }} />,
++      { width: 20, height: 5 },
++    )
++
++    await renderOnce()
++
++    const data = captureSpans()
++    const firstLine = data.lines[0]
++    const helloSpan = firstLine.spans.find((s) => s.text.includes("Hello"))
++
++    expect(helloSpan).toBeDefined()
++    expect(helloSpan!.bg.r).toBeCloseTo(1 / 255)
++    expect(helloSpan!.bg.g).toBeCloseTo(2 / 255)
++    expect(helloSpan!.bg.b).toBeCloseTo(3 / 255)
++    expect(helloSpan!.fg.r).toBeCloseTo(240 / 255)
++    expect(helloSpan!.fg.g).toBeCloseTo(224 / 255)
++    expect(helloSpan!.fg.b).toBeCloseTo(208 / 255)
++  })
++
+   it("should render colored text", async () => {
+     const ansi = "\x1b[31mRed\x1b[0m \x1b[32mGreen\x1b[0m \x1b[34mBlue\x1b[0m"
+     const { renderOnce, captureCharFrame } = await testRender(
+diff --git a/src/terminal-buffer.ts b/src/terminal-buffer.ts
+index e948e8a..9fab91a 100644
+--- a/src/terminal-buffer.ts
++++ b/src/terminal-buffer.ts
+@@ -360,7 +360,8 @@ export class GhosttyTerminalRenderable extends TextBufferRenderable {
+   constructor(ctx: RenderContext, options: GhosttyTerminalOptions) {
+     super(ctx, {
+       ...options,
+-      fg: DEFAULT_FG,
++      bg: options.bg ?? DEFAULT_BG,
++      fg: options.fg ?? DEFAULT_FG,
+       wrapMode: "none",
+     })
+ 

@@ -1,0 +1,31 @@
+diff --git a/src/renderables/Box.ts b/src/renderables/Box.ts
+index 4c871df7..92819a90 100644
+--- a/src/renderables/Box.ts
++++ b/src/renderables/Box.ts
+@@ -330,11 +330,24 @@ export class BoxRenderable extends Renderable {
+   }
+ 
+   protected renderSelf(buffer: OptimizedBuffer, _deltaTime: number): void {
+-    const currentBorderColor = this.getCurrentBorderColor()
+-    const { x, y } = this.getRenderOrigin(buffer)
+     if (!this.suppressFillDuringFrameBufferRender) {
+       this.renderFill(buffer)
+     }
++
++    // For pure layout containers (no border, no title) the drawBox call
++    // would only have been drawing the fill, which renderFill already
++    // handled above.  Skip the FFI boundary crossing entirely — the Zig
++    // side would otherwise pay for scissor checks and no-op loops over
++    // the border/title code paths for every structural <box> in the tree.
++    const hasBorder =
++      this.borderSides.top || this.borderSides.right || this.borderSides.bottom || this.borderSides.left
++    const hasTitle = this._title != null || this._bottomTitle != null
++    if (!hasBorder && !hasTitle) {
++      return
++    }
++
++    const currentBorderColor = this.getCurrentBorderColor()
++    const { x, y } = this.getRenderOrigin(buffer)
+     const borderBackgroundColor = this.shouldFill ? TRANSPARENT : this._backgroundColor
+     buffer.drawBox({
+       x,

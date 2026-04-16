@@ -1,0 +1,4038 @@
+diff --git a/docs/wide-grapheme-alpha-blending-tests.svg b/docs/wide-grapheme-alpha-blending-tests.svg
+new file mode 100644
+index 00000000..41bc770e
+--- /dev/null
++++ b/docs/wide-grapheme-alpha-blending-tests.svg
+@@ -0,0 +1,444 @@
++<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1540 920" width="1540" height="920" role="img" aria-labelledby="title desc">
++  <title id="title">Wide grapheme alpha-blending test map</title>
++  <desc id="desc">Twelve panels illustrating the current wide-grapheme alpha-blending contract: wide text is preserved through interior translucent fills, wide emoji are replaced with [] placeholders, scissor clipping only updates cells inside the clip, boundary-band fills clip crossed spans with fillRectClipWideGraphemes, and renderer repaints preclear placeholder spans before restoring emoji and following cells.</desc>
++  <style>
++    .bg { fill: #f7f4ee; }
++    .panel { fill: #fffdf8; stroke: #cfc7b8; stroke-width: 1.5; }
++    .title { font: 700 28px Menlo, Consolas, monospace; fill: #1d1d1d; }
++    .subtitle { font: 400 14px Menlo, Consolas, monospace; fill: #5a5a5a; }
++    .panel-title { font: 700 17px Menlo, Consolas, monospace; fill: #1d1d1d; }
++    .panel-sub { font: 400 11px Menlo, Consolas, monospace; fill: #666; }
++    .label { font: 700 11px Menlo, Consolas, monospace; fill: #666; letter-spacing: 0.6px; }
++    .call-label { font: 700 9px Menlo, Consolas, monospace; fill: #666; letter-spacing: 0.15px; }
++    .note { font: 400 11px Menlo, Consolas, monospace; fill: #4d4d4d; }
++    .note-center { text-anchor: middle; }
++    .legend { font: 400 12px Menlo, Consolas, monospace; fill: #444; }
++    .cell { fill: #fbfbfb; stroke: #b8b8b8; stroke-width: 1; rx: 4; }
++    .wg { fill: #ddd8f8; stroke: #7569b8; stroke-width: 1; rx: 4; }
++    .emoji { fill: #fde0b8; stroke: #c67a21; stroke-width: 1; rx: 4; }
++    .tint { fill: #e5f3df; stroke: #78a06a; stroke-width: 1; rx: 4; }
++    .preserve { fill: #c7efd4; stroke: #3f8a63; stroke-width: 1.25; rx: 4; }
++    .placeholder-cell { fill: #f4d9e8; stroke: #a75e84; stroke-width: 1; rx: 4; }
++    .edge-fill { fill: #dfe9f8; stroke: #6d87b4; stroke-width: 1; rx: 4; }
++    .overlay { fill: #f9d7a8; opacity: 0.42; stroke: #d48e3a; stroke-width: 1.5; stroke-dasharray: 4 3; rx: 4; }
++    .overlay-line { fill: none; stroke: #d48e3a; stroke-width: 2; stroke-dasharray: 5 3; rx: 4; }
++    .scissor { fill: none; stroke: #d95a5a; stroke-width: 2; stroke-dasharray: 5 4; rx: 6; }
++    .wg-text { font: 700 13px Menlo, Consolas, monospace; fill: #5f4512; text-anchor: middle; }
++    .b-text { font: 700 16px Menlo, Consolas, monospace; fill: #d97b1d; }
++    .ph-text { font: 700 16px Menlo, Consolas, monospace; fill: #6c3554; text-anchor: middle; }
++    .dim { fill: #8b8b8b; }
++  </style>
++
++  <defs>
++    <g id="row-base">
++      <rect class="cell" x="64" y="0" width="28" height="28"/>
++      <rect class="cell" x="96" y="0" width="28" height="28"/>
++      <rect class="cell" x="128" y="0" width="28" height="28"/>
++      <rect class="cell" x="160" y="0" width="28" height="28"/>
++      <rect class="cell" x="192" y="0" width="28" height="28"/>
++      <rect class="cell" x="224" y="0" width="28" height="28"/>
++      <rect class="cell" x="256" y="0" width="28" height="28"/>
++      <rect class="cell" x="288" y="0" width="28" height="28"/>
++    </g>
++  </defs>
++
++  <rect class="bg" x="0" y="0" width="1540" height="920"/>
++
++  <text class="title" x="24" y="44">Wide Grapheme Alpha-Blending Test Map</text>
++  <text class="subtitle" x="24" y="68">WG = wide text. EM = wide emoji. Lavender = original wide text. Gold = original emoji. Orange = translucent overlay.</text>
++  <text class="subtitle" x="24" y="88">Pale green = overlay-filled cell. Mint = preserved wide text. Rose = [] placeholder. Blue = clipped edge fill.</text>
++
++  <rect class="wg" x="24" y="104" width="28" height="18"/>
++  <text class="legend" x="60" y="117">wide text grapheme</text>
++  <rect class="emoji" x="248" y="104" width="28" height="18"/>
++  <text class="legend" x="284" y="117">wide emoji grapheme</text>
++  <rect class="overlay" x="474" y="104" width="28" height="18"/>
++  <text class="legend" x="510" y="117">translucent overlay</text>
++  <rect class="tint" x="700" y="104" width="28" height="18"/>
++  <text class="legend" x="736" y="117">overlay-filled cell</text>
++  <rect class="preserve" x="982" y="104" width="28" height="18"/>
++  <text class="legend" x="1018" y="117">preserved wide text</text>
++  <rect class="placeholder-cell" x="1250" y="104" width="28" height="18"/>
++  <text class="legend" x="1286" y="117">[] placeholder</text>
++
++  <rect class="edge-fill" x="24" y="126" width="28" height="18"/>
++  <text class="legend" x="60" y="139">clipped edge fill</text>
++  <rect class="scissor" x="248" y="124" width="32" height="22"/>
++  <text class="legend" x="292" y="139">scissor clip</text>
++
++  <g transform="translate(24,148)">
++    <rect class="panel" x="0" y="0" width="360" height="240" rx="12"/>
++    <text class="panel-title" x="16" y="28">1. Basic preservation</text>
++    <text class="panel-sub" x="16" y="44">setCellWithAlphaBlending()</text>
++    <text class="label" x="20" y="66">BEFORE</text>
++    <g transform="translate(0,72)">
++      <use href="#row-base"/>
++      <rect class="wg" x="160" y="0" width="28" height="28"/>
++      <rect class="wg" x="192" y="0" width="28" height="28"/>
++      <text class="wg-text" x="190" y="18">WG</text>
++    </g>
++    <text class="call-label" x="20" y="126">SETCELLWITHALPHABLENDING()</text>
++    <g transform="translate(0,132)">
++      <use href="#row-base"/>
++      <rect class="wg" x="160" y="0" width="28" height="28"/>
++      <rect class="wg" x="192" y="0" width="28" height="28"/>
++      <rect class="overlay" x="64" y="0" width="252" height="28"/>
++      <text class="wg-text" x="190" y="18">WG</text>
++    </g>
++    <text class="label" x="20" y="186">AFTER</text>
++    <g transform="translate(0,192)">
++      <use href="#row-base"/>
++      <rect class="tint" x="64" y="0" width="28" height="28"/>
++      <rect class="tint" x="96" y="0" width="28" height="28"/>
++      <rect class="tint" x="128" y="0" width="28" height="28"/>
++      <rect class="preserve" x="160" y="0" width="28" height="28"/>
++      <rect class="preserve" x="192" y="0" width="28" height="28"/>
++      <rect class="tint" x="224" y="0" width="28" height="28"/>
++      <rect class="tint" x="256" y="0" width="28" height="28"/>
++      <rect class="tint" x="288" y="0" width="28" height="28"/>
++      <text class="wg-text" x="190" y="18">WG</text>
++    </g>
++  </g>
++
++  <g transform="translate(400,148)">
++    <rect class="panel" x="0" y="0" width="360" height="240" rx="12"/>
++    <text class="panel-title" x="16" y="28">2. Emoji placeholder</text>
++    <text class="panel-sub" x="16" y="44">fillRect() over a wide emoji</text>
++    <text class="label" x="20" y="66">BEFORE</text>
++    <g transform="translate(0,72)">
++      <use href="#row-base"/>
++      <rect class="emoji" x="160" y="0" width="28" height="28"/>
++      <rect class="emoji" x="192" y="0" width="28" height="28"/>
++      <text class="wg-text" x="190" y="18">EM</text>
++    </g>
++    <text class="call-label" x="20" y="126">FILLRECT()</text>
++    <g transform="translate(0,132)">
++      <use href="#row-base"/>
++      <rect class="emoji" x="160" y="0" width="28" height="28"/>
++      <rect class="emoji" x="192" y="0" width="28" height="28"/>
++      <rect class="overlay" x="64" y="0" width="252" height="28"/>
++      <text class="wg-text" x="190" y="18">EM</text>
++    </g>
++    <text class="note note-center" x="180" y="175">wide emoji become [] instead of bleeding through</text>
++    <text class="label" x="20" y="186">AFTER</text>
++    <g transform="translate(0,192)">
++      <use href="#row-base"/>
++      <rect class="tint" x="64" y="0" width="28" height="28"/>
++      <rect class="tint" x="96" y="0" width="28" height="28"/>
++      <rect class="tint" x="128" y="0" width="28" height="28"/>
++      <rect class="placeholder-cell" x="160" y="0" width="28" height="28"/>
++      <rect class="placeholder-cell" x="192" y="0" width="28" height="28"/>
++      <rect class="tint" x="224" y="0" width="28" height="28"/>
++      <rect class="tint" x="256" y="0" width="28" height="28"/>
++      <rect class="tint" x="288" y="0" width="28" height="28"/>
++      <text class="ph-text" x="174" y="19">[</text>
++      <text class="ph-text" x="206" y="19">]</text>
++    </g>
++  </g>
++
++  <g transform="translate(776,148)">
++    <rect class="panel" x="0" y="0" width="360" height="240" rx="12"/>
++    <text class="panel-title" x="16" y="28">3. Multi-space pass</text>
++    <text class="panel-sub" x="16" y="44" xml:space="preserve">drawText(&quot;  &quot;) over one span</text>
++    <text class="label" x="20" y="66">BEFORE</text>
++    <g transform="translate(0,72)">
++      <use href="#row-base"/>
++      <rect class="wg" x="160" y="0" width="28" height="28"/>
++      <rect class="wg" x="192" y="0" width="28" height="28"/>
++      <text class="wg-text" x="190" y="18">WG</text>
++    </g>
++    <text class="call-label" x="20" y="126" xml:space="preserve">DRAWTEXT(&quot;  &quot;)</text>
++    <g transform="translate(0,132)">
++      <use href="#row-base"/>
++      <rect class="wg" x="160" y="0" width="28" height="28"/>
++      <rect class="wg" x="192" y="0" width="28" height="28"/>
++      <rect class="overlay" x="160" y="0" width="28" height="28"/>
++      <rect class="overlay" x="192" y="0" width="28" height="28"/>
++      <text class="wg-text" x="190" y="18">WG</text>
++    </g>
++    <text class="note note-center" x="180" y="175">second space is skipped, not re-blended</text>
++    <text class="label" x="20" y="186">AFTER</text>
++    <g transform="translate(0,192)">
++      <use href="#row-base"/>
++      <rect class="preserve" x="160" y="0" width="28" height="28"/>
++      <rect class="preserve" x="192" y="0" width="28" height="28"/>
++      <text class="wg-text" x="190" y="18">WG</text>
++    </g>
++  </g>
++
++  <g transform="translate(1152,148)">
++    <rect class="panel" x="0" y="0" width="360" height="240" rx="12"/>
++    <text class="panel-title" x="16" y="28">4. Multiple spans</text>
++    <text class="panel-sub" x="16" y="44">drawText() across two graphemes</text>
++    <text class="label" x="20" y="66">BEFORE</text>
++    <g transform="translate(0,72)">
++      <use href="#row-base"/>
++      <rect class="wg" x="128" y="0" width="28" height="28"/>
++      <rect class="wg" x="160" y="0" width="28" height="28"/>
++      <rect class="wg" x="224" y="0" width="28" height="28"/>
++      <rect class="wg" x="256" y="0" width="28" height="28"/>
++      <text class="wg-text" x="158" y="18">WG</text>
++      <text class="wg-text" x="254" y="18">WG</text>
++    </g>
++    <text class="call-label" x="20" y="126" xml:space="preserve">DRAWTEXT(&quot;          &quot;)</text>
++    <g transform="translate(0,132)">
++      <use href="#row-base"/>
++      <rect class="wg" x="128" y="0" width="28" height="28"/>
++      <rect class="wg" x="160" y="0" width="28" height="28"/>
++      <rect class="wg" x="224" y="0" width="28" height="28"/>
++      <rect class="wg" x="256" y="0" width="28" height="28"/>
++      <rect class="overlay" x="64" y="0" width="252" height="28"/>
++      <text class="wg-text" x="158" y="18">WG</text>
++      <text class="wg-text" x="254" y="18">WG</text>
++    </g>
++    <text class="note note-center" x="180" y="175">cursor resets after the gap between spans</text>
++    <text class="label" x="20" y="186">AFTER</text>
++    <g transform="translate(0,192)">
++      <use href="#row-base"/>
++      <rect class="tint" x="64" y="0" width="28" height="28"/>
++      <rect class="tint" x="96" y="0" width="28" height="28"/>
++      <rect class="preserve" x="128" y="0" width="28" height="28"/>
++      <rect class="preserve" x="160" y="0" width="28" height="28"/>
++      <rect class="tint" x="192" y="0" width="28" height="28"/>
++      <rect class="preserve" x="224" y="0" width="28" height="28"/>
++      <rect class="preserve" x="256" y="0" width="28" height="28"/>
++      <rect class="tint" x="288" y="0" width="28" height="28"/>
++      <text class="wg-text" x="158" y="18">WG</text>
++      <text class="wg-text" x="254" y="18">WG</text>
++    </g>
++  </g>
++
++  <g transform="translate(24,404)">
++    <rect class="panel" x="0" y="0" width="360" height="240" rx="12"/>
++    <text class="panel-title" x="16" y="28">5. Scissor clipping</text>
++    <text class="panel-sub" x="16" y="44">fillRect() must not bleed outside clip</text>
++    <text class="label" x="20" y="66">BEFORE</text>
++    <g transform="translate(0,72)">
++      <use href="#row-base"/>
++      <rect class="wg" x="160" y="0" width="28" height="28"/>
++      <rect class="wg" x="192" y="0" width="28" height="28"/>
++      <text class="wg-text" x="190" y="18">WG</text>
++    </g>
++    <text class="call-label" x="20" y="126">FILLRECT() WITH SCISSOR</text>
++    <g transform="translate(0,132)">
++      <use href="#row-base"/>
++      <rect class="wg" x="160" y="0" width="28" height="28"/>
++      <rect class="wg" x="192" y="0" width="28" height="28"/>
++      <rect class="overlay" x="192" y="0" width="28" height="28"/>
++      <rect class="scissor" x="189" y="-3" width="34" height="34"/>
++      <text class="wg-text" x="190" y="18">WG</text>
++    </g>
++    <text class="note note-center" x="180" y="175">only the clipped cell may change</text>
++    <text class="label" x="20" y="186">AFTER</text>
++    <g transform="translate(0,192)">
++      <use href="#row-base"/>
++      <rect class="wg" x="160" y="0" width="28" height="28"/>
++      <rect class="preserve" x="192" y="0" width="28" height="28"/>
++      <text class="wg-text" x="190" y="18">WG</text>
++    </g>
++  </g>
++
++  <g transform="translate(400,404)">
++    <rect class="panel" x="0" y="0" width="360" height="240" rx="12"/>
++    <text class="panel-title" x="16" y="28">6. Edge clip, left</text>
++    <text class="panel-sub" x="16" y="44">fillRectClipWideGraphemes()</text>
++    <text class="label" x="20" y="66">BEFORE</text>
++    <g transform="translate(0,72)">
++      <use href="#row-base"/>
++      <rect class="wg" x="160" y="0" width="28" height="28"/>
++      <rect class="wg" x="192" y="0" width="28" height="28"/>
++      <text class="wg-text" x="190" y="18">WG</text>
++    </g>
++    <text class="call-label" x="20" y="126">FILLRECTCLIPWIDEGRAPHEMES()</text>
++    <g transform="translate(0,132)">
++      <use href="#row-base"/>
++      <rect class="wg" x="160" y="0" width="28" height="28"/>
++      <rect class="wg" x="192" y="0" width="28" height="28"/>
++      <rect class="overlay" x="192" y="0" width="28" height="28"/>
++      <text class="wg-text" x="190" y="18">WG</text>
++    </g>
++    <text class="note note-center" x="180" y="175">crossed span is cleared; only the inside cell fills</text>
++    <text class="label" x="20" y="186">AFTER</text>
++    <g transform="translate(0,192)">
++      <use href="#row-base"/>
++      <rect class="edge-fill" x="192" y="0" width="28" height="28"/>
++    </g>
++  </g>
++
++  <g transform="translate(776,404)">
++    <rect class="panel" x="0" y="0" width="360" height="240" rx="12"/>
++    <text class="panel-title" x="16" y="28">7. Edge clip, right</text>
++    <text class="panel-sub" x="16" y="44">fillRectClipWideGraphemes()</text>
++    <text class="label" x="20" y="66">BEFORE</text>
++    <g transform="translate(0,72)">
++      <use href="#row-base"/>
++      <rect class="wg" x="160" y="0" width="28" height="28"/>
++      <rect class="wg" x="192" y="0" width="28" height="28"/>
++      <text class="wg-text" x="190" y="18">WG</text>
++    </g>
++    <text class="call-label" x="20" y="126">FILLRECTCLIPWIDEGRAPHEMES()</text>
++    <g transform="translate(0,132)">
++      <use href="#row-base"/>
++      <rect class="wg" x="160" y="0" width="28" height="28"/>
++      <rect class="wg" x="192" y="0" width="28" height="28"/>
++      <rect class="overlay" x="160" y="0" width="28" height="28"/>
++      <text class="wg-text" x="190" y="18">WG</text>
++    </g>
++    <text class="note note-center" x="180" y="175">mirrored edge case: right half stays untouched</text>
++    <text class="label" x="20" y="186">AFTER</text>
++    <g transform="translate(0,192)">
++      <use href="#row-base"/>
++      <rect class="edge-fill" x="160" y="0" width="28" height="28"/>
++    </g>
++  </g>
++
++  <g transform="translate(1152,404)">
++    <rect class="panel" x="0" y="0" width="360" height="240" rx="12"/>
++    <text class="panel-title" x="16" y="28">8. Scissor, then full write</text>
++    <text class="panel-sub" x="16" y="44">a clipped write must not suppress a later full one</text>
++    <text class="label" x="20" y="66">BEFORE</text>
++    <g transform="translate(0,72)">
++      <use href="#row-base"/>
++      <rect class="wg" x="160" y="0" width="28" height="28"/>
++      <rect class="wg" x="192" y="0" width="28" height="28"/>
++      <text class="wg-text" x="190" y="18">WG</text>
++    </g>
++    <text class="call-label" x="20" y="126">FILLRECT() CLIPPED, THEN FILLRECT()</text>
++    <g transform="translate(0,132)">
++      <use href="#row-base"/>
++      <rect class="wg" x="160" y="0" width="28" height="28"/>
++      <rect class="wg" x="192" y="0" width="28" height="28"/>
++      <rect class="overlay" x="192" y="0" width="28" height="28"/>
++      <rect class="scissor" x="189" y="-3" width="34" height="34"/>
++      <rect class="overlay-line" x="160" y="0" width="28" height="28"/>
++      <text class="wg-text" x="190" y="18">WG</text>
++    </g>
++    <text class="note note-center" x="180" y="175">later full write still reaches the start cell</text>
++    <text class="label" x="20" y="186">AFTER</text>
++    <g transform="translate(0,192)">
++      <use href="#row-base"/>
++      <rect class="preserve" x="160" y="0" width="28" height="28"/>
++      <rect class="preserve" x="192" y="0" width="28" height="28"/>
++      <text class="wg-text" x="190" y="18">WG</text>
++    </g>
++  </g>
++
++  <g transform="translate(24,660)">
++    <rect class="panel" x="0" y="0" width="360" height="240" rx="12"/>
++    <text class="panel-title" x="16" y="28">9. Hybrid fill: edge row</text>
++    <text class="panel-sub" x="16" y="44">perimeter uses clipped fill</text>
++    <text class="label" x="20" y="66">BEFORE</text>
++    <g transform="translate(0,72)">
++      <use href="#row-base"/>
++      <rect class="wg" x="160" y="0" width="28" height="28"/>
++      <rect class="wg" x="192" y="0" width="28" height="28"/>
++      <text class="wg-text" x="190" y="18">WG</text>
++    </g>
++    <text class="call-label" x="20" y="126">BOX EDGE BAND</text>
++    <g transform="translate(0,132)">
++      <use href="#row-base"/>
++      <rect class="wg" x="160" y="0" width="28" height="28"/>
++      <rect class="wg" x="192" y="0" width="28" height="28"/>
++      <rect class="overlay" x="192" y="0" width="28" height="28"/>
++      <text class="wg-text" x="190" y="18">WG</text>
++    </g>
++    <text class="note note-center" x="180" y="175">crossed span is cleared at the edge</text>
++    <text class="label" x="20" y="186">AFTER</text>
++    <g transform="translate(0,192)">
++      <use href="#row-base"/>
++      <rect class="edge-fill" x="192" y="0" width="28" height="28"/>
++    </g>
++  </g>
++
++  <g transform="translate(400,660)">
++    <rect class="panel" x="0" y="0" width="360" height="240" rx="12"/>
++    <text class="panel-title" x="16" y="28">10. Hybrid fill: interior row</text>
++    <text class="panel-sub" x="16" y="44">interior uses preserved fill</text>
++    <text class="label" x="20" y="66">BEFORE</text>
++    <g transform="translate(0,72)">
++      <use href="#row-base"/>
++      <rect class="wg" x="192" y="0" width="28" height="28"/>
++      <rect class="wg" x="224" y="0" width="28" height="28"/>
++      <text class="wg-text" x="222" y="18">WG</text>
++    </g>
++    <text class="call-label" x="20" y="126">BOX INTERIOR FILL</text>
++    <g transform="translate(0,132)">
++      <use href="#row-base"/>
++      <rect class="wg" x="192" y="0" width="28" height="28"/>
++      <rect class="wg" x="224" y="0" width="28" height="28"/>
++      <rect class="overlay" x="160" y="0" width="124" height="28"/>
++      <text class="wg-text" x="222" y="18">WG</text>
++    </g>
++    <text class="note note-center" x="180" y="175">fully interior wide text stays visible</text>
++    <text class="label" x="20" y="186">AFTER</text>
++    <g transform="translate(0,192)">
++      <use href="#row-base"/>
++      <rect class="tint" x="160" y="0" width="28" height="28"/>
++      <rect class="preserve" x="192" y="0" width="28" height="28"/>
++      <rect class="preserve" x="224" y="0" width="28" height="28"/>
++      <rect class="tint" x="256" y="0" width="28" height="28"/>
++      <text class="wg-text" x="222" y="18">WG</text>
++    </g>
++  </g>
++
++  <g transform="translate(776,660)">
++    <rect class="panel" x="0" y="0" width="360" height="240" rx="12"/>
++    <text class="panel-title" x="16" y="28">11. Renderer preclear</text>
++    <text class="panel-sub" x="16" y="44">placeholder span repaints back to emoji</text>
++    <text class="label" x="20" y="66">BEFORE</text>
++    <g transform="translate(0,72)">
++      <use href="#row-base"/>
++      <rect class="placeholder-cell" x="160" y="0" width="28" height="28"/>
++      <rect class="placeholder-cell" x="192" y="0" width="28" height="28"/>
++      <text class="ph-text" x="174" y="19">[</text>
++      <text class="ph-text" x="206" y="19">]</text>
++    </g>
++    <text class="call-label" x="20" y="126">RENDER() RESTORES WIDE EMOJI</text>
++    <g transform="translate(0,132)">
++      <use href="#row-base"/>
++      <rect class="overlay-line" x="160" y="0" width="60" height="28"/>
++      <text class="ph-text" x="174" y="19">[</text>
++      <text class="ph-text" x="206" y="19">]</text>
++    </g>
++    <text class="note note-center" x="180" y="175">renderer clears the old span first</text>
++    <text class="label" x="20" y="186">AFTER</text>
++    <g transform="translate(0,192)">
++      <use href="#row-base"/>
++      <rect class="emoji" x="160" y="0" width="28" height="28"/>
++      <rect class="emoji" x="192" y="0" width="28" height="28"/>
++      <text class="wg-text" x="190" y="18">EM</text>
++    </g>
++  </g>
++
++  <g transform="translate(1152,660)">
++    <rect class="panel" x="0" y="0" width="360" height="240" rx="12"/>
++    <text class="panel-title" x="16" y="28">12. Renderer follow-up cell</text>
++    <text class="panel-sub" x="16" y="44">fallback repaint before following ASCII</text>
++    <text class="label" x="20" y="66">BEFORE</text>
++    <g transform="translate(0,72)">
++      <use href="#row-base"/>
++      <rect class="placeholder-cell" x="160" y="0" width="28" height="28"/>
++      <rect class="placeholder-cell" x="192" y="0" width="28" height="28"/>
++      <text class="ph-text" x="174" y="19">[</text>
++      <text class="ph-text" x="206" y="19">]</text>
++      <text class="b-text" x="233" y="19">A</text>
++    </g>
++    <text class="call-label" x="20" y="126">RENDER() REPAINTS EMOJI, THEN B</text>
++    <g transform="translate(0,132)">
++      <use href="#row-base"/>
++      <rect class="overlay-line" x="160" y="0" width="92" height="28"/>
++      <text class="ph-text" x="174" y="19">[</text>
++      <text class="ph-text" x="206" y="19">]</text>
++      <text class="b-text" x="233" y="19">A</text>
++    </g>
++    <text class="note note-center" x="180" y="175">fallback path repositions before B</text>
++    <text class="label" x="20" y="186">AFTER</text>
++    <g transform="translate(0,192)">
++      <use href="#row-base"/>
++      <rect class="emoji" x="160" y="0" width="28" height="28"/>
++      <rect class="emoji" x="192" y="0" width="28" height="28"/>
++      <text class="wg-text" x="190" y="18">EM</text>
++      <text class="b-text" x="233" y="19">B</text>
++    </g>
++  </g>
++</svg>
+diff --git a/src/Renderable.ts b/src/Renderable.ts
+index 993ba357..2584019e 100644
+--- a/src/Renderable.ts
++++ b/src/Renderable.ts
+@@ -1333,15 +1333,15 @@ export abstract class Renderable extends BaseRenderable {
+ 
+     const shouldPushScissor = this._overflow !== "visible" && this.width > 0 && this.height > 0
+     if (shouldPushScissor) {
+-      const scissorRect = this.getScissorRect()
++      const scissorRect = this.getOverflowClipRect()
+       renderList.push({
+         action: "pushScissorRect",
+         x: scissorRect.x,
+         y: scissorRect.y,
+         width: scissorRect.width,
+         height: scissorRect.height,
+-        screenX: this.x,
+-        screenY: this.y,
++        screenX: scissorRect.x,
++        screenY: scissorRect.y,
+       })
+     }
+     const visibleChildren = this._getVisibleChildren()
+@@ -1403,6 +1403,20 @@ export abstract class Renderable extends BaseRenderable {
+     }
+   }
+ 
++  public getOverflowClipRect(): { x: number; y: number; width: number; height: number } {
++    const scissorRect = this.getScissorRect()
++    if (!this.buffered) {
++      return scissorRect
++    }
++
++    return {
++      x: scissorRect.x + this.x,
++      y: scissorRect.y + this.y,
++      width: scissorRect.width,
++      height: scissorRect.height,
++    }
++  }
++
+   protected renderSelf(buffer: OptimizedBuffer, deltaTime: number): void {
+     // Default implementation: do nothing
+     // Override this method to provide custom rendering
+diff --git a/src/buffer.ts b/src/buffer.ts
+index ea32b45d..f9af893e 100644
+--- a/src/buffer.ts
++++ b/src/buffer.ts
+@@ -291,6 +291,13 @@ export class OptimizedBuffer {
+     this.lib.bufferFillRect(this.bufferPtr, x, y, width, height, bg)
+   }
+ 
++  // Clip any wide grapheme spans crossed by this fill instead of tinting the
++  // full span. Overlay edge bands use this to keep box geometry straight.
++  public fillRectClipWideGraphemes(x: number, y: number, width: number, height: number, bg: RGBA): void {
++    this.guard()
++    this.lib.bufferFillRectClipWideGraphemes(this.bufferPtr, x, y, width, height, bg)
++  }
++
+   public colorMatrix(
+     matrix: Float32Array,
+     cellMask: Float32Array,
+diff --git a/src/examples/wide-grapheme-overlay-demo.ts b/src/examples/wide-grapheme-overlay-demo.ts
+index 59636f57..85360ba9 100644
+--- a/src/examples/wide-grapheme-overlay-demo.ts
++++ b/src/examples/wide-grapheme-overlay-demo.ts
+@@ -7,7 +7,6 @@ import {
+   OptimizedBuffer,
+   t,
+   bold,
+-  underline,
+   fg,
+   type MouseEvent,
+   type KeyEvent,
+@@ -16,12 +15,12 @@ import type { CliRenderer, RenderContext } from "../index.js"
+ import { setupCommonDemoKeys } from "./lib/standalone-keys.js"
+ 
+ const GRAPHEME_LINES: string[] = [
+-  "東京都  北京市  서울시  大阪府  名古屋  横浜市  上海市",
+-  "👨‍👩‍👧‍👦  👩🏽‍💻  🏳️‍🌈  🇺🇸  🇩🇪  🇯🇵  🇮🇳  家族  絵文字  🎉🎊🎈",
+-  "こんにちは世界  你好世界  안녕하세요  สวัสดี  مرحبا",
+-  "漢字テスト  中文测试  한국어  日本語  繁體中文  简体中文",
+-  "🚀 Full-width: ＡＢＣＤＥＦ  Half: abcdef  ½ ⅞ ⅓",
+-  "混合テキスト mixed text with 漢字 and emoji 🎯",
++  "W2 CJK: 東京都  北京市  서울시  大阪府  名古屋  横浜市  上海市",
++  "W2 emoji: 👨‍👩‍👧‍👦  👩🏽‍💻  👩‍🚀  🇺🇸  🇩🇪  🇯🇵  🇮🇳  🎉🎊🎈",
++  "VS16 off/on: ♥ / ♥️   ☀ / ☀️   ✈ / ✈️   ☎ / ☎️   ☺ / ☺️   ✂ / ✂️",
++  "ZWJ + flags: 👩‍🚀  🧑‍🚀  👨‍👩‍👧‍👦  🧑‍💻  🇺🇸  🇩🇪  🇯🇵  🇮🇳",
++  "Mixed: こんにちは世界  你好世界  안녕하세요  สวัสดี  مرحبا",
++  "Half/full: ＡＢＣＤＥＦ  abcdef  ½ ⅞ ⅓  漢字  emoji 🎯",
+ ]
+ 
+ const HEADER_HEIGHT = 2
+@@ -37,6 +36,7 @@ class DraggableBox extends BoxRenderable {
+   private dragOffsetX = 0
+   private dragOffsetY = 0
+   private alphaPercentage: number
++  private showAlphaLabel: boolean
+ 
+   constructor(
+     ctx: RenderContext,
+@@ -47,6 +47,8 @@ class DraggableBox extends BoxRenderable {
+     height: number,
+     bg: RGBA,
+     zIndex: number,
++    bordered = false,
++    showAlphaLabel = true,
+   ) {
+     super(ctx, {
+       id,
+@@ -54,16 +56,24 @@ class DraggableBox extends BoxRenderable {
+       height,
+       zIndex,
+       backgroundColor: bg,
++      border: bordered,
++      borderColor: bordered ? RGBA.fromInts(255, 255, 255, 235) : undefined,
++      borderStyle: bordered ? "rounded" : undefined,
+       position: "absolute",
+       left: x,
+       top: y,
+     })
+     this.alphaPercentage = Math.round(bg.a * 100)
++    this.showAlphaLabel = showAlphaLabel
+   }
+ 
+   protected renderSelf(buffer: OptimizedBuffer): void {
+     super.renderSelf(buffer)
+ 
++    if (!this.showAlphaLabel) {
++      return
++    }
++
+     const alphaText = `${this.alphaPercentage}%`
+     const centerX = this.x + Math.floor(this.width / 2 - alphaText.length / 2)
+     const centerY = this.y + Math.floor(this.height / 2)
+@@ -94,7 +104,7 @@ class DraggableBox extends BoxRenderable {
+           const newY = event.y - this.dragOffsetY
+ 
+           this.x = Math.max(0, Math.min(newX, this._ctx.width - this.width))
+-          this.y = Math.max(0, Math.min(newY, this._ctx.height - this.height))
++          this.y = Math.max(HEADER_HEIGHT, Math.min(newY, this._ctx.height - this.height))
+ 
+           event.stopPropagation()
+         }
+@@ -139,7 +149,8 @@ function toggleScrim(renderer: CliRenderer) {
+ function updateHeader() {
+   if (!headerDisplay) return
+   const dimLabel = scrimVisible ? "D: hide scrim" : "D: show scrim"
+-  headerDisplay.content = t`${bold(fg("#00D4AA")("Wide Grapheme Overlay"))} ${fg("#A8A8B2")(`| ${dimLabel} | Drag boxes over CJK/emoji | Ctrl+C: quit`)}`
++  headerDisplay.content = t`${bold(fg("#00D4AA")("Wide Grapheme Overlay"))} ${fg("#A8A8B2")(`| ${dimLabel} | Ctrl+C: quit`)}
++${fg("#7A8394")("Compare the small bordered probe, one large bordered box, and the plain translucent fills across the CJK/emoji lines")}`
+ }
+ 
+ export function run(renderer: CliRenderer): void {
+@@ -167,6 +178,21 @@ export function run(renderer: CliRenderer): void {
+   const background = new GraphemeBackground(renderer, "wg-background", renderer.terminalWidth, bgHeight)
+   root.add(background)
+ 
++  const edgeProbe = new DraggableBox(
++    renderer,
++    "wg-edge-probe",
++    11,
++    HEADER_HEIGHT,
++    6,
++    3,
++    RGBA.fromValues(64 / 255, 176 / 255, 255 / 255, 128 / 255),
++    90,
++    true,
++    false,
++  )
++  root.add(edgeProbe)
++  draggableBoxes.push(edgeProbe)
++
+   // Full-screen dimming scrim (same as opencode dialog backdrop: RGBA(0,0,0,150))
+   scrim = new BoxRenderable(renderer, {
+     id: "wg-scrim",
+@@ -191,6 +217,7 @@ export function run(renderer: CliRenderer): void {
+     8,
+     RGBA.fromValues(64 / 255, 176 / 255, 255 / 255, 128 / 255),
+     100,
++    true,
+   )
+   root.add(box1)
+   draggableBoxes.push(box1)
+diff --git a/src/renderables/Box.test.ts b/src/renderables/Box.test.ts
+index 0b17406f..962a9593 100644
+--- a/src/renderables/Box.test.ts
++++ b/src/renderables/Box.test.ts
+@@ -1,15 +1,38 @@
+ import { test, expect, describe, beforeEach, afterEach, spyOn } from "bun:test"
+-import { BoxRenderable, type BoxOptions } from "./Box.js"
++import { BoxRenderable } from "./Box.js"
+ import { createTestRenderer, type TestRenderer } from "../testing/test-renderer.js"
++import { TextRenderable } from "./Text.js"
++import { RGBA } from "../lib/RGBA.js"
++import type { OptimizedBuffer } from "../buffer.js"
+ import type { BorderStyle } from "../lib/border.js"
++import type { CapturedFrame } from "../types.js"
+ 
+ let testRenderer: TestRenderer
+ let renderOnce: () => Promise<void>
+-let captureFrame: () => string
++let captureCharFrame: () => string
++let captureSpans: () => CapturedFrame
+ let warnSpy: ReturnType<typeof spyOn>
+ 
++function getBgAt(buffer: TestRenderer["currentRenderBuffer"], x: number, y: number): RGBA {
++  const index = (y * buffer.width + x) * 4
++  return RGBA.fromValues(
++    buffer.buffers.bg[index] ?? 0,
++    buffer.buffers.bg[index + 1] ?? 0,
++    buffer.buffers.bg[index + 2] ?? 0,
++    buffer.buffers.bg[index + 3] ?? 0,
++  )
++}
++
+ beforeEach(async () => {
+-  ;({ renderer: testRenderer, renderOnce, captureCharFrame: captureFrame } = await createTestRenderer({}))
++  ;({
++    renderer: testRenderer,
++    renderOnce,
++    captureCharFrame,
++    captureSpans,
++  } = await createTestRenderer({
++    width: 24,
++    height: 6,
++  }))
+   warnSpy = spyOn(console, "warn").mockImplementation(() => {})
+ })
+ 
+@@ -176,7 +199,7 @@ describe("BoxRenderable - border titles (top and bottom)", () => {
+     testRenderer.root.add(box)
+     await renderOnce()
+ 
+-    const lines = captureFrame().split("\n")
++    const lines = captureCharFrame().split("\n")
+ 
+     expect(lines[0].slice(0, 16)).toBe("┌─Top──────────┐")
+     expect(lines[4].slice(0, 16)).toBe("└──────────Bot─┘")
+@@ -199,7 +222,738 @@ describe("BoxRenderable - border titles (top and bottom)", () => {
+     testRenderer.root.add(box)
+     await renderOnce()
+ 
+-    const lines = captureFrame().split("\n")
++    const lines = captureCharFrame().split("\n")
+     expect(lines[4].slice(0, 18)).toBe(expectedBorder)
+   })
+ })
++
++describe("BoxRenderable - wide grapheme alpha fill", () => {
++  test("leaves wide text untouched when a transparent box would otherwise take the clipping path", async () => {
++    testRenderer.root.add(
++      new TextRenderable(testRenderer, {
++        id: "line-0",
++        content: "ab東cd",
++        position: "absolute",
++        left: 0,
++        top: 0,
++      }),
++    )
++
++    testRenderer.root.add(
++      new BoxRenderable(testRenderer, {
++        id: "overlay",
++        position: "absolute",
++        left: 3,
++        top: 0,
++        width: 4,
++        height: 1,
++        border: false,
++        backgroundColor: "transparent",
++      }),
++    )
++
++    await renderOnce()
++
++    const topRow = captureCharFrame().split("\n")[0]
++    expect(topRow?.startsWith("ab東cd")).toBe(true)
++  })
++
++  test("clips a partially offscreen translucent fill to the visible rect", async () => {
++    testRenderer.root.add(
++      new TextRenderable(testRenderer, {
++        id: "line-0",
++        content: "abcd",
++        position: "absolute",
++        left: 0,
++        top: 0,
++      }),
++    )
++
++    testRenderer.root.add(
++      new BoxRenderable(testRenderer, {
++        id: "overlay",
++        position: "absolute",
++        left: -1,
++        top: 0,
++        width: 2,
++        height: 1,
++        border: false,
++        backgroundColor: RGBA.fromInts(0, 136, 255, 24),
++      }),
++    )
++
++    await renderOnce()
++
++    const spans = captureSpans().lines[0].spans
++    expect(spans[0]?.text).toBe("a")
++    expect(spans[0]?.bg.a).toBeGreaterThan(0)
++    expect(spans[1]?.text.startsWith("bcd")).toBe(true)
++    expect(spans[1]?.bg.a).toBe(0)
++  })
++
++  test("keeps narrow text visible when a small translucent fill does not touch any wide grapheme", async () => {
++    testRenderer.root.add(
++      new TextRenderable(testRenderer, {
++        id: "line-0",
++        content: "abcd東",
++        position: "absolute",
++        left: 0,
++        top: 0,
++      }),
++    )
++    testRenderer.root.add(
++      new TextRenderable(testRenderer, {
++        id: "line-1",
++        content: "efgh",
++        position: "absolute",
++        left: 0,
++        top: 1,
++      }),
++    )
++
++    testRenderer.root.add(
++      new BoxRenderable(testRenderer, {
++        id: "overlay",
++        position: "absolute",
++        left: 1,
++        top: 0,
++        width: 2,
++        height: 2,
++        border: false,
++        backgroundColor: RGBA.fromInts(0, 136, 255, 24),
++      }),
++    )
++
++    await renderOnce()
++
++    const [topRow, middleRow] = captureCharFrame().split("\n")
++    expect(topRow.startsWith("abcd東")).toBe(true)
++    expect(middleRow.startsWith("efgh")).toBe(true)
++  })
++
++  test("clips boundary-crossing wide graphemes while preserving fully interior graphemes", async () => {
++    testRenderer.root.add(
++      new TextRenderable(testRenderer, {
++        id: "line-0",
++        content: "ab東cd",
++        position: "absolute",
++        left: 0,
++        top: 0,
++      }),
++    )
++    testRenderer.root.add(
++      new TextRenderable(testRenderer, {
++        id: "line-1",
++        content: "abcd東ef",
++        position: "absolute",
++        left: 0,
++        top: 1,
++      }),
++    )
++
++    testRenderer.root.add(
++      new BoxRenderable(testRenderer, {
++        id: "overlay",
++        position: "absolute",
++        left: 3,
++        top: 0,
++        width: 6,
++        height: 3,
++        border: false,
++        backgroundColor: RGBA.fromInts(0, 136, 255, 24),
++      }),
++    )
++
++    await renderOnce()
++
++    const [topRow, middleRow] = captureCharFrame().split("\n")
++    expect(topRow.startsWith("ab       ")).toBe(true)
++    expect(middleRow.startsWith("abc 東ef")).toBe(true)
++  })
++
++  test("applies the same clipping when the translucent overlay box is buffered", async () => {
++    testRenderer.root.add(
++      new TextRenderable(testRenderer, {
++        id: "line-0",
++        content: "ab東cd",
++        position: "absolute",
++        left: 0,
++        top: 0,
++      }),
++    )
++    testRenderer.root.add(
++      new TextRenderable(testRenderer, {
++        id: "line-1",
++        content: "abcd東ef",
++        position: "absolute",
++        left: 0,
++        top: 1,
++      }),
++    )
++
++    testRenderer.root.add(
++      new BoxRenderable(testRenderer, {
++        id: "overlay",
++        buffered: true,
++        position: "absolute",
++        left: 3,
++        top: 0,
++        width: 6,
++        height: 3,
++        border: false,
++        backgroundColor: RGBA.fromInts(0, 136, 255, 24),
++      }),
++    )
++
++    await renderOnce()
++
++    const [topRow, middleRow] = captureCharFrame().split("\n")
++    expect(topRow.startsWith("ab       ")).toBe(true)
++    expect(middleRow.startsWith("abc 東ef")).toBe(true)
++  })
++
++  test("treats ancestor overflow clipping as a visible edge for wide-grapheme clipping", async () => {
++    testRenderer.root.add(
++      new TextRenderable(testRenderer, {
++        id: "line-0",
++        content: "ab東cd",
++        position: "absolute",
++        left: 0,
++        top: 1,
++      }),
++    )
++
++    const parent = new BoxRenderable(testRenderer, {
++      id: "parent",
++      position: "absolute",
++      left: 3,
++      top: 0,
++      width: 3,
++      height: 3,
++      border: false,
++      shouldFill: false,
++      overflow: "hidden",
++    })
++    testRenderer.root.add(parent)
++
++    parent.add(
++      new BoxRenderable(testRenderer, {
++        id: "overlay",
++        position: "absolute",
++        left: -1,
++        top: 0,
++        width: 4,
++        height: 3,
++        border: false,
++        backgroundColor: RGBA.fromInts(0, 136, 255, 24),
++      }),
++    )
++
++    await renderOnce()
++
++    const middleRow = captureCharFrame().split("\n")[1]
++    expect(middleRow?.startsWith("ab  c ")).toBe(true)
++  })
++
++  test("treats buffered ancestor overflow clipping as a visible edge for wide-grapheme clipping", async () => {
++    testRenderer.root.add(
++      new TextRenderable(testRenderer, {
++        id: "line-0",
++        content: "ab東cd",
++        position: "absolute",
++        left: 0,
++        top: 1,
++      }),
++    )
++
++    const parent = new BoxRenderable(testRenderer, {
++      id: "parent",
++      buffered: true,
++      position: "absolute",
++      left: 3,
++      top: 0,
++      width: 3,
++      height: 3,
++      border: false,
++      shouldFill: false,
++      overflow: "hidden",
++    })
++    testRenderer.root.add(parent)
++
++    parent.add(
++      new BoxRenderable(testRenderer, {
++        id: "overlay",
++        position: "absolute",
++        left: -1,
++        top: 0,
++        width: 4,
++        height: 3,
++        border: false,
++        backgroundColor: RGBA.fromInts(0, 136, 255, 24),
++      }),
++    )
++
++    await renderOnce()
++
++    const middleRow = captureCharFrame().split("\n")[1]
++    expect(middleRow?.startsWith("ab  c ")).toBe(true)
++  })
++
++  test("clips buffered overflow-hidden children in screen coordinates", async () => {
++    const parent = new BoxRenderable(testRenderer, {
++      id: "parent",
++      buffered: true,
++      position: "absolute",
++      left: 3,
++      top: 0,
++      width: 3,
++      height: 3,
++      border: false,
++      shouldFill: false,
++      overflow: "hidden",
++    })
++    testRenderer.root.add(parent)
++
++    parent.add(
++      new TextRenderable(testRenderer, {
++        id: "child",
++        content: "abcdef",
++        position: "absolute",
++        left: -1,
++        top: 1,
++      }),
++    )
++
++    await renderOnce()
++
++    const middleRow = captureCharFrame().split("\n")[1]
++    expect(middleRow?.startsWith("   bc")).toBe(true)
++  })
++
++  test("uses the border ring as the clipped perimeter so no interior space is wasted", async () => {
++    testRenderer.root.add(
++      new TextRenderable(testRenderer, {
++        id: "line-0",
++        content: "abcd東ef",
++        position: "absolute",
++        left: 0,
++        top: 1,
++      }),
++    )
++
++    testRenderer.root.add(
++      new BoxRenderable(testRenderer, {
++        id: "overlay",
++        position: "absolute",
++        left: 3,
++        top: 0,
++        width: 6,
++        height: 3,
++        border: true,
++        backgroundColor: RGBA.fromInts(0, 136, 255, 24),
++      }),
++    )
++
++    await renderOnce()
++
++    const [topRow, middleRow] = captureCharFrame().split("\n")
++    expect(topRow?.startsWith("   ┌────┐")).toBe(true)
++    expect(middleRow?.startsWith("abc│東ef│")).toBe(true)
++  })
++
++  test("does not double-tint border cells when the fill already covers the border ring", async () => {
++    testRenderer.root.add(
++      new BoxRenderable(testRenderer, {
++        id: "overlay",
++        position: "absolute",
++        left: 1,
++        top: 0,
++        width: 6,
++        height: 3,
++        border: true,
++        backgroundColor: RGBA.fromInts(64, 176, 255, 128),
++      }),
++    )
++
++    await renderOnce()
++
++    const borderBg = getBgAt(testRenderer.currentRenderBuffer, 2, 0)
++    const interiorBg = getBgAt(testRenderer.currentRenderBuffer, 2, 1)
++
++    expect(borderBg.r).toBeCloseTo(interiorBg.r, 6)
++    expect(borderBg.g).toBeCloseTo(interiorBg.g, 6)
++    expect(borderBg.b).toBeCloseTo(interiorBg.b, 6)
++    expect(borderBg.a).toBeCloseTo(interiorBg.a, 6)
++  })
++
++  test("renders buffered opaque boxes from framebuffer-local coordinates", async () => {
++    testRenderer.root.add(
++      new TextRenderable(testRenderer, {
++        id: "line-0",
++        content: "abcdefgh",
++        position: "absolute",
++        left: 0,
++        top: 1,
++      }),
++    )
++
++    testRenderer.root.add(
++      new BoxRenderable(testRenderer, {
++        id: "overlay",
++        buffered: true,
++        position: "absolute",
++        left: 3,
++        top: 1,
++        width: 4,
++        height: 1,
++        border: false,
++        backgroundColor: "#ff0000",
++      }),
++    )
++
++    await renderOnce()
++
++    const middleRow = captureCharFrame().split("\n")[1]
++    expect(middleRow?.startsWith("abc    h")).toBe(true)
++  })
++
++  test("retains buffered opaque framebuffer contents across unrelated rerenders", async () => {
++    let firstFrame = true
++    const box = new BoxRenderable(testRenderer, {
++      id: "overlay",
++      buffered: true,
++      position: "absolute",
++      left: 0,
++      top: 0,
++      width: 5,
++      height: 1,
++      border: false,
++      shouldFill: false,
++      backgroundColor: "#000000",
++      renderAfter(buffer) {
++        if (!firstFrame) {
++          return
++        }
++
++        buffer.drawText("A", 0, 0, RGBA.fromInts(255, 255, 255, 255))
++        firstFrame = false
++      },
++    })
++    const tick = new TextRenderable(testRenderer, {
++      id: "tick",
++      content: "x",
++      position: "absolute",
++      left: 0,
++      top: 1,
++    })
++
++    testRenderer.root.add(box)
++    testRenderer.root.add(tick)
++
++    await renderOnce()
++    expect(captureCharFrame().split("\n")[0]?.startsWith("A")).toBe(true)
++
++    tick.content = "y"
++    await renderOnce()
++
++    expect(captureCharFrame().split("\n")[0]?.startsWith("A")).toBe(true)
++  })
++
++  test("keeps renderAfter callbacks framebuffer-local while clipping wide grapheme edges", async () => {
++    testRenderer.root.add(
++      new TextRenderable(testRenderer, {
++        id: "line-0",
++        content: "ab東cd",
++        position: "absolute",
++        left: 0,
++        top: 0,
++      }),
++    )
++    testRenderer.root.add(
++      new TextRenderable(testRenderer, {
++        id: "line-1",
++        content: "abcd東ef",
++        position: "absolute",
++        left: 0,
++        top: 1,
++      }),
++    )
++
++    testRenderer.root.add(
++      new BoxRenderable(testRenderer, {
++        id: "overlay",
++        buffered: true,
++        position: "absolute",
++        left: 3,
++        top: 0,
++        width: 6,
++        height: 3,
++        border: false,
++        backgroundColor: RGBA.fromInts(0, 136, 255, 24),
++        renderAfter(buffer) {
++          buffer.drawText("X", 5, 0, RGBA.fromInts(255, 255, 255, 255))
++        },
++      }),
++    )
++
++    await renderOnce()
++
++    const [topRow, middleRow] = captureCharFrame().split("\n")
++    expect(topRow?.startsWith("ab      X")).toBe(true)
++    expect(middleRow?.startsWith("abc 東ef")).toBe(true)
++  })
++
++  test("keeps renderBefore callbacks beneath direct translucent fill for buffered boxes", async () => {
++    testRenderer.root.add(
++      new BoxRenderable(testRenderer, {
++        id: "overlay",
++        buffered: true,
++        position: "absolute",
++        left: 3,
++        top: 1,
++        width: 4,
++        height: 1,
++        border: false,
++        backgroundColor: RGBA.fromInts(0, 136, 255, 24),
++        renderBefore(buffer) {
++          buffer.drawText("X", 0, 0, RGBA.fromInts(255, 255, 255, 255))
++        },
++      }),
++    )
++
++    await renderOnce()
++
++    const xSpan = captureSpans().lines[1].spans.find((span) => span.text.includes("X"))
++    expect(xSpan).toBeDefined()
++    expect(xSpan!.fg.r).toBeLessThan(1)
++    expect(xSpan!.bg.a).toBeGreaterThan(0)
++  })
++
++  test("does not accumulate translucent buffered box tint across identical rerenders", async () => {
++    testRenderer.root.add(
++      new BoxRenderable(testRenderer, {
++        id: "overlay",
++        buffered: true,
++        position: "absolute",
++        left: 4,
++        top: 1,
++        width: 4,
++        height: 2,
++        border: false,
++        backgroundColor: RGBA.fromInts(0, 136, 255, 24),
++        renderAfter(buffer) {
++          buffer.drawText("X", 0, 0, RGBA.fromInts(255, 255, 255, 255))
++        },
++      }),
++    )
++
++    await renderOnce()
++    const firstSpan = captureSpans().lines[1].spans.find((span) => span.text.includes("X"))
++    expect(firstSpan).toBeDefined()
++
++    await renderOnce()
++    const secondSpan = captureSpans().lines[1].spans.find((span) => span.text.includes("X"))
++    expect(secondSpan).toBeDefined()
++
++    expect(secondSpan!.bg.r).toBeCloseTo(firstSpan!.bg.r, 6)
++    expect(secondSpan!.bg.g).toBeCloseTo(firstSpan!.bg.g, 6)
++    expect(secondSpan!.bg.b).toBeCloseTo(firstSpan!.bg.b, 6)
++    expect(secondSpan!.bg.a).toBeCloseTo(firstSpan!.bg.a, 6)
++  })
++
++  test("does not accumulate translucent framebuffer writes across unrelated rerenders when the box is otherwise opaque", async () => {
++    const box = new BoxRenderable(testRenderer, {
++      id: "overlay",
++      buffered: true,
++      position: "absolute",
++      left: 1,
++      top: 1,
++      width: 3,
++      height: 1,
++      border: false,
++      shouldFill: false,
++      backgroundColor: "#000000",
++      renderAfter(buffer) {
++        buffer.fillRect(0, 0, 1, 1, RGBA.fromInts(255, 0, 0, 128))
++      },
++    })
++    const tick = new TextRenderable(testRenderer, {
++      id: "tick",
++      content: "x",
++      position: "absolute",
++      left: 0,
++      top: 2,
++    })
++
++    testRenderer.root.add(box)
++    testRenderer.root.add(tick)
++
++    await renderOnce()
++    const firstRed = captureSpans().lines[1].spans[1]?.bg.r
++    expect(firstRed).toBeDefined()
++
++    tick.content = "y"
++    await renderOnce()
++    const secondRed = captureSpans().lines[1].spans[1]?.bg.r
++    expect(secondRed).toBeDefined()
++    expect(secondRed).toBeCloseTo(firstRed!, 6)
++  })
++
++  test("keeps subclass renderSelf framebuffer-local while clipping wide grapheme edges", async () => {
++    class BufferedLabelBox extends BoxRenderable {
++      protected override renderSelf(buffer: OptimizedBuffer): void {
++        super.renderSelf(buffer)
++        buffer.drawText("X", 5, 0, RGBA.fromInts(255, 255, 255, 255))
++      }
++    }
++
++    testRenderer.root.add(
++      new TextRenderable(testRenderer, {
++        id: "line-0",
++        content: "ab東cd",
++        position: "absolute",
++        left: 0,
++        top: 0,
++      }),
++    )
++    testRenderer.root.add(
++      new TextRenderable(testRenderer, {
++        id: "line-1",
++        content: "abcd東ef",
++        position: "absolute",
++        left: 0,
++        top: 1,
++      }),
++    )
++
++    testRenderer.root.add(
++      new BufferedLabelBox(testRenderer, {
++        id: "overlay",
++        buffered: true,
++        position: "absolute",
++        left: 3,
++        top: 0,
++        width: 6,
++        height: 3,
++        border: false,
++        backgroundColor: RGBA.fromInts(0, 136, 255, 24),
++      }),
++    )
++
++    await renderOnce()
++
++    const [topRow, middleRow] = captureCharFrame().split("\n")
++    expect(topRow?.startsWith("ab      X")).toBe(true)
++    expect(middleRow?.startsWith("abc 東ef")).toBe(true)
++  })
++
++  test("does not replay stale framebuffer contents after switching back from bypass rendering", async () => {
++    const box = new BoxRenderable(testRenderer, {
++      id: "overlay",
++      buffered: true,
++      position: "absolute",
++      left: 2,
++      top: 1,
++      width: 3,
++      height: 1,
++      border: false,
++      shouldFill: false,
++      backgroundColor: RGBA.fromInts(0, 136, 255, 24),
++      renderAfter(buffer) {
++        buffer.drawText("A", 0, 0, RGBA.fromInts(255, 255, 255, 255))
++      },
++    })
++    testRenderer.root.add(box)
++
++    await renderOnce()
++    expect(captureCharFrame().split("\n")[1]?.startsWith("  A")).toBe(true)
++
++    box.renderAfter = undefined
++    await renderOnce()
++    expect(captureCharFrame().split("\n")[1]?.trim()).toBe("")
++
++    box.renderAfter = function (buffer) {
++      buffer.drawText("B", 1, 0, RGBA.fromInts(255, 255, 255, 255))
++    }
++    await renderOnce()
++
++    const middleRow = captureCharFrame().split("\n")[1]
++    expect(middleRow?.startsWith("  AB")).toBe(false)
++    expect(middleRow?.startsWith("   B")).toBe(true)
++  })
++
++  test("clears stale framebuffer contents when opaque rendering resumes after a bypassed frame", async () => {
++    const box = new BoxRenderable(testRenderer, {
++      id: "overlay",
++      buffered: true,
++      position: "absolute",
++      left: 2,
++      top: 1,
++      width: 3,
++      height: 1,
++      border: false,
++      shouldFill: false,
++      backgroundColor: "#ff0000",
++      renderAfter(buffer) {
++        buffer.drawText("A", 0, 0, RGBA.fromInts(255, 255, 255, 255))
++      },
++    })
++    testRenderer.root.add(box)
++
++    await renderOnce()
++    expect(captureCharFrame().split("\n")[1]?.startsWith("  A")).toBe(true)
++
++    box.renderAfter = undefined
++    box.backgroundColor = RGBA.fromInts(0, 136, 255, 24)
++    await renderOnce()
++    expect(captureCharFrame().split("\n")[1]?.trim()).toBe("")
++
++    box.backgroundColor = "#ff0000"
++    box.renderAfter = function (buffer) {
++      buffer.drawText("B", 1, 0, RGBA.fromInts(255, 255, 255, 255))
++    }
++    await renderOnce()
++
++    const middleRow = captureCharFrame().split("\n")[1]
++    expect(middleRow?.startsWith("  AB")).toBe(false)
++    expect(middleRow?.startsWith("   B")).toBe(true)
++  })
++
++  test("does not replace emoji when a buffered transparent framebuffer draw is otherwise empty", async () => {
++    class TransparentBufferedBox extends BoxRenderable {
++      protected override renderSelf(buffer: OptimizedBuffer): void {
++        super.renderSelf(buffer)
++      }
++    }
++
++    testRenderer.root.add(
++      new TextRenderable(testRenderer, {
++        id: "line-0",
++        content: "ab👋cd",
++        position: "absolute",
++        left: 0,
++        top: 2,
++      }),
++    )
++
++    testRenderer.root.add(
++      new TransparentBufferedBox(testRenderer, {
++        id: "overlay",
++        buffered: true,
++        position: "absolute",
++        left: 1,
++        top: 1,
++        width: 8,
++        height: 3,
++        border: false,
++        shouldFill: false,
++        backgroundColor: "transparent",
++      }),
++    )
++
++    await renderOnce()
++
++    const row = captureCharFrame().split("\n")[2]
++    expect(row?.startsWith("ab👋cd")).toBe(true)
++  })
++})
+diff --git a/src/renderables/Box.ts b/src/renderables/Box.ts
+index 97b61799..4c871df7 100644
+--- a/src/renderables/Box.ts
++++ b/src/renderables/Box.ts
+@@ -14,6 +14,49 @@ import { type ColorInput, RGBA, parseColor } from "../lib/RGBA.js"
+ import { isValidPercentage } from "../lib/renderable.validations.js"
+ import type { RenderContext } from "../types.js"
+ 
++const CHAR_FLAG_MASK = 0xc0000000 >>> 0
++const CHAR_FLAG_GRAPHEME = 0x80000000 >>> 0
++const CHAR_FLAG_CONTINUATION = 0xc0000000 >>> 0
++const CHAR_EXT_RIGHT_SHIFT = 28
++const CHAR_EXT_LEFT_SHIFT = 26
++const CHAR_EXT_MASK = 0x3
++const TRANSPARENT = RGBA.fromValues(0, 0, 0, 0)
++
++function isWideClusterCell(charCode: number): boolean {
++  const flag = (charCode & CHAR_FLAG_MASK) >>> 0
++  if (flag !== CHAR_FLAG_GRAPHEME && flag !== CHAR_FLAG_CONTINUATION) {
++    return false
++  }
++
++  const left = (charCode >>> CHAR_EXT_LEFT_SHIFT) & CHAR_EXT_MASK
++  const right = (charCode >>> CHAR_EXT_RIGHT_SHIFT) & CHAR_EXT_MASK
++  return left + right > 0
++}
++
++interface Rect {
++  x: number
++  y: number
++  width: number
++  height: number
++}
++
++function intersectRects(a: Rect, b: Rect): Rect | null {
++  const startX = Math.max(a.x, b.x)
++  const startY = Math.max(a.y, b.y)
++  const endX = Math.min(a.x + a.width - 1, b.x + b.width - 1)
++  const endY = Math.min(a.y + a.height - 1, b.y + b.height - 1)
++
++  if (startX > endX || startY > endY) {
++    return null
++  }
++
++  return {
++    x: startX,
++    y: startY,
++    width: endX - startX + 1,
++    height: endY - startY + 1,
++  }
++}
+ export interface BoxOptions<TRenderable extends Renderable = BoxRenderable> extends RenderableOptions<TRenderable> {
+   backgroundColor?: string | RGBA
+   borderStyle?: BorderStyle
+@@ -56,6 +99,9 @@ export class BoxRenderable extends Renderable {
+   protected _titleAlignment: "left" | "center" | "right"
+   protected _bottomTitle?: string
+   protected _bottomTitleAlignment: "left" | "center" | "right"
++  private suppressFillDuringFrameBufferRender = false
++  private frameBufferNeedsReset = false
++  private frameBufferRendered = false
+ 
+   protected _defaultOptions = {
+     backgroundColor: "transparent",
+@@ -237,20 +283,70 @@ export class BoxRenderable extends Renderable {
+     }
+   }
+ 
+-  protected renderSelf(buffer: OptimizedBuffer): void {
+-    const currentBorderColor = this._focused ? this._focusedBorderColor : this._borderColor
++  public override render(buffer: OptimizedBuffer, deltaTime: number): void {
++    let shouldDrawFrameBuffer = false
++
++    if (!this.buffered || !this.frameBuffer) {
++      this.renderToBuffer(buffer, deltaTime)
++    } else if (this.canReuseFrameBuffer(buffer)) {
++      shouldDrawFrameBuffer = true
++    } else if (this.shouldBypassFrameBuffer(buffer)) {
++      // The framebuffer is skipped entirely on this path, so any retained
++      // contents must be discarded before we use it again later.
++      this.frameBufferNeedsReset = true
++      this.frameBufferRendered = false
++      this.renderToBuffer(buffer, deltaTime)
++    } else {
++      if (this.frameBufferNeedsReset || this.shouldClearFrameBufferBeforeRender(buffer)) {
++        // Only reset retained contents when this box would otherwise alpha-blend
++        // onto its own previous framebuffer output.
++        this.frameBuffer.clear(RGBA.fromValues(0, 0, 0, 0))
++        this.frameBufferNeedsReset = false
++        this.frameBufferRendered = false
++      }
++      const shouldRenderFillDirectly = this.shouldRenderFillDirectly(buffer)
++      const shouldRenderBeforeUnderDirectFill = shouldRenderFillDirectly && !!this.renderBefore
++      if (shouldRenderBeforeUnderDirectFill) {
++        this.renderBefore!.call(this, this.frameBuffer, deltaTime)
++        buffer.drawFrameBuffer(this.x, this.y, this.frameBuffer)
++        this.frameBuffer.clear(RGBA.fromValues(0, 0, 0, 0))
++      }
++      if (shouldRenderFillDirectly) {
++        this.renderFill(buffer)
++        this.suppressFillDuringFrameBufferRender = true
++      }
++      this.renderToBuffer(this.frameBuffer, deltaTime, {
++        skipRenderBefore: shouldRenderBeforeUnderDirectFill,
++      })
++      this.frameBufferRendered = true
++      shouldDrawFrameBuffer = true
++    }
++    this.markClean()
++    this._ctx.addToHitGrid(this.x, this.y, this.width, this.height, this.num)
++
++    if (shouldDrawFrameBuffer) {
++      buffer.drawFrameBuffer(this.x, this.y, this.frameBuffer!)
++    }
++  }
+ 
++  protected renderSelf(buffer: OptimizedBuffer, _deltaTime: number): void {
++    const currentBorderColor = this.getCurrentBorderColor()
++    const { x, y } = this.getRenderOrigin(buffer)
++    if (!this.suppressFillDuringFrameBufferRender) {
++      this.renderFill(buffer)
++    }
++    const borderBackgroundColor = this.shouldFill ? TRANSPARENT : this._backgroundColor
+     buffer.drawBox({
+-      x: this.x,
+-      y: this.y,
++      x,
++      y,
+       width: this.width,
+       height: this.height,
+       borderStyle: this._borderStyle,
+       customBorderChars: this._customBorderChars,
+       border: this._border,
+       borderColor: currentBorderColor,
+-      backgroundColor: this._backgroundColor,
+-      shouldFill: this.shouldFill,
++      backgroundColor: borderBackgroundColor,
++      shouldFill: false,
+       title: this._title,
+       titleAlignment: this._titleAlignment,
+       bottomTitle: this._bottomTitle,
+@@ -258,6 +354,234 @@ export class BoxRenderable extends Renderable {
+     })
+   }
+ 
++  private shouldBypassFrameBuffer(buffer: OptimizedBuffer): boolean {
++    if (!this.buffered || !this.frameBuffer) {
++      return false
++    }
++
++    // Bypass is only safe for the plain Box path. Hooks or renderSelf
++    // overrides depend on framebuffer-local ordering/coordinates.
++    if (this.renderBefore || this.renderAfter) {
++      return false
++    }
++
++    const resolvedRenderSelf = Object.getPrototypeOf(this).renderSelf
++    if (resolvedRenderSelf !== BoxRenderable.prototype.renderSelf) {
++      return false
++    }
++
++    return this.hasTranslucentParts(buffer)
++  }
++
++  private shouldClearFrameBufferBeforeRender(buffer: OptimizedBuffer): boolean {
++    return this.hasTranslucentParts(buffer)
++  }
++
++  private canReuseFrameBuffer(buffer: OptimizedBuffer): boolean {
++    if (!this.frameBufferRendered || this.frameBufferNeedsReset || this.isDirty || this.live) {
++      return false
++    }
++
++    if (this.shouldBypassFrameBuffer(buffer)) {
++      return false
++    }
++
++    return !this.shouldRenderFillDirectly(buffer)
++  }
++
++  private shouldRenderFillDirectly(buffer: OptimizedBuffer): boolean {
++    return this.hasTranslucentFill(buffer)
++  }
++
++  private hasTranslucentParts(buffer: OptimizedBuffer): boolean {
++    return this.hasTranslucentFill(buffer) || this.hasTranslucentBorder()
++  }
++
++  private hasTranslucentFill(buffer: OptimizedBuffer): boolean {
++    return this._backgroundColor.a < 1 || buffer.getCurrentOpacity() < 1
++  }
++
++  private hasTranslucentBorder(): boolean {
++    return this.getCurrentBorderColor().a < 1
++  }
++
++  private getCurrentBorderColor(): RGBA {
++    return this._focused ? this._focusedBorderColor : this._borderColor
++  }
++
++  private renderToBuffer(
++    buffer: OptimizedBuffer,
++    deltaTime: number,
++    options: { skipRenderBefore?: boolean } = {},
++  ): void {
++    try {
++      if (!options.skipRenderBefore && this.renderBefore) {
++        this.renderBefore.call(this, buffer, deltaTime)
++      }
++
++      this.renderSelf(buffer, deltaTime)
++
++      if (this.renderAfter) {
++        this.renderAfter.call(this, buffer, deltaTime)
++      }
++    } finally {
++      this.suppressFillDuringFrameBufferRender = false
++    }
++  }
++  private isRenderingToOwnFrameBuffer(buffer: OptimizedBuffer): boolean {
++    return this.buffered && this.frameBuffer === buffer
++  }
++
++  private getRenderOrigin(buffer: OptimizedBuffer): { x: number; y: number } {
++    if (this.isRenderingToOwnFrameBuffer(buffer)) {
++      return { x: 0, y: 0 }
++    }
++
++    return { x: this.x, y: this.y }
++  }
++
++  // Translucent fills only need the hybrid strategy when the perimeter
++  // actually crosses a wide span. Otherwise the normal preserved fill path
++  // can be used for the whole rect, which keeps small narrow-text overlays
++  // from collapsing into an all-edge clipped fill.
++  private renderFill(buffer: OptimizedBuffer): void {
++    if (!this.shouldFill || this.width <= 0 || this.height <= 0) {
++      return
++    }
++
++    if (this._backgroundColor.a * buffer.getCurrentOpacity() <= 0) {
++      return
++    }
++
++    const fillRect = this.getClippedFillRect(buffer)
++    if (!fillRect) {
++      return
++    }
++
++    const backgroundIsTranslucent = this._backgroundColor.a < 1 || buffer.getCurrentOpacity() < 1
++    if (!backgroundIsTranslucent) {
++      buffer.fillRect(fillRect.x, fillRect.y, fillRect.width, fillRect.height, this._backgroundColor)
++      return
++    }
++
++    if (!this.fillPerimeterTouchesWideGrapheme(buffer, fillRect)) {
++      buffer.fillRect(fillRect.x, fillRect.y, fillRect.width, fillRect.height, this._backgroundColor)
++      return
++    }
++
++    // Width/height <= 2 means there is no interior left after reserving a
++    // one-cell perimeter band, so the whole translucent fill has to use the
++    // clipping path.
++    if (fillRect.width <= 2 || fillRect.height <= 2) {
++      buffer.fillRectClipWideGraphemes(fillRect.x, fillRect.y, fillRect.width, fillRect.height, this._backgroundColor)
++      return
++    }
++
++    buffer.fillRectClipWideGraphemes(fillRect.x, fillRect.y, fillRect.width, 1, this._backgroundColor)
++    buffer.fillRectClipWideGraphemes(
++      fillRect.x,
++      fillRect.y + fillRect.height - 1,
++      fillRect.width,
++      1,
++      this._backgroundColor,
++    )
++    buffer.fillRectClipWideGraphemes(fillRect.x, fillRect.y + 1, 1, fillRect.height - 2, this._backgroundColor)
++    buffer.fillRectClipWideGraphemes(
++      fillRect.x + fillRect.width - 1,
++      fillRect.y + 1,
++      1,
++      fillRect.height - 2,
++      this._backgroundColor,
++    )
++    buffer.fillRect(fillRect.x + 1, fillRect.y + 1, fillRect.width - 2, fillRect.height - 2, this._backgroundColor)
++  }
++
++  private fillPerimeterTouchesWideGrapheme(
++    buffer: OptimizedBuffer,
++    fillRect: { x: number; y: number; width: number; height: number },
++  ): boolean {
++    const chars = buffer.buffers.char
++    const top = fillRect.y
++    const bottom = fillRect.y + fillRect.height - 1
++    const left = fillRect.x
++    const right = fillRect.x + fillRect.width - 1
++    const rowStride = buffer.width
++
++    for (let x = left; x <= right; x++) {
++      if (isWideClusterCell(chars[top * rowStride + x])) {
++        return true
++      }
++      if (bottom !== top && isWideClusterCell(chars[bottom * rowStride + x])) {
++        return true
++      }
++    }
++
++    for (let y = top + 1; y < bottom; y++) {
++      if (isWideClusterCell(chars[y * rowStride + left])) {
++        return true
++      }
++      if (right !== left && isWideClusterCell(chars[y * rowStride + right])) {
++        return true
++      }
++    }
++
++    return false
++  }
++
++  private getClippedFillRect(buffer: OptimizedBuffer): Rect | null {
++    if (this.width <= 0 || this.height <= 0) {
++      return null
++    }
++
++    const { x, y } = this.getRenderOrigin(buffer)
++    const requestedRect = {
++      x,
++      y,
++      width: this.width,
++      height: this.height,
++    }
++    const visibleClipRect = this.getVisibleClipRect(buffer)
++    if (!visibleClipRect) {
++      return null
++    }
++
++    return intersectRects(requestedRect, visibleClipRect)
++  }
++
++  private getVisibleClipRect(buffer: OptimizedBuffer): Rect | null {
++    if (this.isRenderingToOwnFrameBuffer(buffer)) {
++      return {
++        x: 0,
++        y: 0,
++        width: buffer.width,
++        height: buffer.height,
++      }
++    }
++
++    let clipRect: Rect = {
++      x: 0,
++      y: 0,
++      width: buffer.width,
++      height: buffer.height,
++    }
++
++    let ancestor = this.parent
++    while (ancestor) {
++      if (ancestor.overflow !== "visible" && ancestor.width > 0 && ancestor.height > 0) {
++        const ancestorClipRect = ancestor.getOverflowClipRect()
++        const nextClipRect = intersectRects(clipRect, ancestorClipRect)
++        if (!nextClipRect) {
++          return null
++        }
++        clipRect = nextClipRect
++      }
++
++      ancestor = ancestor.parent
++    }
++
++    return clipRect
++  }
++
+   protected getScissorRect(): { x: number; y: number; width: number; height: number } {
+     const baseRect = super.getScissorRect()
+ 
+diff --git a/src/zig.ts b/src/zig.ts
+index 90f79ac1..66dbec85 100644
+--- a/src/zig.ts
++++ b/src/zig.ts
+@@ -366,6 +366,10 @@ function getOpenTUILib(libPath?: string) {
+       args: ["ptr", "i32", "i32", "u32", "u32", "ptr", "u32", "ptr", "ptr", "ptr", "u32", "ptr", "u32"],
+       returns: "void",
+     },
++    bufferFillRectClipWideGraphemes: {
++      args: ["ptr", "u32", "u32", "u32", "u32", "ptr"],
++      returns: "void",
++    },
+     bufferPushScissorRect: {
+       args: ["ptr", "i32", "i32", "u32", "u32"],
+       returns: "void",
+@@ -394,7 +398,6 @@ function getOpenTUILib(libPath?: string) {
+       args: ["ptr"],
+       returns: "void",
+     },
+-
+     addToHitGrid: {
+       args: ["ptr", "i32", "i32", "u32", "u32", "u32"],
+       returns: "void",
+@@ -1448,6 +1451,14 @@ export interface RenderLib {
+     attributes?: number,
+   ) => void
+   bufferFillRect: (buffer: Pointer, x: number, y: number, width: number, height: number, color: RGBA) => void
++  bufferFillRectClipWideGraphemes: (
++    buffer: Pointer,
++    x: number,
++    y: number,
++    width: number,
++    height: number,
++    color: RGBA,
++  ) => void
+   bufferColorMatrix: (
+     buffer: Pointer,
+     matrixPtr: Pointer,
+@@ -2188,6 +2199,18 @@ class FFIRenderLib implements RenderLib {
+     this.opentui.symbols.bufferFillRect(buffer, x, y, width, height, bg)
+   }
+ 
++  public bufferFillRectClipWideGraphemes(
++    buffer: Pointer,
++    x: number,
++    y: number,
++    width: number,
++    height: number,
++    color: RGBA,
++  ) {
++    const bg = color.buffer
++    this.opentui.symbols.bufferFillRectClipWideGraphemes(buffer, x, y, width, height, bg)
++  }
++
+   public bufferColorMatrix(
+     buffer: Pointer,
+     matrixPtr: Pointer,
+diff --git a/src/zig/buffer.zig b/src/zig/buffer.zig
+index 7575bbde..13b652b1 100644
+--- a/src/zig/buffer.zig
++++ b/src/zig/buffer.zig
+@@ -169,6 +169,48 @@ pub const OptimizedBuffer = struct {
+     scissor_stack: std.ArrayListUnmanaged(ClipRect),
+     opacity_stack: std.ArrayListUnmanaged(f32),
+ 
++    /// Ephemeral cursor for left-to-right alpha-blend passes.
++    /// Tracks the last wide-grapheme span that was blended so that
++    /// subsequent same-style space writes within the same span are skipped.
++    /// Create one per pass/row; do NOT store on the buffer.
++    const BlendCursor = struct {
++        span_end_x: u32 = 0,
++        active: bool = false,
++        fg: RGBA = .{ 0.0, 0.0, 0.0, 0.0 },
++        bg: RGBA = .{ 0.0, 0.0, 0.0, 0.0 },
++        attributes: u32 = 0,
++
++        fn sameStyle(self: *const BlendCursor, fg: RGBA, bg: RGBA, attributes: u32) bool {
++            return self.attributes == attributes and
++                self.fg[0] == fg[0] and
++                self.fg[1] == fg[1] and
++                self.fg[2] == fg[2] and
++                self.fg[3] == fg[3] and
++                self.bg[0] == bg[0] and
++                self.bg[1] == bg[1] and
++                self.bg[2] == bg[2] and
++                self.bg[3] == bg[3];
++        }
++
++        /// Alpha-blend with span-skip awareness. Use this instead of
++        /// setCellWithAlphaBlending() when iterating left-to-right.
++        fn blendAt(self: *BlendCursor, buf: *OptimizedBuffer, x: u32, y: u32, char: u32, fg: RGBA, bg: RGBA, attributes: u32) !u32 {
++            if (self.active and x <= self.span_end_x and char == DEFAULT_SPACE_CHAR and self.sameStyle(fg, bg, attributes)) {
++                return self.span_end_x;
++            }
++            self.active = false;
++            const result_x = try buf.setCellWithAlphaBlending(x, y, char, fg, bg, attributes);
++            if (result_x > x) {
++                self.span_end_x = result_x;
++                self.fg = fg;
++                self.bg = bg;
++                self.attributes = attributes;
++                self.active = true;
++            }
++            return result_x;
++        }
++    };
++
+     const InitOptions = struct {
+         respectAlpha: bool = false,
+         blendBackdropColor: ?RGBA = null,
+@@ -592,15 +634,14 @@ pub const OptimizedBuffer = struct {
+         return self.coordsToIndex(x, y);
+     }
+ 
+-    /// Write cell data at index and update link tracker.
+-    fn writeCellAndLinks(self: *OptimizedBuffer, index: u32, cell: Cell) void {
++    /// Write style (fg/bg/attributes) at index and update link tracker.
++    fn writeStyleAndLinks(self: *OptimizedBuffer, index: u32, fg: RGBA, bg: RGBA, attributes: u32) void {
+         const prev_link_id = ansi.TextAttributes.getLinkId(self.buffer.attributes[index]);
+-        const new_link_id = ansi.TextAttributes.getLinkId(cell.attributes);
++        const new_link_id = ansi.TextAttributes.getLinkId(attributes);
+ 
+-        self.buffer.char[index] = cell.char;
+-        self.buffer.fg[index] = cell.fg;
+-        self.buffer.bg[index] = cell.bg;
+-        self.buffer.attributes[index] = cell.attributes;
++        self.buffer.fg[index] = fg;
++        self.buffer.bg[index] = bg;
++        self.buffer.attributes[index] = attributes;
+ 
+         if (prev_link_id != 0 and prev_link_id != new_link_id) {
+             self.link_tracker.removeCellRef(prev_link_id);
+@@ -610,6 +651,138 @@ pub const OptimizedBuffer = struct {
+         }
+     }
+ 
++    /// Write cell data at index and update link tracker.
++    fn writeCellAndLinks(self: *OptimizedBuffer, index: u32, cell: Cell) void {
++        self.buffer.char[index] = cell.char;
++        self.writeStyleAndLinks(index, cell.fg, cell.bg, cell.attributes);
++    }
++
++    fn cellAtIndex(self: *const OptimizedBuffer, index: u32) Cell {
++        return Cell{
++            .char = self.buffer.char[index],
++            .fg = self.buffer.fg[index],
++            .bg = self.buffer.bg[index],
++            .attributes = self.buffer.attributes[index],
++        };
++    }
++
++    pub const WideCharKind = enum { wide_text, emoji, unknown };
++
++    fn isEmojiLikeSequence(bytes: []const u8) bool {
++        var offset: usize = 0;
++        while (offset < bytes.len) {
++            const cp_len = std.unicode.utf8ByteSequenceLength(bytes[offset]) catch return false;
++            if (offset + cp_len > bytes.len) return false;
++            const cp = std.unicode.utf8Decode(bytes[offset .. offset + cp_len]) catch return false;
++
++            if (cp == 0x200D or cp == 0xFE0F or cp == 0x20E3) return true;
++            if (cp >= 0x1F1E6 and cp <= 0x1F1FF) return true;
++            if (cp >= 0x1F3FB and cp <= 0x1F3FF) return true;
++
++            offset += cp_len;
++        }
++
++        return false;
++    }
++
++    /// Classify wide cells in the order most likely to preserve overlay intent:
++    /// explicit emoji signals first, East Asian width next, then multi-codepoint
++    /// sequence heuristics for ZWJ/flags/modifiers.
++    pub fn classifyWideChar(self: *const OptimizedBuffer, char: u32) WideCharKind {
++        const grapheme_bytes: ?[]const u8 = blk: {
++            if (!gp.isGraphemeChar(char) and !gp.isContinuationChar(char)) break :blk null;
++            const id = gp.graphemeIdFromChar(char);
++            const bytes = self.pool.get(id) catch return .unknown;
++            if (bytes.len == 0) return .unknown;
++            break :blk bytes;
++        };
++        const cp: u21 = blk: {
++            if (grapheme_bytes == null) {
++                if (char > 0x10FFFF) return .unknown;
++                break :blk @intCast(char);
++            }
++
++            const bytes = grapheme_bytes.?;
++            const seq_len = std.unicode.utf8ByteSequenceLength(bytes[0]) catch return .unknown;
++            if (seq_len > bytes.len) return .unknown;
++            break :blk std.unicode.utf8Decode(bytes[0..seq_len]) catch return .unknown;
++        };
++
++        if (uucode.get(.is_emoji_presentation, cp)) return .emoji;
++
++        const eaw = uucode.get(.east_asian_width, cp);
++        if (eaw == .fullwidth or eaw == .wide) return .wide_text;
++
++        if (grapheme_bytes) |bytes| {
++            const seq_len = std.unicode.utf8ByteSequenceLength(bytes[0]) catch return .unknown;
++            if (seq_len < bytes.len) {
++                if (isEmojiLikeSequence(bytes)) return .emoji;
++                return .wide_text;
++            }
++        }
++
++        return .unknown;
++    }
++
++    fn shouldPlaceholderWideChar(self: *const OptimizedBuffer, char: u32) bool {
++        return switch (self.classifyWideChar(char)) {
++            .emoji => true,
++            .wide_text, .unknown => false,
++        };
++    }
++
++    const GraphemeSpan = struct {
++        start: u32,
++        end: u32,
++        id: u32,
++    };
++
++    fn graphemeSpanForIndex(self: *const OptimizedBuffer, index: u32, char: u32) GraphemeSpan {
++        const row_start = index - (index % self.width);
++        const row_end = row_start + self.width - 1;
++        const left = gp.charLeftExtent(char);
++        const right = gp.charRightExtent(char);
++
++        return .{
++            .start = index - @min(left, index - row_start),
++            .end = index + @min(right, row_end - index),
++            .id = gp.graphemeIdFromChar(char),
++        };
++    }
++
++    fn applyCellStyleToGraphemeSpan(self: *OptimizedBuffer, span: GraphemeSpan, style: Cell) void {
++        var span_i: u32 = span.start;
++        while (span_i <= span.end) : (span_i += 1) {
++            if (!self.isPointInScissor(@intCast(span_i % self.width), @intCast(span_i / self.width))) continue;
++
++            const span_char = self.buffer.char[span_i];
++            if (!(gp.isGraphemeChar(span_char) or gp.isContinuationChar(span_char))) continue;
++            if (gp.graphemeIdFromChar(span_char) != span.id) continue;
++
++            self.writeStyleAndLinks(span_i, style.fg, style.bg, style.attributes);
++        }
++    }
++
++    /// Blend a translucent overlay onto an entire wide-grapheme span uniformly.
++    /// Reads the canonical start cell of the span, blends once, and writes
++    /// the result to every cell in the span. Returns the rightmost
++    /// x-coordinate of the span.
++    fn blendPreservedGraphemeSpan(self: *OptimizedBuffer, index: u32, overlayCell: Cell) u32 {
++        const span_char = self.buffer.char[index];
++        const span = self.graphemeSpanForIndex(index, span_char);
++        const start_char = self.buffer.char[span.start];
++        // If the canonical start cell is clipped away, blend from the visible
++        // cell we were asked to update so partial-span writes still have a
++        // style source.
++        const style_source_index = if (gp.isGraphemeChar(start_char) and gp.graphemeIdFromChar(start_char) == span.id)
++            span.start
++        else
++            index;
++        const blended = self.blendCells(overlayCell, self.cellAtIndex(style_source_index));
++        self.applyCellStyleToGraphemeSpan(span, blended);
++        return span.end % self.width;
++    }
++
+     pub fn get(self: *const OptimizedBuffer, x: u32, y: u32) ?Cell {
+         if (x >= self.width or y >= self.height) return null;
+ 
+@@ -728,7 +901,7 @@ pub const OptimizedBuffer = struct {
+         return bytes_written;
+     }
+ 
+-    pub fn blendCells(self: *const OptimizedBuffer, overlayCell: Cell, destCell: Cell) Cell {
++    fn blendAlphaCells(self: *const OptimizedBuffer, overlayCell: Cell, destCell: Cell, allow_preserve_char: bool) Cell {
+         const hasBgAlpha = isRGBAWithAlpha(overlayCell.bg);
+         const hasFgAlpha = isRGBAWithAlpha(overlayCell.fg);
+ 
+@@ -740,12 +913,11 @@ pub const OptimizedBuffer = struct {
+             const charIsDefaultSpace = overlayCell.char == DEFAULT_SPACE_CHAR;
+             const destNotZero = destCell.char != 0;
+             const destNotDefaultSpace = destCell.char != DEFAULT_SPACE_CHAR;
+-            const destWidthIsOne = gp.encodedCharWidth(destCell.char) == 1;
+ 
+-            const preserveChar = (charIsDefaultSpace and
++            const preserveChar = (allow_preserve_char and
++                charIsDefaultSpace and
+                 destNotZero and
+-                destNotDefaultSpace and
+-                destWidthIsOne);
++                destNotDefaultSpace);
+             const finalChar = if (preserveChar) destCell.char else overlayCell.char;
+ 
+             var finalFg: RGBA = undefined;
+@@ -783,6 +955,40 @@ pub const OptimizedBuffer = struct {
+         return overlayCell;
+     }
+ 
++    pub fn blendCells(self: *const OptimizedBuffer, overlayCell: Cell, destCell: Cell) Cell {
++        return self.blendAlphaCells(overlayCell, destCell, true);
++    }
++
++    fn blendCellsWithoutPreservingChar(self: *const OptimizedBuffer, overlayCell: Cell, destCell: Cell) Cell {
++        return self.blendAlphaCells(overlayCell, destCell, false);
++    }
++
++    // Render a stable ASCII placeholder using the overlay tint instead of
++    // trying to recolor emoji bytes, which terminals treat opaquely.
++    fn renderPlaceholder(self: *OptimizedBuffer, span_start: u32, width: u32, overlayCell: Cell, destCell: Cell) void {
++        const blendedBg = blendColors(overlayCell.bg, destCell.bg, self.blendBackdropColor);
++        const blendedFg = blendColors(overlayCell.bg, destCell.fg, self.blendBackdropColor);
++        const placeholderBg = RGBA{ blendedBg[0], blendedBg[1], blendedBg[2], overlayCell.bg[3] };
++        const y = span_start / self.width;
++        const x = span_start % self.width;
++        const attrs = overlayCell.attributes;
++
++        self.set(x, y, Cell{ .char = '[', .fg = blendedFg, .bg = placeholderBg, .attributes = attrs });
++        if (width > 1 and x + 1 < self.width) {
++            self.set(x + 1, y, Cell{ .char = ']', .fg = blendedFg, .bg = placeholderBg, .attributes = attrs });
++        }
++
++        var extra: u32 = 2;
++        while (extra < width) : (extra += 1) {
++            if (x + extra < self.width) {
++                self.set(x + extra, y, Cell{ .char = DEFAULT_SPACE_CHAR, .fg = blendedFg, .bg = placeholderBg, .attributes = attrs });
++            }
++        }
++    }
++
++    /// Alpha-blend an overlay cell onto the destination at (x, y).
++    /// Wide text spans are preserved and tinted uniformly. Wide emoji use a
++    /// placeholder span instead of rendering tinted color emoji.
+     pub fn setCellWithAlphaBlending(
+         self: *OptimizedBuffer,
+         x: u32,
+@@ -791,27 +997,70 @@ pub const OptimizedBuffer = struct {
+         fg: RGBA,
+         bg: RGBA,
+         attributes: u32,
+-    ) !void {
+-        if (!self.isPointInScissor(@intCast(x), @intCast(y))) return;
++    ) !u32 {
++        if (!self.isPointInScissor(@intCast(x), @intCast(y))) return x;
++
++        const index = self.coordsToIndex(x, y);
+ 
+         // Apply current opacity from the stack
+         const opacity = self.getCurrentOpacity();
+         if (isFullyOpaque(opacity, fg, bg)) {
+             self.set(x, y, Cell{ .char = char, .fg = fg, .bg = bg, .attributes = attributes });
+-            return;
++            return x;
+         }
+ 
+         const effectiveFg = RGBA{ fg[0], fg[1], fg[2], fg[3] * opacity };
+         const effectiveBg = RGBA{ bg[0], bg[1], bg[2], bg[3] * opacity };
++        if (effectiveFg[3] == 0.0 and effectiveBg[3] == 0.0) return x;
+ 
+         const overlayCell = Cell{ .char = char, .fg = effectiveFg, .bg = effectiveBg, .attributes = attributes };
+ 
+-        if (self.get(x, y)) |destCell| {
+-            const blendedCell = self.blendCells(overlayCell, destCell);
+-            self.set(x, y, blendedCell);
+-        } else {
++        const destCell = self.get(x, y) orelse {
+             self.set(x, y, overlayCell);
++            return x;
++        };
++        const blendedCell = self.blendCells(overlayCell, destCell);
++        const preservesDestChar = blendedCell.char == destCell.char and
++            (gp.isGraphemeChar(destCell.char) or gp.isContinuationChar(destCell.char));
++        if (!preservesDestChar) {
++            self.set(x, y, blendedCell);
++            return x;
++        }
++
++        const isWideSpan = gp.charLeftExtent(destCell.char) + gp.charRightExtent(destCell.char) > 0;
++        if (!isWideSpan) {
++            // Single-cell grapheme: update just this cell.
++            self.writeStyleAndLinks(index, blendedCell.fg, blendedCell.bg, blendedCell.attributes);
++            return x;
++        }
++
++        // A transparent space should be a no-op for an already-preserved wide
++        // span; return the span end so left-to-right callers can skip the rest.
++        if (overlayCell.char == DEFAULT_SPACE_CHAR and overlayCell.bg[3] == 0.0) {
++            const span = self.graphemeSpanForIndex(index, destCell.char);
++            return span.end % self.width;
+         }
++
++        if (overlayCell.char == DEFAULT_SPACE_CHAR and self.shouldPlaceholderWideChar(destCell.char)) {
++            const span = self.graphemeSpanForIndex(index, destCell.char);
++            const span_start_x = span.start % self.width;
++            const span_end_x = span.end % self.width;
++            const span_y = span.start / self.width;
++            if (self.isPointInScissor(@intCast(span_start_x), @intCast(span_y)) and
++                self.isPointInScissor(@intCast(span_end_x), @intCast(span_y)))
++            {
++                const width = span.end - span.start + 1;
++                const start_cell = self.cellAtIndex(span.start);
++                self.renderPlaceholder(span.start, width, overlayCell, start_cell);
++                return span_end_x;
++            }
++
++            return self.blendPreservedGraphemeSpan(index, overlayCell);
++        }
++
++        // Wide grapheme: resolve the full span, blend once from the canonical
++        // start cell, and write uniformly.
++        return self.blendPreservedGraphemeSpan(index, overlayCell);
+     }
+ 
+     pub fn setCellWithAlphaBlendingRaw(
+@@ -852,6 +1101,71 @@ pub const OptimizedBuffer = struct {
+         }
+     }
+ 
++    /// Alpha-blend an overlay cell while clipping any intersected wide
++    /// grapheme span instead of tinting that full span uniformly. Box edge
++    /// bands use this path so geometric edges stay straight even when they
++    /// cut through a wide glyph.
++    pub fn setCellWithAlphaBlendingClipWideGraphemes(
++        self: *OptimizedBuffer,
++        x: u32,
++        y: u32,
++        char: u32,
++        fg: RGBA,
++        bg: RGBA,
++        attributes: u32,
++    ) !void {
++        if (!self.isPointInScissor(@intCast(x), @intCast(y))) return;
++
++        const opacity = self.getCurrentOpacity();
++        if (isFullyOpaque(opacity, fg, bg)) {
++            self.set(x, y, Cell{ .char = char, .fg = fg, .bg = bg, .attributes = attributes });
++            return;
++        }
++
++        const effectiveFg = RGBA{ fg[0], fg[1], fg[2], fg[3] * opacity };
++        const effectiveBg = RGBA{ bg[0], bg[1], bg[2], bg[3] * opacity };
++        if (char == DEFAULT_SPACE_CHAR and effectiveBg[3] == 0.0) return;
++        if (effectiveFg[3] == 0.0 and effectiveBg[3] == 0.0) return;
++        const overlayCell = Cell{ .char = char, .fg = effectiveFg, .bg = effectiveBg, .attributes = attributes };
++
++        if (self.get(x, y)) |destCell| {
++            const blendedCell = self.blendCellsWithoutPreservingChar(overlayCell, destCell);
++            self.set(x, y, blendedCell);
++        } else {
++            self.set(x, y, overlayCell);
++        }
++    }
++
++    const FillBounds = struct {
++        start_x: u32,
++        start_y: u32,
++        end_x: u32,
++        end_y: u32,
++    };
++
++    fn clippedFillBounds(self: *const OptimizedBuffer, x: u32, y: u32, width: u32, height: u32) ?FillBounds {
++        if (self.width == 0 or self.height == 0 or width == 0 or height == 0) return null;
++        if (x >= self.width or y >= self.height) return null;
++        if (!self.isRectInScissor(@intCast(x), @intCast(y), width, height)) return null;
++
++        const maxEndX = self.width - 1;
++        const maxEndY = self.height - 1;
++        const requestedEndX = x + width - 1;
++        const requestedEndY = y + height - 1;
++        const endX = @min(maxEndX, requestedEndX);
++        const endY = @min(maxEndY, requestedEndY);
++        if (x > endX or y > endY) return null;
++
++        const clippedRect = self.clipRectToScissor(@intCast(x), @intCast(y), endX - x + 1, endY - y + 1) orelse return null;
++
++        return .{
++            .start_x = @max(x, @as(u32, @intCast(clippedRect.x))),
++            .start_y = @max(y, @as(u32, @intCast(clippedRect.y))),
++            .end_x = @min(endX, @as(u32, @intCast(clippedRect.x + @as(i32, @intCast(clippedRect.width)) - 1))),
++            .end_y = @min(endY, @as(u32, @intCast(clippedRect.y + @as(i32, @intCast(clippedRect.height)) - 1))),
++        };
++    }
++
+     pub fn drawChar(
+         self: *OptimizedBuffer,
+         char: u32,
+@@ -864,7 +1178,7 @@ pub const OptimizedBuffer = struct {
+         if (!self.isPointInScissor(@intCast(x), @intCast(y))) return;
+ 
+         if (isRGBAWithAlpha(bg) or isRGBAWithAlpha(fg)) {
+-            try self.setCellWithAlphaBlending(x, y, char, fg, bg, attributes);
++            _ = try self.setCellWithAlphaBlending(x, y, char, fg, bg, attributes);
+         } else {
+             self.set(x, y, Cell{
+                 .char = char,
+@@ -883,46 +1197,27 @@ pub const OptimizedBuffer = struct {
+         height: u32,
+         bg: RGBA,
+     ) !void {
+-        if (self.width == 0 or self.height == 0 or width == 0 or height == 0) return;
+-        if (x >= self.width or y >= self.height) return;
+-
+-        if (!self.isRectInScissor(@intCast(x), @intCast(y), width, height)) return;
+-
+-        const startX = x;
+-        const startY = y;
+-        const maxEndX = if (x < self.width) self.width - 1 else 0;
+-        const maxEndY = if (y < self.height) self.height - 1 else 0;
+-        const requestedEndX = x + width - 1;
+-        const requestedEndY = y + height - 1;
+-        const endX = @min(maxEndX, requestedEndX);
+-        const endY = @min(maxEndY, requestedEndY);
+-
+-        if (startX > endX or startY > endY) return;
+-
+-        const clippedRect = self.clipRectToScissor(@intCast(startX), @intCast(startY), endX - startX + 1, endY - startY + 1) orelse return;
+-        const clippedStartX = @max(startX, @as(u32, @intCast(clippedRect.x)));
+-        const clippedStartY = @max(startY, @as(u32, @intCast(clippedRect.y)));
+-        const clippedEndX = @min(endX, @as(u32, @intCast(clippedRect.x + @as(i32, @intCast(clippedRect.width)) - 1)));
+-        const clippedEndY = @min(endY, @as(u32, @intCast(clippedRect.y + @as(i32, @intCast(clippedRect.height)) - 1)));
++        if (bg[3] * self.getCurrentOpacity() == 0.0) return;
++        const bounds = self.clippedFillBounds(x, y, width, height) orelse return;
+ 
+-        const opacity = self.getCurrentOpacity();
+-        const hasAlpha = isRGBAWithAlpha(bg) or opacity < 1.0;
++        const hasAlpha = isRGBAWithAlpha(bg) or self.getCurrentOpacity() < 1.0;
+         const linkAware = self.link_tracker.hasAny();
+ 
+         if (hasAlpha or self.grapheme_tracker.hasAny() or linkAware) {
+-            var fillY = clippedStartY;
+-            while (fillY <= clippedEndY) : (fillY += 1) {
+-                var fillX = clippedStartX;
+-                while (fillX <= clippedEndX) : (fillX += 1) {
+-                    try self.setCellWithAlphaBlending(fillX, fillY, DEFAULT_SPACE_CHAR, .{ 1.0, 1.0, 1.0, 1.0 }, bg, 0);
++            var fillY = bounds.start_y;
++            while (fillY <= bounds.end_y) : (fillY += 1) {
++                var cursor = BlendCursor{};
++                var fillX = bounds.start_x;
++                while (fillX <= bounds.end_x) : (fillX += 1) {
++                    fillX = try cursor.blendAt(self, fillX, fillY, DEFAULT_SPACE_CHAR, .{ 1.0, 1.0, 1.0, 1.0 }, bg, 0);
+                 }
+             }
+         } else {
+             // For non-alpha (fully opaque) backgrounds with no graphemes or links, we can do direct filling
+-            var fillY = clippedStartY;
+-            while (fillY <= clippedEndY) : (fillY += 1) {
+-                const rowStartIndex = self.coordsToIndex(@intCast(clippedStartX), @intCast(fillY));
+-                const rowWidth = clippedEndX - clippedStartX + 1;
++            var fillY = bounds.start_y;
++            while (fillY <= bounds.end_y) : (fillY += 1) {
++                const rowStartIndex = self.coordsToIndex(@intCast(bounds.start_x), @intCast(fillY));
++                const rowWidth = bounds.end_x - bounds.start_x + 1;
+ 
+                 const rowSliceChar = self.buffer.char[rowStartIndex .. rowStartIndex + rowWidth];
+                 const rowSliceFg = self.buffer.fg[rowStartIndex .. rowStartIndex + rowWidth];
+@@ -937,6 +1232,33 @@ pub const OptimizedBuffer = struct {
+         }
+     }
+ 
++    pub fn fillRectClipWideGraphemes(
++        self: *OptimizedBuffer,
++        x: u32,
++        y: u32,
++        width: u32,
++        height: u32,
++        bg: RGBA,
++    ) !void {
++        if (bg[3] * self.getCurrentOpacity() == 0.0) return;
++        const bounds = self.clippedFillBounds(x, y, width, height) orelse return;
++
++        const hasAlpha = isRGBAWithAlpha(bg) or self.getCurrentOpacity() < 1.0;
++        const linkAware = self.link_tracker.hasAny();
++
++        if (hasAlpha or self.grapheme_tracker.hasAny() or linkAware) {
++            var fillY = bounds.start_y;
++            while (fillY <= bounds.end_y) : (fillY += 1) {
++                var fillX = bounds.start_x;
++                while (fillX <= bounds.end_x) : (fillX += 1) {
++                    try self.setCellWithAlphaBlendingClipWideGraphemes(fillX, fillY, DEFAULT_SPACE_CHAR, .{ 1.0, 1.0, 1.0, 1.0 }, bg, 0);
++                }
++            }
++        } else {
++            try self.fillRect(x, y, width, height, bg);
++        }
++    }
++
+     pub fn drawText(
+         self: *OptimizedBuffer,
+         text: []const u8,
+@@ -962,6 +1284,7 @@ pub const OptimizedBuffer = struct {
+         var byte_offset: u32 = 0;
+         var col: u32 = 0;
+         var special_idx: usize = 0;
++        var cursor = BlendCursor{};
+ 
+         while (byte_offset < text.len) {
+             const charX = x + advance_cells;
+@@ -1013,7 +1336,8 @@ pub const OptimizedBuffer = struct {
+                     if (tab_x >= self.width) break;
+ 
+                     if (isRGBAWithAlpha(bgColor)) {
+-                        try self.setCellWithAlphaBlending(
++                        _ = try cursor.blendAt(
++                            self,
+                             tab_x,
+                             y,
+                             DEFAULT_SPACE_CHAR,
+@@ -1044,7 +1368,7 @@ pub const OptimizedBuffer = struct {
+             }
+ 
+             if (isRGBAWithAlpha(bgColor)) {
+-                try self.setCellWithAlphaBlending(charX, y, encoded_char, fg, bgColor, attributes);
++                _ = try cursor.blendAt(self, charX, y, encoded_char, fg, bgColor, attributes);
+             } else {
+                 self.set(charX, y, Cell{
+                     .char = encoded_char,
+@@ -1125,6 +1449,7 @@ pub const OptimizedBuffer = struct {
+         var dY = clippedStartY;
+         while (dY <= clippedEndY) : (dY += 1) {
+             var lastDrawnGraphemeId: u32 = 0;
++            var cursor = BlendCursor{};
+ 
+             var dX = clippedStartX;
+             while (dX <= clippedEndX) : (dX += 1) {
+@@ -1151,7 +1476,7 @@ pub const OptimizedBuffer = struct {
+                         if (graphemeId != lastDrawnGraphemeId) {
+                             // We haven't drawn the start character for this grapheme (likely out of bounds to the left)
+                             // Draw a space with the same attributes to fill the cell
+-                            self.setCellWithAlphaBlending(@intCast(dX), @intCast(dY), DEFAULT_SPACE_CHAR, srcFg, srcBg, srcAttr) catch {};
++                            _ = cursor.blendAt(self, @intCast(dX), @intCast(dY), DEFAULT_SPACE_CHAR, srcFg, srcBg, srcAttr) catch @as(u32, @intCast(dX));
+                         }
+                         continue;
+                     }
+@@ -1160,7 +1485,7 @@ pub const OptimizedBuffer = struct {
+                         lastDrawnGraphemeId = srcChar & gp.GRAPHEME_ID_MASK;
+                     }
+ 
+-                    self.setCellWithAlphaBlending(@intCast(dX), @intCast(dY), srcChar, srcFg, srcBg, srcAttr) catch {};
++                    _ = cursor.blendAt(self, @intCast(dX), @intCast(dY), srcChar, srcFg, srcBg, srcAttr) catch 0;
+                     continue;
+                 }
+ 
+@@ -1222,6 +1547,7 @@ pub const OptimizedBuffer = struct {
+             if (currentY >= bufferBottomY) break;
+ 
+             currentX = x;
++            var cursor = BlendCursor{};
+             var column_in_line: u32 = 0;
+             globalCharPos = vline.col_offset;
+ 
+@@ -1486,13 +1812,15 @@ pub const OptimizedBuffer = struct {
+ 
+                         var tab_col: u32 = 0;
+                         while (tab_col < g_width) : (tab_col += 1) {
+-                            if (currentX + @as(i32, @intCast(tab_col)) >= @as(i32, @intCast(self.width))) break;
++                            const tab_x_i32 = currentX + @as(i32, @intCast(tab_col));
++                            if (tab_x_i32 >= @as(i32, @intCast(self.width))) break;
+ 
+                             const char = if (tab_col == 0 and tab_indicator != null) tab_indicator.? else DEFAULT_SPACE_CHAR;
+                             const fg = if (tab_col == 0 and tab_indicator_color != null) tab_indicator_color.? else drawFg;
+ 
+-                            try self.setCellWithAlphaBlending(
+-                                @intCast(currentX + @as(i32, @intCast(tab_col))),
++                            _ = try cursor.blendAt(
++                                self,
++                                @intCast(tab_x_i32),
+                                 @intCast(currentY),
+                                 char,
+                                 fg,
+@@ -1515,7 +1843,8 @@ pub const OptimizedBuffer = struct {
+                             encoded_char = gp.packGraphemeStart(gid & gp.GRAPHEME_ID_MASK, g_width);
+                         }
+ 
+-                        try self.setCellWithAlphaBlending(
++                        _ = try cursor.blendAt(
++                            self,
+                             @intCast(currentX),
+                             @intCast(currentY),
+                             encoded_char,
+@@ -1770,7 +2099,7 @@ pub const OptimizedBuffer = struct {
+                             char = if (borderSides.right) borderChars[@intFromEnum(BorderCharIndex.topRight)] else borderChars[@intFromEnum(BorderCharIndex.horizontal)];
+                         }
+ 
+-                        try self.setCellWithAlphaBlending(@intCast(drawX), @intCast(startY), char, borderColor, backgroundColor, 0);
++                        _ = try self.setCellWithAlphaBlending(@intCast(drawX), @intCast(startY), char, borderColor, backgroundColor, 0);
+                     }
+                 }
+             }
+@@ -1793,7 +2122,7 @@ pub const OptimizedBuffer = struct {
+                             char = if (borderSides.right) borderChars[@intFromEnum(BorderCharIndex.bottomRight)] else borderChars[@intFromEnum(BorderCharIndex.horizontal)];
+                         }
+ 
+-                        try self.setCellWithAlphaBlending(@intCast(drawX), @intCast(endY), char, borderColor, backgroundColor, 0);
++                        _ = try self.setCellWithAlphaBlending(@intCast(drawX), @intCast(endY), char, borderColor, backgroundColor, 0);
+                     }
+                 }
+             }
+@@ -1808,12 +2137,12 @@ pub const OptimizedBuffer = struct {
+             while (drawY <= verticalEndY) : (drawY += 1) {
+                 // Left border
+                 if (borderSides.left and isAtActualLeft and startX >= 0 and startX < @as(i32, @intCast(self.width))) {
+-                    try self.setCellWithAlphaBlending(@intCast(startX), @intCast(drawY), borderChars[@intFromEnum(BorderCharIndex.vertical)], borderColor, backgroundColor, 0);
++                    _ = try self.setCellWithAlphaBlending(@intCast(startX), @intCast(drawY), borderChars[@intFromEnum(BorderCharIndex.vertical)], borderColor, backgroundColor, 0);
+                 }
+ 
+                 // Right border
+                 if (borderSides.right and isAtActualRight and endX >= 0 and endX < @as(i32, @intCast(self.width))) {
+-                    try self.setCellWithAlphaBlending(@intCast(endX), @intCast(drawY), borderChars[@intFromEnum(BorderCharIndex.vertical)], borderColor, backgroundColor, 0);
++                    _ = try self.setCellWithAlphaBlending(@intCast(endX), @intCast(drawY), borderChars[@intFromEnum(BorderCharIndex.vertical)], borderColor, backgroundColor, 0);
+                 }
+             }
+         }
+@@ -1892,6 +2221,7 @@ pub const OptimizedBuffer = struct {
+ 
+         var y_cell = posY;
+         while (y_cell < self.height) : (y_cell += 1) {
++            var cursor = BlendCursor{};
+             var x_cell = posX;
+             while (x_cell < self.width) : (x_cell += 1) {
+                 if (!self.isPointInScissor(@intCast(x_cell), @intCast(y_cell))) {
+@@ -1917,7 +2247,7 @@ pub const OptimizedBuffer = struct {
+ 
+                 const cellResult = renderQuadrantBlock(pixelsRgba);
+ 
+-                try self.setCellWithAlphaBlending(x_cell, y_cell, cellResult.char, cellResult.fg, cellResult.bg, 0);
++                _ = try cursor.blendAt(self, x_cell, y_cell, cellResult.char, cellResult.fg, cellResult.bg, 0);
+             }
+         }
+     }
+@@ -1938,6 +2268,8 @@ pub const OptimizedBuffer = struct {
+         const numCells = dataLen / cellResultSize;
+         const bufferWidthCells = terminalWidthCells;
+ 
++        var cursor = BlendCursor{};
++        var lastRow: u32 = 0;
+         var i: usize = 0;
+         while (i < numCells) : (i += 1) {
+             const cellDataOffset = i * cellResultSize;
+@@ -1945,6 +2277,11 @@ pub const OptimizedBuffer = struct {
+             const cellX = posX + @as(u32, @intCast(i % bufferWidthCells));
+             const cellY = posY + @as(u32, @intCast(i / bufferWidthCells));
+ 
++            if (cellY != lastRow) {
++                cursor = .{};
++                lastRow = cellY;
++            }
++
+             if (cellX >= terminalWidthCells or cellY >= terminalHeightCells) continue;
+             if (cellX >= self.width or cellY >= self.height) continue;
+ 
+@@ -1967,7 +2304,7 @@ pub const OptimizedBuffer = struct {
+                 char = BLOCK_CHAR;
+             }
+ 
+-            self.setCellWithAlphaBlending(cellX, cellY, char, fg, bg, 0) catch {};
++            _ = cursor.blendAt(self, cellX, cellY, char, fg, bg, 0) catch 0;
+         }
+     }
+ 
+@@ -2017,6 +2354,7 @@ pub const OptimizedBuffer = struct {
+             srcY += 1;
+             destY += 1;
+         }) {
++            var cursor = BlendCursor{};
+             var srcX: u32 = startX;
+             var destX: u32 = destStartX;
+             while (srcX < startX + visibleWidth) : ({
+@@ -2036,7 +2374,7 @@ pub const OptimizedBuffer = struct {
+                 const fg: RGBA = .{ baseFg[0], baseFg[1], baseFg[2], gray * baseFg[3] * opacity };
+ 
+                 if (graphemeAware or linkAware) {
+-                    self.setCellWithAlphaBlending(destX, destY, char, fg, bg, 0) catch {};
++                    _ = cursor.blendAt(self, destX, destY, char, fg, bg, 0) catch 0;
+                 } else {
+                     self.setCellWithAlphaBlendingRaw(destX, destY, char, fg, bg, 0) catch {};
+                 }
+@@ -2087,6 +2425,7 @@ pub const OptimizedBuffer = struct {
+             cellY += 1;
+             destY += 1;
+         }) {
++            var cursor = BlendCursor{};
+             var cellX: u32 = startX;
+             var destX: u32 = destStartX;
+             while (cellX < startX + visibleWidth) : ({
+@@ -2118,7 +2457,7 @@ pub const OptimizedBuffer = struct {
+                 const fg: RGBA = .{ baseFg[0], baseFg[1], baseFg[2], gray * baseFg[3] * opacity };
+ 
+                 if (graphemeAware or linkAware) {
+-                    self.setCellWithAlphaBlending(destX, destY, char, fg, bg, 0) catch {};
++                    _ = cursor.blendAt(self, destX, destY, char, fg, bg, 0) catch 0;
+                 } else {
+                     self.setCellWithAlphaBlendingRaw(destX, destY, char, fg, bg, 0) catch {};
+                 }
+diff --git a/src/zig/lib.zig b/src/zig/lib.zig
+index b95b7e0b..9716c8e3 100644
+--- a/src/zig/lib.zig
++++ b/src/zig/lib.zig
+@@ -518,7 +518,7 @@ export fn bufferDrawText(bufferPtr: *buffer.OptimizedBuffer, text: [*]const u8,
+ export fn bufferSetCellWithAlphaBlending(bufferPtr: *buffer.OptimizedBuffer, x: u32, y: u32, char: u32, fg: [*]const f32, bg: [*]const f32, attributes: u32) void {
+     const rgbaFg = utils.f32PtrToRGBA(fg);
+     const rgbaBg = utils.f32PtrToRGBA(bg);
+-    bufferPtr.setCellWithAlphaBlending(x, y, char, rgbaFg, rgbaBg, attributes) catch {};
++    _ = bufferPtr.setCellWithAlphaBlending(x, y, char, rgbaFg, rgbaBg, attributes) catch return;
+ }
+ 
+ export fn bufferSetCell(bufferPtr: *buffer.OptimizedBuffer, x: u32, y: u32, char: u32, fg: [*]const f32, bg: [*]const f32, attributes: u32) void {
+@@ -538,6 +538,11 @@ export fn bufferFillRect(bufferPtr: *buffer.OptimizedBuffer, x: u32, y: u32, wid
+     bufferPtr.fillRect(x, y, width, height, rgbaBg) catch {};
+ }
+ 
++export fn bufferFillRectClipWideGraphemes(bufferPtr: *buffer.OptimizedBuffer, x: u32, y: u32, width: u32, height: u32, bg: [*]const f32) void {
++    const rgbaBg = utils.f32PtrToRGBA(bg);
++    bufferPtr.fillRectClipWideGraphemes(x, y, width, height, rgbaBg) catch {};
++}
++
+ export fn bufferColorMatrix(bufferPtr: *buffer.OptimizedBuffer, matrixPtr: [*]const f32, cellMaskPtr: [*]const f32, cellMaskCount: usize, strength: f32, target: u8) void {
+     if (cellMaskCount == 0) return;
+     const matrix = matrixPtr[0..16];
+diff --git a/src/zig/renderer.zig b/src/zig/renderer.zig
+index bc739e81..e9a669d7 100644
+--- a/src/zig/renderer.zig
++++ b/src/zig/renderer.zig
+@@ -635,6 +635,12 @@ pub const CliRenderer = struct {
+ 
+             var runStart: i64 = -1;
+             var runLength: u32 = 0;
++            // Tracks continuation cells already covered by a grapheme emitted
++            // in this pass so we do not print trailing spaces into that span.
++            var lastEmittedGraphemeEnd: u32 = 0;
++            // Tracks old wide spans already blanked this row so repainting any
++            // of their cells does not repeatedly clear the same terminal cells.
++            var lastClearedOldGraphemeEnd: u32 = 0;
+ 
+             for (0..self.width) |ux| {
+                 const x = @as(u32, @intCast(ux));
+@@ -642,6 +648,15 @@ pub const CliRenderer = struct {
+                 const nextCell = self.nextRenderBuffer.get(x, y);
+ 
+                 if (currentCell == null or nextCell == null) continue;
++                // A lead-cell sync writes the grapheme's continuation cells into
++                // currentRenderBuffer immediately. When we reach those tails later
++                // in the same left-to-right pass, they can now compare equal even
++                // though the grapheme was just emitted. Skipping them here keeps
++                // the active run open so fallback output does not inject cursor
++                // moves between adjacent wide graphemes.
++                if (gp.isContinuationChar(nextCell.?.char) and x < lastEmittedGraphemeEnd) {
++                    continue;
++                }
+ 
+                 if (!force) {
+                     const charEqual = currentCell.?.char == nextCell.?.char;
+@@ -719,6 +734,28 @@ pub const CliRenderer = struct {
+                     ansi.TextAttributes.applyAttributesOutputWriter(writer, cell.attributes) catch {};
+                 }
+ 
++                var clearedOldWideSpan = false;
++                if (!force and (gp.isGraphemeChar(currentCell.?.char) or gp.isContinuationChar(currentCell.?.char)) and currentCell.?.char != cell.char) {
++                    const oldLeft = gp.charLeftExtent(currentCell.?.char);
++                    const oldRight = gp.charRightExtent(currentCell.?.char);
++                    const oldWidth = oldLeft + 1 + oldRight;
++                    const oldStartX = x - oldLeft;
++                    const oldEndX = oldStartX + oldWidth;
++                    if (oldWidth > 1 and oldEndX > lastClearedOldGraphemeEnd) {
++                        // Clear the old terminal footprint first: the buffer can
++                        // already be correct while the terminal still shows stale
++                        // cells from the previous wide grapheme.
++                        ansi.ANSI.moveToOutput(writer, oldStartX + 1, y + 1 + self.renderOffset) catch {};
++                        var clear_from_start_i: u32 = 0;
++                        while (clear_from_start_i < oldWidth) : (clear_from_start_i += 1) {
++                            writer.writeByte(' ') catch {};
++                        }
++                        ansi.ANSI.moveToOutput(writer, x + 1, y + 1 + self.renderOffset) catch {};
++                        lastClearedOldGraphemeEnd = oldEndX;
++                        clearedOldWideSpan = true;
++                    }
++                }
++
+                 // Handle grapheme characters
+                 if (gp.isGraphemeChar(cell.char)) {
+                     const gid: u32 = gp.graphemeIdFromChar(cell.char);
+@@ -729,11 +766,19 @@ pub const CliRenderer = struct {
+                     if (bytes.len > 0) {
+                         const capabilities = self.terminal.getCapabilities();
+                         const graphemeWidth = gp.charRightExtent(cell.char) + 1;
++                        lastEmittedGraphemeEnd = x + graphemeWidth;
++                        if (!force and graphemeWidth > 1 and currentCell.?.char != cell.char and !clearedOldWideSpan) {
++                            var clear_i: u32 = 0;
++                            while (clear_i < graphemeWidth) : (clear_i += 1) {
++                                writer.writeByte(' ') catch {};
++                            }
++                            ansi.ANSI.moveToOutput(writer, x + 1, y + 1 + self.renderOffset) catch {};
++                        }
+                         if (capabilities.explicit_width) {
+                             ansi.ANSI.explicitWidthOutput(writer, graphemeWidth, bytes) catch {};
+                         } else {
+                             writer.writeAll(bytes) catch {};
+-                            if (capabilities.explicit_cursor_positioning) {
++                            if (capabilities.explicit_cursor_positioning and graphemeWidth > 1) {
+                                 const nextX = x + graphemeWidth;
+                                 if (nextX < self.width) {
+                                     ansi.ANSI.moveToOutput(writer, nextX + 1, y + 1 + self.renderOffset) catch {};
+@@ -742,11 +787,13 @@ pub const CliRenderer = struct {
+                         }
+                     }
+                 } else if (gp.isContinuationChar(cell.char)) {
+-                    // Intentionally do not write a space for continuation cells.
+-                    // NOTE: disabled to fix 2-cell emoji rendering when the two
+-                    // cells have distinct colors (space overwrite can break glyph output)
+-
+-                    // writer.writeByte(' ') catch {};
++                    // Only clear continuation cells that are not part of the
++                    // wide grapheme we just emitted. Writing a space into an
++                    // already-emitted span can split 2-cell glyphs, including
++                    // emoji whose two cells end up with distinct styling.
++                    if (x >= lastEmittedGraphemeEnd) {
++                        writer.writeByte(' ') catch {};
++                    }
+                 } else {
+                     const len = std.unicode.utf8Encode(@intCast(cell.char), &utf8Buf) catch 1;
+                     writer.writeAll(utf8Buf[0..len]) catch {};
+diff --git a/src/zig/tests/buffer_test.zig b/src/zig/tests/buffer_test.zig
+index b72c3f91..5ebf82fd 100644
+--- a/src/zig/tests/buffer_test.zig
++++ b/src/zig/tests/buffer_test.zig
+@@ -2228,7 +2228,7 @@ test "OptimizedBuffer - blendColors with transparent destination" {
+ 
+     const semi_white = RGBA{ 1.0, 1.0, 1.0, 0.5 };
+     const transparent_fg = RGBA{ 0.0, 0.0, 0.0, 0.0 };
+-    try buf.setCellWithAlphaBlending(0, 0, 'X', semi_white, transparent_fg, 0);
++    _ = try buf.setCellWithAlphaBlending(0, 0, 'X', semi_white, transparent_fg, 0);
+ 
+     const cell = buf.get(0, 0).?;
+     try std.testing.expect(cell.fg[0] > 0.45);
+@@ -2255,7 +2255,7 @@ test "OptimizedBuffer - blend backdrop flattens transparent destination" {
+ 
+     const opaque_fg = RGBA{ 1.0, 1.0, 1.0, 1.0 };
+     const semi_black_bg = RGBA{ 0.0, 0.0, 0.0, 0.5 };
+-    try buf.setCellWithAlphaBlending(0, 0, buffer_mod.DEFAULT_SPACE_CHAR, opaque_fg, semi_black_bg, 0);
++    _ = try buf.setCellWithAlphaBlending(0, 0, buffer_mod.DEFAULT_SPACE_CHAR, opaque_fg, semi_black_bg, 0);
+ 
+     const cell = buf.get(0, 0).?;
+     try std.testing.expect(cell.bg[0] > 0.45);
+@@ -2555,3 +2555,1044 @@ test "renderer - CJK graphemes shifting left must preserve continuation cells (#
+     const id8 = gp.graphemeIdFromChar(cell8.char);
+     try std.testing.expectEqual(id7, id8);
+ }
++
++// ── Wide-grapheme alpha-blending tests ──────────────────────────────────
++//
++// These tests verify the wide-grapheme alpha-blending contract on the
++// paths covered here: setCellWithAlphaBlending(), drawText(),
++// drawFrameBuffer(), and fillRect().
++//
++// The fixture graphemes used here are width-2 CJK characters. The contract is:
++// a translucent space overlay must preserve the underlying wide grapheme and,
++// when preservation happens, tint the grapheme span uniformly across its cells.
++//
++// Covered cases:
++//   1. Basic preservation: overlay space keeps the underlying char.
++//   2. Partial overlap:    hitting a continuation cell tints the whole span.
++//   3. Multi-cell pass:    a row of spaces doesn't double-blend a single span.
++//   4. Multiple spans:     the skip cursor resets between distinct graphemes.
++//   5. Scissor clipping:   span expansion doesn't bleed outside the scissor.
++//   6. Non-space override: a real character still overwrites mid-span.
++//   7. Cross-call compose: independent overlays stack across separate calls.
++//   8. Scissor then full:  a clipped write doesn't suppress a later full write.
++//
++// Most tests place a width-2 grapheme, apply an overlay through one of these
++// APIs, and then assert grapheme preservation and/or the expected background
++// color behavior.
++
++test "setCellWithAlphaBlending preserves wide characters under translucent overlay" {
++    const pool = gp.initGlobalPool(std.testing.allocator);
++    defer gp.deinitGlobalPool();
++
++    var buf = try OptimizedBuffer.init(
++        std.testing.allocator,
++        10,
++        1,
++        .{ .pool = pool, .id = "test-buffer" },
++    );
++    defer buf.deinit();
++
++    const bg = RGBA{ 0.0, 0.0, 0.0, 1.0 };
++    const fg = RGBA{ 1.0, 1.0, 1.0, 1.0 };
++    try buf.clear(bg, null);
++
++    // Write a width-2 grapheme (東) at column 2
++    const gid = try pool.alloc("東");
++    const grapheme_start = gp.packGraphemeStart(gid & gp.GRAPHEME_ID_MASK, 2);
++    buf.set(2, 0, .{ .char = grapheme_start, .fg = fg, .bg = bg, .attributes = 0 });
++
++    // Verify grapheme start + continuation are present
++    const start_before = buf.get(2, 0).?;
++    const cont_before = buf.get(3, 0).?;
++    try std.testing.expect(gp.isGraphemeChar(start_before.char));
++    try std.testing.expect(gp.isContinuationChar(cont_before.char));
++
++    // Apply a translucent overlay (like NestedTmuxOverlay's #0088ff18) over the whole row
++    const overlay_bg = RGBA{ 0.0, 0.533, 1.0, 0.094 }; // #0088ff18
++    const overlay_fg = RGBA{ 0.0, 0.0, 0.0, 0.0 };
++    for (0..10) |x| {
++        _ = try buf.setCellWithAlphaBlending(@intCast(x), 0, ' ', overlay_fg, overlay_bg, 0);
++    }
++
++    // Grapheme start and continuation must still be present
++    const start_after = buf.get(2, 0).?;
++    const cont_after = buf.get(3, 0).?;
++    try std.testing.expect(gp.isGraphemeChar(start_after.char));
++    try std.testing.expect(gp.isContinuationChar(cont_after.char));
++
++    // Chars must be identical (same grapheme ID, same extents)
++    try std.testing.expectEqual(start_before.char, start_after.char);
++    try std.testing.expectEqual(cont_before.char, cont_after.char);
++
++    // Background should be tinted (not identical to the original pure black)
++    try std.testing.expect(start_after.bg[1] > 0.01); // green channel gained from #0088ff
++    try std.testing.expect(cont_after.bg[1] > 0.01);
++
++    // Both cells should have the SAME blended bg (no double-blending)
++    try std.testing.expectEqual(start_after.bg[0], cont_after.bg[0]);
++    try std.testing.expectEqual(start_after.bg[1], cont_after.bg[1]);
++    try std.testing.expectEqual(start_after.bg[2], cont_after.bg[2]);
++}
++
++test "drawText translucent space over continuation cell tints the whole grapheme span" {
++    const pool = gp.initGlobalPool(std.testing.allocator);
++    defer gp.deinitGlobalPool();
++
++    var buf = try OptimizedBuffer.init(
++        std.testing.allocator,
++        10,
++        1,
++        .{ .pool = pool, .id = "test-buffer" },
++    );
++    defer buf.deinit();
++
++    const bg = RGBA{ 0.0, 0.0, 0.0, 1.0 };
++    const fg = RGBA{ 1.0, 1.0, 1.0, 1.0 };
++    try buf.clear(bg, null);
++
++    // Write a width-2 grapheme (東) at column 2
++    const gid = try pool.alloc("東");
++    const grapheme_start = gp.packGraphemeStart(gid & gp.GRAPHEME_ID_MASK, 2);
++    buf.set(2, 0, .{ .char = grapheme_start, .fg = fg, .bg = bg, .attributes = 0 });
++
++    // drawText a single translucent space at x=3 (the continuation cell only)
++    const overlay_bg = RGBA{ 0.0, 0.533, 1.0, 0.094 };
++    const overlay_fg = RGBA{ 1.0, 1.0, 1.0, 1.0 };
++    try buf.drawText(" ", 3, 0, overlay_fg, overlay_bg, 0);
++
++    // Grapheme must survive
++    const start_after = buf.get(2, 0).?;
++    const cont_after = buf.get(3, 0).?;
++    try std.testing.expect(gp.isGraphemeChar(start_after.char));
++    try std.testing.expect(gp.isContinuationChar(cont_after.char));
++
++    // Both cells should be tinted (not just x=3)
++    try std.testing.expect(start_after.bg[1] > 0.01);
++    try std.testing.expect(cont_after.bg[1] > 0.01);
++
++    // Both cells should have the SAME blended bg (uniform tint across the span)
++    try std.testing.expectEqual(start_after.bg[0], cont_after.bg[0]);
++    try std.testing.expectEqual(start_after.bg[1], cont_after.bg[1]);
++    try std.testing.expectEqual(start_after.bg[2], cont_after.bg[2]);
++}
++
++test "drawFrameBuffer 1x1 translucent child over continuation cell tints the whole grapheme span" {
++    const pool = gp.initGlobalPool(std.testing.allocator);
++    defer gp.deinitGlobalPool();
++
++    var buf = try OptimizedBuffer.init(
++        std.testing.allocator,
++        10,
++        1,
++        .{ .pool = pool, .id = "test-buffer" },
++    );
++    defer buf.deinit();
++
++    const bg = RGBA{ 0.0, 0.0, 0.0, 1.0 };
++    const fg = RGBA{ 1.0, 1.0, 1.0, 1.0 };
++    try buf.clear(bg, null);
++
++    // Write a width-2 grapheme (東) at column 2
++    const gid = try pool.alloc("東");
++    const grapheme_start = gp.packGraphemeStart(gid & gp.GRAPHEME_ID_MASK, 2);
++    buf.set(2, 0, .{ .char = grapheme_start, .fg = fg, .bg = bg, .attributes = 0 });
++
++    // Create a 1×1 child framebuffer with a translucent background
++    var child = try OptimizedBuffer.init(
++        std.testing.allocator,
++        1,
++        1,
++        .{ .pool = pool, .id = "child-buffer" },
++    );
++    defer child.deinit();
++    child.setRespectAlpha(true);
++    const overlay_bg = RGBA{ 0.0, 0.533, 1.0, 0.094 };
++    try child.clear(overlay_bg, null);
++
++    // Composite the 1×1 child at dest x=3 (the continuation cell only)
++    buf.drawFrameBuffer(3, 0, child, null, null, null, null);
++
++    // Grapheme must survive
++    const start_after = buf.get(2, 0).?;
++    const cont_after = buf.get(3, 0).?;
++    try std.testing.expect(gp.isGraphemeChar(start_after.char));
++    try std.testing.expect(gp.isContinuationChar(cont_after.char));
++
++    // Both cells should be tinted (not just x=3)
++    try std.testing.expect(start_after.bg[1] > 0.01);
++    try std.testing.expect(cont_after.bg[1] > 0.01);
++
++    // Both cells should have the SAME blended bg (uniform tint across the span)
++    try std.testing.expectEqual(start_after.bg[0], cont_after.bg[0]);
++    try std.testing.expectEqual(start_after.bg[1], cont_after.bg[1]);
++    try std.testing.expectEqual(start_after.bg[2], cont_after.bg[2]);
++}
++
++test "drawFrameBuffer preserves later per-cell overlay colors within a wide grapheme span" {
++    const pool = gp.initGlobalPool(std.testing.allocator);
++    defer gp.deinitGlobalPool();
++
++    var buf = try OptimizedBuffer.init(
++        std.testing.allocator,
++        10,
++        1,
++        .{ .pool = pool, .id = "test-buffer" },
++    );
++    defer buf.deinit();
++
++    var ref = try OptimizedBuffer.init(
++        std.testing.allocator,
++        10,
++        1,
++        .{ .pool = pool, .id = "ref-buffer" },
++    );
++    defer ref.deinit();
++
++    const base_bg = RGBA{ 0.0, 0.0, 0.0, 1.0 };
++    const fg = RGBA{ 1.0, 1.0, 1.0, 1.0 };
++    try buf.clear(base_bg, null);
++    try ref.clear(base_bg, null);
++
++    const gid = try pool.alloc("東");
++    const grapheme_start = gp.packGraphemeStart(gid & gp.GRAPHEME_ID_MASK, 2);
++    buf.set(2, 0, .{ .char = grapheme_start, .fg = fg, .bg = base_bg, .attributes = 0 });
++    ref.set(2, 0, .{ .char = grapheme_start, .fg = fg, .bg = base_bg, .attributes = 0 });
++
++    var child = try OptimizedBuffer.init(
++        std.testing.allocator,
++        2,
++        1,
++        .{ .pool = pool, .id = "child-buffer" },
++    );
++    defer child.deinit();
++    child.setRespectAlpha(true);
++    try child.clear(RGBA{ 0.0, 0.0, 0.0, 0.0 }, null);
++
++    const blue_bg = RGBA{ 0.0, 0.0, 1.0, 0.5 };
++    const red_bg = RGBA{ 1.0, 0.0, 0.0, 0.5 };
++    child.set(0, 0, .{ .char = buffer_mod.DEFAULT_SPACE_CHAR, .fg = fg, .bg = blue_bg, .attributes = 0 });
++    child.set(1, 0, .{ .char = buffer_mod.DEFAULT_SPACE_CHAR, .fg = fg, .bg = red_bg, .attributes = 0 });
++
++    buf.drawFrameBuffer(2, 0, child, null, null, null, null);
++
++    _ = try ref.setCellWithAlphaBlending(2, 0, buffer_mod.DEFAULT_SPACE_CHAR, fg, blue_bg, 0);
++    _ = try ref.setCellWithAlphaBlending(3, 0, buffer_mod.DEFAULT_SPACE_CHAR, fg, red_bg, 0);
++
++    const actual_start = buf.get(2, 0).?;
++    const actual_cont = buf.get(3, 0).?;
++    const expected_start = ref.get(2, 0).?;
++    const expected_cont = ref.get(3, 0).?;
++
++    try std.testing.expect(gp.isGraphemeChar(actual_start.char));
++    try std.testing.expect(gp.isContinuationChar(actual_cont.char));
++    try std.testing.expectEqual(expected_start.bg[0], actual_start.bg[0]);
++    try std.testing.expectEqual(expected_start.bg[1], actual_start.bg[1]);
++    try std.testing.expectEqual(expected_start.bg[2], actual_start.bg[2]);
++    try std.testing.expectEqual(expected_start.bg[3], actual_start.bg[3]);
++    try std.testing.expectEqual(expected_cont.bg[0], actual_cont.bg[0]);
++    try std.testing.expectEqual(expected_cont.bg[1], actual_cont.bg[1]);
++    try std.testing.expectEqual(expected_cont.bg[2], actual_cont.bg[2]);
++    try std.testing.expectEqual(expected_cont.bg[3], actual_cont.bg[3]);
++}
++
++test "fillRect with translucent partial overlap tints the whole grapheme span" {
++    const pool = gp.initGlobalPool(std.testing.allocator);
++    defer gp.deinitGlobalPool();
++
++    var buf = try OptimizedBuffer.init(
++        std.testing.allocator,
++        10,
++        1,
++        .{ .pool = pool, .id = "test-buffer" },
++    );
++    defer buf.deinit();
++
++    const bg = RGBA{ 0.0, 0.0, 0.0, 1.0 };
++    const fg = RGBA{ 1.0, 1.0, 1.0, 1.0 };
++    try buf.clear(bg, null);
++
++    const gid = try pool.alloc("東");
++    const grapheme_start = gp.packGraphemeStart(gid & gp.GRAPHEME_ID_MASK, 2);
++    buf.set(2, 0, .{ .char = grapheme_start, .fg = fg, .bg = bg, .attributes = 0 });
++
++    const start_before = buf.get(2, 0).?;
++    const cont_before = buf.get(3, 0).?;
++    try std.testing.expect(gp.isGraphemeChar(start_before.char));
++    try std.testing.expect(gp.isContinuationChar(cont_before.char));
++
++    const overlay_bg = RGBA{ 0.0, 0.533, 1.0, 0.094 };
++    try buf.fillRect(3, 0, 1, 1, overlay_bg);
++
++    const start_after = buf.get(2, 0).?;
++    const cont_after = buf.get(3, 0).?;
++    try std.testing.expect(gp.isGraphemeChar(start_after.char));
++    try std.testing.expect(gp.isContinuationChar(cont_after.char));
++
++    try std.testing.expectEqual(start_before.char, start_after.char);
++    try std.testing.expectEqual(cont_before.char, cont_after.char);
++
++    try std.testing.expect(start_after.bg[1] > 0.01);
++    try std.testing.expect(cont_after.bg[1] > 0.01);
++
++    try std.testing.expectEqual(start_after.bg[0], cont_after.bg[0]);
++    try std.testing.expectEqual(start_after.bg[1], cont_after.bg[1]);
++    try std.testing.expectEqual(start_after.bg[2], cont_after.bg[2]);
++}
++
++test "fillRectClipWideGraphemes clips a left-edge overlap instead of tinting outside the box" {
++    const pool = gp.initGlobalPool(std.testing.allocator);
++    defer gp.deinitGlobalPool();
++
++    var buf = try OptimizedBuffer.init(
++        std.testing.allocator,
++        10,
++        1,
++        .{ .pool = pool, .id = "test-buffer" },
++    );
++    defer buf.deinit();
++
++    const bg = RGBA{ 0.0, 0.0, 0.0, 1.0 };
++    const fg = RGBA{ 1.0, 1.0, 1.0, 1.0 };
++    try buf.clear(bg, null);
++
++    const gid = try pool.alloc("東");
++    const grapheme_start = gp.packGraphemeStart(gid & gp.GRAPHEME_ID_MASK, 2);
++    buf.set(2, 0, .{ .char = grapheme_start, .fg = fg, .bg = bg, .attributes = 0 });
++
++    const overlay_bg = RGBA{ 0.0, 0.533, 1.0, 0.094 };
++    try buf.fillRectClipWideGraphemes(3, 0, 1, 1, overlay_bg);
++
++    const outside = buf.get(2, 0).?;
++    const inside = buf.get(3, 0).?;
++
++    try std.testing.expectEqual(@as(u32, buffer_mod.DEFAULT_SPACE_CHAR), outside.char);
++    try std.testing.expectEqual(@as(u32, buffer_mod.DEFAULT_SPACE_CHAR), inside.char);
++    try std.testing.expectEqual(bg[0], outside.bg[0]);
++    try std.testing.expectEqual(bg[1], outside.bg[1]);
++    try std.testing.expectEqual(bg[2], outside.bg[2]);
++    try std.testing.expect(inside.bg[1] > 0.01);
++}
++
++test "fillRectClipWideGraphemes clips a right-edge overlap instead of tinting outside the box" {
++    const pool = gp.initGlobalPool(std.testing.allocator);
++    defer gp.deinitGlobalPool();
++
++    var buf = try OptimizedBuffer.init(
++        std.testing.allocator,
++        10,
++        1,
++        .{ .pool = pool, .id = "test-buffer" },
++    );
++    defer buf.deinit();
++
++    const bg = RGBA{ 0.0, 0.0, 0.0, 1.0 };
++    const fg = RGBA{ 1.0, 1.0, 1.0, 1.0 };
++    try buf.clear(bg, null);
++
++    const gid = try pool.alloc("東");
++    const grapheme_start = gp.packGraphemeStart(gid & gp.GRAPHEME_ID_MASK, 2);
++    buf.set(2, 0, .{ .char = grapheme_start, .fg = fg, .bg = bg, .attributes = 0 });
++
++    const overlay_bg = RGBA{ 0.0, 0.533, 1.0, 0.094 };
++    try buf.fillRectClipWideGraphemes(2, 0, 1, 1, overlay_bg);
++
++    const inside = buf.get(2, 0).?;
++    const outside = buf.get(3, 0).?;
++
++    try std.testing.expectEqual(@as(u32, buffer_mod.DEFAULT_SPACE_CHAR), inside.char);
++    try std.testing.expectEqual(@as(u32, buffer_mod.DEFAULT_SPACE_CHAR), outside.char);
++    try std.testing.expect(inside.bg[1] > 0.01);
++    try std.testing.expectEqual(bg[0], outside.bg[0]);
++    try std.testing.expectEqual(bg[1], outside.bg[1]);
++    try std.testing.expectEqual(bg[2], outside.bg[2]);
++}
++
++test "fillRectClipWideGraphemes with transparent background is a no-op over wide graphemes" {
++    const pool = gp.initGlobalPool(std.testing.allocator);
++    defer gp.deinitGlobalPool();
++
++    var buf = try OptimizedBuffer.init(
++        std.testing.allocator,
++        10,
++        1,
++        .{ .pool = pool, .id = "test-buffer" },
++    );
++    defer buf.deinit();
++
++    const bg = RGBA{ 0.0, 0.0, 0.0, 1.0 };
++    const fg = RGBA{ 1.0, 1.0, 1.0, 1.0 };
++    try buf.clear(bg, null);
++
++    const gid = try pool.alloc("東");
++    const grapheme_start = gp.packGraphemeStart(gid & gp.GRAPHEME_ID_MASK, 2);
++    buf.set(2, 0, .{ .char = grapheme_start, .fg = fg, .bg = bg, .attributes = 0 });
++
++    const start_before = buf.get(2, 0).?;
++    const cont_before = buf.get(3, 0).?;
++    try std.testing.expect(gp.isGraphemeChar(start_before.char));
++    try std.testing.expect(gp.isContinuationChar(cont_before.char));
++
++    try buf.fillRectClipWideGraphemes(3, 0, 1, 1, RGBA{ 0.0, 0.0, 0.0, 0.0 });
++
++    const start_after = buf.get(2, 0).?;
++    const cont_after = buf.get(3, 0).?;
++    try std.testing.expectEqual(start_before.char, start_after.char);
++    try std.testing.expectEqual(cont_before.char, cont_after.char);
++    try std.testing.expectEqual(start_before.bg[0], start_after.bg[0]);
++    try std.testing.expectEqual(start_before.bg[1], start_after.bg[1]);
++    try std.testing.expectEqual(start_before.bg[2], start_after.bg[2]);
++    try std.testing.expectEqual(cont_before.bg[0], cont_after.bg[0]);
++    try std.testing.expectEqual(cont_before.bg[1], cont_after.bg[1]);
++    try std.testing.expectEqual(cont_before.bg[2], cont_after.bg[2]);
++}
++
++test "drawText multi-space translucent overlay over wide grapheme does not double-blend" {
++    const pool = gp.initGlobalPool(std.testing.allocator);
++    defer gp.deinitGlobalPool();
++
++    var buf = try OptimizedBuffer.init(
++        std.testing.allocator,
++        10,
++        1,
++        .{ .pool = pool, .id = "test-buffer" },
++    );
++    defer buf.deinit();
++
++    const bg = RGBA{ 0.0, 0.0, 0.0, 1.0 };
++    const fg = RGBA{ 1.0, 1.0, 1.0, 1.0 };
++    try buf.clear(bg, null);
++
++    // Write a width-2 grapheme (東) at column 2
++    const gid = try pool.alloc("東");
++    const grapheme_start = gp.packGraphemeStart(gid & gp.GRAPHEME_ID_MASK, 2);
++    buf.set(2, 0, .{ .char = grapheme_start, .fg = fg, .bg = bg, .attributes = 0 });
++
++    // Build the reference: apply a single setCellWithAlphaBlending at x=2
++    // which span-blends both cells exactly once.
++    var ref = try OptimizedBuffer.init(
++        std.testing.allocator,
++        10,
++        1,
++        .{ .pool = pool, .id = "ref-buffer" },
++    );
++    defer ref.deinit();
++    try ref.clear(bg, null);
++    ref.set(2, 0, .{ .char = grapheme_start, .fg = fg, .bg = bg, .attributes = 0 });
++    const overlay_bg = RGBA{ 0.0, 0.533, 1.0, 0.094 };
++    const overlay_fg = RGBA{ 1.0, 1.0, 1.0, 1.0 };
++    _ = try ref.setCellWithAlphaBlending(2, 0, ' ', overlay_fg, overlay_bg, 0);
++    const expected_bg = ref.get(2, 0).?.bg;
++
++    // Now draw TWO translucent spaces covering both cells of the wide grapheme.
++    // Without the span-skip fix, cell x=2 gets double-blended.
++    try buf.drawText("  ", 2, 0, overlay_fg, overlay_bg, 0);
++
++    // Grapheme must survive
++    const start_after = buf.get(2, 0).?;
++    const cont_after = buf.get(3, 0).?;
++    try std.testing.expect(gp.isGraphemeChar(start_after.char));
++    try std.testing.expect(gp.isContinuationChar(cont_after.char));
++
++    // Both cells must have the same bg (uniform tint)
++    try std.testing.expectEqual(start_after.bg[0], cont_after.bg[0]);
++    try std.testing.expectEqual(start_after.bg[1], cont_after.bg[1]);
++    try std.testing.expectEqual(start_after.bg[2], cont_after.bg[2]);
++
++    // The tint must match a single-blend reference (no double-blend)
++    try std.testing.expectEqual(expected_bg[0], start_after.bg[0]);
++    try std.testing.expectEqual(expected_bg[1], start_after.bg[1]);
++    try std.testing.expectEqual(expected_bg[2], start_after.bg[2]);
++}
++
++test "drawText translucent spaces over multiple separate wide graphemes" {
++    const pool = gp.initGlobalPool(std.testing.allocator);
++    defer gp.deinitGlobalPool();
++
++    var buf = try OptimizedBuffer.init(
++        std.testing.allocator,
++        10,
++        1,
++        .{ .pool = pool, .id = "test-buffer" },
++    );
++    defer buf.deinit();
++
++    const bg = RGBA{ 0.0, 0.0, 0.0, 1.0 };
++    const fg = RGBA{ 1.0, 1.0, 1.0, 1.0 };
++    try buf.clear(bg, null);
++
++    // Place two separate wide graphemes: 東 at x=1 and 京 at x=5
++    const gid1 = try pool.alloc("東");
++    const gs1 = gp.packGraphemeStart(gid1 & gp.GRAPHEME_ID_MASK, 2);
++    buf.set(1, 0, .{ .char = gs1, .fg = fg, .bg = bg, .attributes = 0 });
++
++    const gid2 = try pool.alloc("京");
++    const gs2 = gp.packGraphemeStart(gid2 & gp.GRAPHEME_ID_MASK, 2);
++    buf.set(5, 0, .{ .char = gs2, .fg = fg, .bg = bg, .attributes = 0 });
++
++    // Build single-blend reference for each grapheme independently
++    var ref = try OptimizedBuffer.init(
++        std.testing.allocator,
++        10,
++        1,
++        .{ .pool = pool, .id = "ref-buffer" },
++    );
++    defer ref.deinit();
++    try ref.clear(bg, null);
++    ref.set(1, 0, .{ .char = gs1, .fg = fg, .bg = bg, .attributes = 0 });
++    ref.set(5, 0, .{ .char = gs2, .fg = fg, .bg = bg, .attributes = 0 });
++    const overlay_bg = RGBA{ 0.0, 0.533, 1.0, 0.094 };
++    const overlay_fg = RGBA{ 1.0, 1.0, 1.0, 1.0 };
++    _ = try ref.setCellWithAlphaBlending(1, 0, ' ', overlay_fg, overlay_bg, 0);
++    _ = try ref.setCellWithAlphaBlending(5, 0, ' ', overlay_fg, overlay_bg, 0);
++    const expected_bg1 = ref.get(1, 0).?.bg;
++    const expected_bg2 = ref.get(5, 0).?.bg;
++
++    // Draw translucent spaces across the whole row — hits both graphemes,
++    // plus the gap at x=3-4 which has normal cells.  The span tracker
++    // must reset between the two graphemes.
++    try buf.drawText("          ", 0, 0, overlay_fg, overlay_bg, 0);
++
++    // First grapheme (x=1-2): preserved, uniform tint, no double-blend
++    const g1_start = buf.get(1, 0).?;
++    const g1_cont = buf.get(2, 0).?;
++    try std.testing.expect(gp.isGraphemeChar(g1_start.char));
++    try std.testing.expect(gp.isContinuationChar(g1_cont.char));
++    try std.testing.expectEqual(g1_start.bg[0], g1_cont.bg[0]);
++    try std.testing.expectEqual(g1_start.bg[1], g1_cont.bg[1]);
++    try std.testing.expectEqual(g1_start.bg[2], g1_cont.bg[2]);
++    try std.testing.expectEqual(expected_bg1[0], g1_start.bg[0]);
++    try std.testing.expectEqual(expected_bg1[1], g1_start.bg[1]);
++    try std.testing.expectEqual(expected_bg1[2], g1_start.bg[2]);
++
++    // Second grapheme (x=5-6): same checks — tracker must have reset
++    const g2_start = buf.get(5, 0).?;
++    const g2_cont = buf.get(6, 0).?;
++    try std.testing.expect(gp.isGraphemeChar(g2_start.char));
++    try std.testing.expect(gp.isContinuationChar(g2_cont.char));
++    try std.testing.expectEqual(g2_start.bg[0], g2_cont.bg[0]);
++    try std.testing.expectEqual(g2_start.bg[1], g2_cont.bg[1]);
++    try std.testing.expectEqual(g2_start.bg[2], g2_cont.bg[2]);
++    try std.testing.expectEqual(expected_bg2[0], g2_start.bg[0]);
++    try std.testing.expectEqual(expected_bg2[1], g2_start.bg[1]);
++    try std.testing.expectEqual(expected_bg2[2], g2_start.bg[2]);
++}
++
++test "scissor clips span expansion — does not bleed outside clipped region" {
++    const pool = gp.initGlobalPool(std.testing.allocator);
++    defer gp.deinitGlobalPool();
++
++    var buf = try OptimizedBuffer.init(
++        std.testing.allocator,
++        10,
++        1,
++        .{ .pool = pool, .id = "test-buffer" },
++    );
++    defer buf.deinit();
++
++    const bg = RGBA{ 0.0, 0.0, 0.0, 1.0 };
++    const fg = RGBA{ 1.0, 1.0, 1.0, 1.0 };
++    try buf.clear(bg, null);
++
++    // Write 東 at x=2 (occupies x=2 and x=3)
++    const gid = try pool.alloc("東");
++    const grapheme_start = gp.packGraphemeStart(gid & gp.GRAPHEME_ID_MASK, 2);
++    buf.set(2, 0, .{ .char = grapheme_start, .fg = fg, .bg = bg, .attributes = 0 });
++
++    const start_bg_before = buf.get(2, 0).?.bg;
++
++    // Set scissor to x=3 only (1 cell wide), so x=2 is outside the scissor
++    try buf.pushScissorRect(3, 0, 1, 1);
++
++    // fillRect at x=3 — the span expansion should NOT write to x=2
++    // because x=2 is outside the scissor.
++    const overlay_bg = RGBA{ 0.0, 0.533, 1.0, 0.094 };
++    try buf.fillRect(3, 0, 1, 1, overlay_bg);
++
++    buf.popScissorRect();
++
++    const start_after = buf.get(2, 0).?;
++    const cont_after = buf.get(3, 0).?;
++
++    // Grapheme structure must survive
++    try std.testing.expect(gp.isGraphemeChar(start_after.char));
++    try std.testing.expect(gp.isContinuationChar(cont_after.char));
++
++    // x=3 (inside scissor) should be tinted
++    try std.testing.expect(cont_after.bg[1] > 0.01);
++
++    // x=2 (outside scissor) must NOT be tinted — bg should be unchanged
++    try std.testing.expectEqual(start_bg_before[0], start_after.bg[0]);
++    try std.testing.expectEqual(start_bg_before[1], start_after.bg[1]);
++    try std.testing.expectEqual(start_bg_before[2], start_after.bg[2]);
++}
++
++test "drawText non-space character overwrites wide grapheme even after span blend" {
++    const pool = gp.initGlobalPool(std.testing.allocator);
++    defer gp.deinitGlobalPool();
++
++    var buf = try OptimizedBuffer.init(
++        std.testing.allocator,
++        10,
++        1,
++        .{ .pool = pool, .id = "test-buffer" },
++    );
++    defer buf.deinit();
++
++    const bg = RGBA{ 0.0, 0.0, 0.0, 1.0 };
++    const fg = RGBA{ 1.0, 1.0, 1.0, 1.0 };
++    try buf.clear(bg, null);
++
++    // Write 東 at x=2 (occupies x=2 and x=3)
++    const gid = try pool.alloc("東");
++    const grapheme_start = gp.packGraphemeStart(gid & gp.GRAPHEME_ID_MASK, 2);
++    buf.set(2, 0, .{ .char = grapheme_start, .fg = fg, .bg = bg, .attributes = 0 });
++
++    // drawText " B" at x=2: space at x=2 should tint the span,
++    // then 'B' at x=3 should overwrite the continuation cell.
++    // The span-skip logic must NOT skip non-space characters.
++    const overlay_bg = RGBA{ 0.0, 0.533, 1.0, 0.094 };
++    const overlay_fg = RGBA{ 1.0, 1.0, 1.0, 1.0 };
++    try buf.drawText(" B", 2, 0, overlay_fg, overlay_bg, 0);
++
++    const cell3 = buf.get(3, 0).?;
++    // 'B' is ASCII 66 — should have overwritten the continuation cell
++    try std.testing.expectEqual(@as(u32, 'B'), cell3.char);
++}
++
++test "drawFrameBuffer mixed space-then-char child overwrites continuation cell" {
++    const pool = gp.initGlobalPool(std.testing.allocator);
++    defer gp.deinitGlobalPool();
++
++    var buf = try OptimizedBuffer.init(
++        std.testing.allocator,
++        10,
++        1,
++        .{ .pool = pool, .id = "test-buffer" },
++    );
++    defer buf.deinit();
++
++    const bg = RGBA{ 0.0, 0.0, 0.0, 1.0 };
++    const fg = RGBA{ 1.0, 1.0, 1.0, 1.0 };
++    try buf.clear(bg, null);
++
++    // Write 東 at x=2 (occupies x=2 and x=3)
++    const gid = try pool.alloc("東");
++    const grapheme_start = gp.packGraphemeStart(gid & gp.GRAPHEME_ID_MASK, 2);
++    buf.set(2, 0, .{ .char = grapheme_start, .fg = fg, .bg = bg, .attributes = 0 });
++
++    // Create a 2×1 child framebuffer with respectAlpha containing " B":
++    // cell 0 = translucent space, cell 1 = 'B'
++    var child = try OptimizedBuffer.init(
++        std.testing.allocator,
++        2,
++        1,
++        .{ .pool = pool, .id = "child-buffer" },
++    );
++    defer child.deinit();
++    child.setRespectAlpha(true);
++    const overlay_bg = RGBA{ 0.0, 0.533, 1.0, 0.094 };
++    const overlay_fg = RGBA{ 1.0, 1.0, 1.0, 1.0 };
++    try child.clear(overlay_bg, null);
++    // Overwrite cell 1 with 'B' (fully opaque)
++    child.set(1, 0, .{ .char = 'B', .fg = overlay_fg, .bg = RGBA{ 0.0, 0.0, 0.0, 1.0 }, .attributes = 0 });
++
++    // Composite at dest x=2: space lands on grapheme start, 'B' on continuation
++    buf.drawFrameBuffer(2, 0, child, null, null, null, null);
++
++    // The space at x=2 should have triggered span blending, tinting the
++    // grapheme. But 'B' at x=3 must NOT be skipped by the span guard —
++    // it should overwrite the continuation cell.
++    const cell3 = buf.get(3, 0).?;
++    try std.testing.expectEqual(@as(u32, 'B'), cell3.char);
++}
++
++test "two separate alpha overlays over the same wide grapheme blend twice" {
++    const pool = gp.initGlobalPool(std.testing.allocator);
++    defer gp.deinitGlobalPool();
++
++    var buf = try OptimizedBuffer.init(
++        std.testing.allocator,
++        10,
++        1,
++        .{ .pool = pool, .id = "test-buffer" },
++    );
++    defer buf.deinit();
++
++    const bg = RGBA{ 0.0, 0.0, 0.0, 1.0 };
++    const fg = RGBA{ 1.0, 1.0, 1.0, 1.0 };
++    try buf.clear(bg, null);
++
++    // Write 東 at x=2 (occupies x=2 and x=3)
++    const gid = try pool.alloc("東");
++    const grapheme_start = gp.packGraphemeStart(gid & gp.GRAPHEME_ID_MASK, 2);
++    buf.set(2, 0, .{ .char = grapheme_start, .fg = fg, .bg = bg, .attributes = 0 });
++
++    // Build single-blend reference
++    var ref = try OptimizedBuffer.init(
++        std.testing.allocator,
++        10,
++        1,
++        .{ .pool = pool, .id = "ref-buffer" },
++    );
++    defer ref.deinit();
++    try ref.clear(bg, null);
++    ref.set(2, 0, .{ .char = grapheme_start, .fg = fg, .bg = bg, .attributes = 0 });
++
++    const overlay_bg = RGBA{ 0.0, 0.533, 1.0, 0.094 };
++    const overlay_fg = RGBA{ 1.0, 1.0, 1.0, 1.0 };
++
++    // Apply two separate fillRect overlays
++    try buf.fillRect(2, 0, 2, 1, overlay_bg);
++    try buf.fillRect(2, 0, 2, 1, overlay_bg);
++
++    // Apply two overlays to reference using setCellWithAlphaBlending directly
++    _ = try ref.setCellWithAlphaBlending(2, 0, ' ', overlay_fg, overlay_bg, 0);
++    _ = try ref.setCellWithAlphaBlending(2, 0, ' ', overlay_fg, overlay_bg, 0);
++
++    const expected_bg = ref.get(2, 0).?.bg;
++    const actual_start = buf.get(2, 0).?;
++    const actual_cont = buf.get(3, 0).?;
++
++    // Grapheme must survive
++    try std.testing.expect(gp.isGraphemeChar(actual_start.char));
++    try std.testing.expect(gp.isContinuationChar(actual_cont.char));
++
++    // Both cells should match double-blended reference
++    try std.testing.expectEqual(expected_bg[0], actual_start.bg[0]);
++    try std.testing.expectEqual(expected_bg[1], actual_start.bg[1]);
++    try std.testing.expectEqual(expected_bg[2], actual_start.bg[2]);
++    try std.testing.expectEqual(expected_bg[0], actual_cont.bg[0]);
++    try std.testing.expectEqual(expected_bg[1], actual_cont.bg[1]);
++    try std.testing.expectEqual(expected_bg[2], actual_cont.bg[2]);
++
++    // Double-blend must differ from single-blend
++    const single_ref = try OptimizedBuffer.init(
++        std.testing.allocator,
++        10,
++        1,
++        .{ .pool = pool, .id = "single-ref" },
++    );
++    defer single_ref.deinit();
++    try single_ref.clear(bg, null);
++    single_ref.set(2, 0, .{ .char = grapheme_start, .fg = fg, .bg = bg, .attributes = 0 });
++    _ = try single_ref.setCellWithAlphaBlending(2, 0, ' ', overlay_fg, overlay_bg, 0);
++    const single_bg = single_ref.get(2, 0).?.bg;
++    try std.testing.expect(actual_start.bg[2] > single_bg[2]);
++}
++
++test "scissored partial-span tint followed by unclipped tint applies to both cells" {
++    const pool = gp.initGlobalPool(std.testing.allocator);
++    defer gp.deinitGlobalPool();
++
++    var buf = try OptimizedBuffer.init(
++        std.testing.allocator,
++        10,
++        1,
++        .{ .pool = pool, .id = "test-buffer" },
++    );
++    defer buf.deinit();
++
++    const bg = RGBA{ 0.0, 0.0, 0.0, 1.0 };
++    const fg = RGBA{ 1.0, 1.0, 1.0, 1.0 };
++    try buf.clear(bg, null);
++
++    // Write 東 at x=2 (occupies x=2 and x=3)
++    const gid = try pool.alloc("東");
++    const grapheme_start = gp.packGraphemeStart(gid & gp.GRAPHEME_ID_MASK, 2);
++    buf.set(2, 0, .{ .char = grapheme_start, .fg = fg, .bg = bg, .attributes = 0 });
++
++    const overlay_bg = RGBA{ 0.0, 0.533, 1.0, 0.094 };
++
++    // First: scissored fillRect that only covers x=3 (continuation cell)
++    try buf.pushScissorRect(3, 0, 1, 1);
++    try buf.fillRect(3, 0, 1, 1, overlay_bg);
++    buf.popScissorRect();
++
++    // x=2 should be untouched (outside scissor), x=3 tinted
++    const bg_after_first_x2 = buf.get(2, 0).?.bg;
++    try std.testing.expectEqual(bg[1], bg_after_first_x2[1]);
++    try std.testing.expect(buf.get(3, 0).?.bg[1] > 0.01);
++
++    // Second: unclipped fillRect covering x=2 — must NOT be suppressed
++    try buf.fillRect(2, 0, 1, 1, overlay_bg);
++
++    const final_x2 = buf.get(2, 0).?;
++    const final_x3 = buf.get(3, 0).?;
++
++    // Grapheme must survive
++    try std.testing.expect(gp.isGraphemeChar(final_x2.char));
++    try std.testing.expect(gp.isContinuationChar(final_x3.char));
++
++    // x=2 must now be tinted (the second fillRect must have applied)
++    try std.testing.expect(final_x2.bg[1] > 0.01);
++}
++
++test "alpha overlay preserves wide text but replaces emoji with placeholder" {
++    const pool = gp.initGlobalPool(std.testing.allocator);
++    defer gp.deinitGlobalPool();
++
++    var buf = try OptimizedBuffer.init(
++        std.testing.allocator,
++        10,
++        1,
++        .{ .pool = pool, .id = "test-preserve-text-placeholder-emoji" },
++    );
++    defer buf.deinit();
++
++    const bg = RGBA{ 0.0, 0.0, 0.0, 1.0 };
++    const fg = RGBA{ 1.0, 1.0, 1.0, 1.0 };
++    try buf.clear(bg, null);
++
++    const cjk_gid = try pool.alloc("東");
++    buf.set(0, 0, .{ .char = gp.packGraphemeStart(cjk_gid & gp.GRAPHEME_ID_MASK, 2), .fg = fg, .bg = bg, .attributes = 0 });
++
++    const emoji_gid = try pool.alloc("👋");
++    buf.set(4, 0, .{ .char = gp.packGraphemeStart(emoji_gid & gp.GRAPHEME_ID_MASK, 2), .fg = fg, .bg = bg, .attributes = 0 });
++
++    try buf.fillRect(0, 0, 10, 1, RGBA{ 0.0, 0.0, 1.0, 0.5 });
++
++    try std.testing.expect(gp.isGraphemeChar(buf.get(0, 0).?.char));
++    try std.testing.expectEqual(@as(u32, '['), buf.get(4, 0).?.char);
++    try std.testing.expectEqual(@as(u32, ']'), buf.get(5, 0).?.char);
++}
++
++test "placeholder rendering produces bracket characters and blanks extra cells" {
++    const pool = gp.initGlobalPool(std.testing.allocator);
++    defer gp.deinitGlobalPool();
++
++    var buf = try OptimizedBuffer.init(
++        std.testing.allocator,
++        12,
++        1,
++        .{ .pool = pool, .id = "test-placeholder-rendering" },
++    );
++    defer buf.deinit();
++
++    const bg = RGBA{ 0.0, 0.0, 0.0, 1.0 };
++    const fg = RGBA{ 1.0, 1.0, 1.0, 1.0 };
++    try buf.clear(bg, null);
++
++    const emoji_gid = try pool.alloc("👋");
++    buf.set(2, 0, .{ .char = gp.packGraphemeStart(emoji_gid & gp.GRAPHEME_ID_MASK, 4), .fg = fg, .bg = bg, .attributes = 0 });
++
++    try buf.fillRect(2, 0, 4, 1, RGBA{ 1.0, 0.0, 0.0, 0.5 });
++
++    try std.testing.expectEqual(@as(u32, '['), buf.get(2, 0).?.char);
++    try std.testing.expectEqual(@as(u32, ']'), buf.get(3, 0).?.char);
++    try std.testing.expectEqual(@as(u32, buffer_mod.DEFAULT_SPACE_CHAR), buf.get(4, 0).?.char);
++    try std.testing.expectEqual(@as(u32, buffer_mod.DEFAULT_SPACE_CHAR), buf.get(5, 0).?.char);
++}
++
++test "classifyWideChar distinguishes wide text, emoji, and wide non-emoji text" {
++    const pool = gp.initGlobalPool(std.testing.allocator);
++    defer gp.deinitGlobalPool();
++
++    var buf = try OptimizedBuffer.init(
++        std.testing.allocator,
++        12,
++        1,
++        .{ .pool = pool, .id = "test-classify-wide-char" },
++    );
++    defer buf.deinit();
++
++    try std.testing.expectEqual(OptimizedBuffer.WideCharKind.wide_text, buf.classifyWideChar(0x6771));
++
++    const cjk_gid = try pool.alloc("東");
++    try std.testing.expectEqual(
++        OptimizedBuffer.WideCharKind.wide_text,
++        buf.classifyWideChar(gp.packGraphemeStart(cjk_gid & gp.GRAPHEME_ID_MASK, 2)),
++    );
++
++    const emoji_gid = try pool.alloc("👋");
++    try std.testing.expectEqual(
++        OptimizedBuffer.WideCharKind.emoji,
++        buf.classifyWideChar(gp.packGraphemeStart(emoji_gid & gp.GRAPHEME_ID_MASK, 2)),
++    );
++
++    const dark_bg = RGBA{ 0.0, 0.0, 0.0, 1.0 };
++    const fg = RGBA{ 1.0, 1.0, 1.0, 1.0 };
++    try buf.clear(dark_bg, null);
++    try buf.drawText("नमस्ते", 0, 0, fg, dark_bg, 0);
++    try std.testing.expectEqual(OptimizedBuffer.WideCharKind.wide_text, buf.classifyWideChar(buf.get(2, 0).?.char));
++}
++
++test "setCellWithAlphaBlending on emoji produces placeholder" {
++    const pool = gp.initGlobalPool(std.testing.allocator);
++    defer gp.deinitGlobalPool();
++
++    var buf = try OptimizedBuffer.init(
++        std.testing.allocator,
++        10,
++        1,
++        .{ .pool = pool, .id = "test-emoji-placeholder" },
++    );
++    defer buf.deinit();
++
++    const bg = RGBA{ 0.0, 0.0, 0.0, 1.0 };
++    const fg = RGBA{ 1.0, 1.0, 1.0, 1.0 };
++    try buf.clear(bg, null);
++
++    const emoji_gid = try pool.alloc("👋");
++    buf.set(2, 0, .{ .char = gp.packGraphemeStart(emoji_gid & gp.GRAPHEME_ID_MASK, 2), .fg = fg, .bg = bg, .attributes = 0 });
++
++    _ = try buf.setCellWithAlphaBlending(2, 0, buffer_mod.DEFAULT_SPACE_CHAR, .{ 1.0, 1.0, 1.0, 1.0 }, RGBA{ 1.0, 0.0, 0.0, 0.5 }, 0);
++    try std.testing.expectEqual(@as(u32, '['), buf.get(2, 0).?.char);
++    try std.testing.expectEqual(@as(u32, ']'), buf.get(3, 0).?.char);
++}
++
++test "transparent space alpha overlay leaves emoji unchanged" {
++    const pool = gp.initGlobalPool(std.testing.allocator);
++    defer gp.deinitGlobalPool();
++
++    var buf = try OptimizedBuffer.init(
++        std.testing.allocator,
++        10,
++        1,
++        .{ .pool = pool, .id = "test-transparent-emoji-noop" },
++    );
++    defer buf.deinit();
++
++    const bg = RGBA{ 0.0, 0.0, 0.0, 1.0 };
++    const fg = RGBA{ 1.0, 1.0, 1.0, 1.0 };
++    try buf.clear(bg, null);
++
++    const emoji_gid = try pool.alloc("👋");
++    const emoji_start = gp.packGraphemeStart(emoji_gid & gp.GRAPHEME_ID_MASK, 2);
++    buf.set(2, 0, .{ .char = emoji_start, .fg = fg, .bg = bg, .attributes = 0 });
++
++    const start_before = buf.get(2, 0).?;
++    const cont_before = buf.get(3, 0).?;
++
++    _ = try buf.setCellWithAlphaBlending(2, 0, buffer_mod.DEFAULT_SPACE_CHAR, fg, RGBA{ 0.0, 0.0, 0.0, 0.0 }, 0);
++
++    const start_after = buf.get(2, 0).?;
++    const cont_after = buf.get(3, 0).?;
++    try std.testing.expectEqual(start_before.char, start_after.char);
++    try std.testing.expectEqual(cont_before.char, cont_after.char);
++    try std.testing.expectEqualStrings("👋", try pool.get(gp.graphemeIdFromChar(start_after.char)));
++}
++
++test "transparent space alpha overlay preserves visible foreground on blank cells" {
++    const pool = gp.initGlobalPool(std.testing.allocator);
++    defer gp.deinitGlobalPool();
++
++    var buf = try OptimizedBuffer.init(
++        std.testing.allocator,
++        4,
++        1,
++        .{ .pool = pool, .id = "test-transparent-space-visible-fg" },
++    );
++    defer buf.deinit();
++
++    const bg = RGBA{ 0.0, 0.0, 0.0, 1.0 };
++    const fg = RGBA{ 0.5, 0.5, 0.5, 1.0 };
++    try buf.clear(bg, null);
++
++    _ = try buf.setCellWithAlphaBlending(1, 0, buffer_mod.DEFAULT_SPACE_CHAR, fg, RGBA{ 0.0, 0.0, 0.0, 0.0 }, 0);
++
++    const cell = buf.get(1, 0).?;
++    const epsilon: f32 = 0.01;
++    try std.testing.expectEqual(buffer_mod.DEFAULT_SPACE_CHAR, cell.char);
++    try std.testing.expect(@abs(cell.fg[0] - fg[0]) < epsilon);
++    try std.testing.expect(@abs(cell.fg[1] - fg[1]) < epsilon);
++    try std.testing.expect(@abs(cell.fg[2] - fg[2]) < epsilon);
++    try std.testing.expect(@abs(cell.bg[3] - bg[3]) < epsilon);
++}
++
++test "fillRect with transparent background leaves blank-cell styles unchanged" {
++    const pool = gp.initGlobalPool(std.testing.allocator);
++    defer gp.deinitGlobalPool();
++
++    var buf = try OptimizedBuffer.init(
++        std.testing.allocator,
++        4,
++        1,
++        .{ .pool = pool, .id = "test-transparent-fill-noop" },
++    );
++    defer buf.deinit();
++
++    const bg = RGBA{ 0.0, 0.0, 0.0, 1.0 };
++    const fg = RGBA{ 0.0, 0.0, 0.0, 1.0 };
++    const attributes: u32 = 1;
++    try buf.clear(bg, null);
++    buf.set(1, 0, .{ .char = buffer_mod.DEFAULT_SPACE_CHAR, .fg = fg, .bg = bg, .attributes = attributes });
++
++    try buf.fillRect(1, 0, 1, 1, RGBA{ 0.0, 0.0, 0.0, 0.0 });
++
++    const cell = buf.get(1, 0).?;
++    try std.testing.expectEqual(buffer_mod.DEFAULT_SPACE_CHAR, cell.char);
++    try std.testing.expectEqual(fg[0], cell.fg[0]);
++    try std.testing.expectEqual(fg[1], cell.fg[1]);
++    try std.testing.expectEqual(fg[2], cell.fg[2]);
++    try std.testing.expectEqual(fg[3], cell.fg[3]);
++    try std.testing.expectEqual(bg[0], cell.bg[0]);
++    try std.testing.expectEqual(bg[1], cell.bg[1]);
++    try std.testing.expectEqual(bg[2], cell.bg[2]);
++    try std.testing.expectEqual(bg[3], cell.bg[3]);
++    try std.testing.expectEqual(attributes, cell.attributes);
++}
++
++test "fillRect preserves wide non-emoji text grapheme" {
++    const pool = gp.initGlobalPool(std.testing.allocator);
++    defer gp.deinitGlobalPool();
++
++    var buf = try OptimizedBuffer.init(
++        std.testing.allocator,
++        12,
++        1,
++        .{ .pool = pool, .id = "test-wide-non-emoji-text" },
++    );
++    defer buf.deinit();
++
++    const bg = RGBA{ 0.0, 0.0, 0.0, 1.0 };
++    const fg = RGBA{ 1.0, 1.0, 1.0, 1.0 };
++    try buf.clear(bg, null);
++    try buf.drawText("नमस्ते", 0, 0, fg, bg, 0);
++
++    try buf.fillRect(0, 0, 8, 1, RGBA{ 1.0, 0.0, 0.0, 0.5 });
++
++    try std.testing.expect(gp.isGraphemeChar(buf.get(2, 0).?.char));
++    try std.testing.expect(gp.isContinuationChar(buf.get(3, 0).?.char));
++}
++
++test "emoji graphemes survive placeholder replacement across frames" {
++    const pool = gp.initGlobalPool(std.testing.allocator);
++    defer gp.deinitGlobalPool();
++
++    var fb = try OptimizedBuffer.init(
++        std.testing.allocator,
++        10,
++        1,
++        .{ .pool = pool, .id = "framebuffer" },
++    );
++    defer fb.deinit();
++
++    const dark_bg = RGBA{ 0.04, 0.05, 0.08, 1.0 };
++    const fg = RGBA{ 1.0, 1.0, 1.0, 1.0 };
++    try fb.clear(dark_bg, null);
++
++    const gid = try pool.alloc("👋");
++    fb.set(2, 0, .{ .char = gp.packGraphemeStart(gid & gp.GRAPHEME_ID_MASK, 2), .fg = fg, .bg = dark_bg, .attributes = 0 });
++
++    var buf = try OptimizedBuffer.init(
++        std.testing.allocator,
++        10,
++        1,
++        .{ .pool = pool, .id = "main-buffer" },
++    );
++    defer buf.deinit();
++
++    try buf.clear(dark_bg, null);
++    buf.drawFrameBuffer(0, 0, fb, null, null, null, null);
++    try buf.fillRect(0, 0, 10, 1, RGBA{ 0.0, 0.0, 1.0, 0.5 });
++    try std.testing.expectEqual(@as(u32, '['), buf.get(2, 0).?.char);
++
++    try buf.clear(dark_bg, null);
++    buf.drawFrameBuffer(0, 0, fb, null, null, null, null);
++
++    const start = buf.get(2, 0).?;
++    const cont = buf.get(3, 0).?;
++    try std.testing.expect(gp.isGraphemeChar(start.char));
++    try std.testing.expect(gp.isContinuationChar(cont.char));
++    try std.testing.expectEqualStrings("👋", try pool.get(gp.graphemeIdFromChar(start.char)));
++}
+diff --git a/src/zig/tests/renderer_test.zig b/src/zig/tests/renderer_test.zig
+index cf0f7b3f..9d7c655d 100644
+--- a/src/zig/tests/renderer_test.zig
++++ b/src/zig/tests/renderer_test.zig
+@@ -905,6 +905,40 @@ test "renderer - explicit_cursor_positioning emits cursor move after wide graphe
+     try std.testing.expect(std.mem.indexOf(u8, output, "\x1b[1;3H") != null);
+ }
+ 
++test "renderer - fallback path does not emit post-grapheme cursor moves" {
++    const pool = gp.initGlobalPool(std.testing.allocator);
++    defer gp.deinitGlobalPool();
++
++    var cli_renderer = try CliRenderer.create(
++        std.testing.allocator,
++        20,
++        2,
++        pool,
++        true,
++    );
++    defer cli_renderer.destroy();
++
++    cli_renderer.terminal.caps.explicit_cursor_positioning = false;
++    cli_renderer.terminal.caps.explicit_width = false;
++
++    const dark_bg = RGBA{ 0.04, 0.05, 0.08, 1.0 };
++    const tinted_bg = RGBA{ 0.0, 0.0, 1.0, 0.5 };
++    const fg = RGBA{ 1.0, 1.0, 1.0, 1.0 };
++
++    const first_buffer = cli_renderer.getNextBuffer();
++    try first_buffer.clear(dark_bg, null);
++    try first_buffer.drawText("👋  ", 0, 0, fg, dark_bg, 0);
++    cli_renderer.render(false);
++
++    const second_buffer = cli_renderer.getNextBuffer();
++    try second_buffer.clear(dark_bg, null);
++    try second_buffer.drawText("👋  ", 0, 0, fg, tinted_bg, 0);
++    cli_renderer.render(false);
++
++    const output = cli_renderer.getLastOutputForTest();
++    try std.testing.expect(std.mem.indexOf(u8, output, "👋\x1b[1;3H") == null);
++}
++
+ test "renderer - explicit_cursor_positioning produces more cursor moves" {
+     const pool = gp.initGlobalPool(std.testing.allocator);
+     defer gp.deinitGlobalPool();
+@@ -977,6 +1011,7 @@ test "renderer - explicit_cursor_positioning produces more cursor moves" {
+         }
+     }
+ 
++    try std.testing.expect(count_without > 0);
+     try std.testing.expect(count_with > count_without);
+ }
+ 
+@@ -1015,3 +1050,191 @@ test "renderer - explicit_cursor_positioning with CJK characters" {
+ 
+     try std.testing.expect(std.mem.indexOf(u8, output, "\x1b[1;3H") != null);
+ }
++
++test "renderer - repainting CJK text under translucent overlay keeps wide text in fallback output" {
++    const pool = gp.initGlobalPool(std.testing.allocator);
++    defer gp.deinitGlobalPool();
++    var local_link_pool = link.LinkPool.init(std.testing.allocator);
++    defer local_link_pool.deinit();
++
++    var tb = try TextBuffer.init(std.testing.allocator, pool, &local_link_pool, .unicode);
++    defer tb.deinit();
++
++    try tb.setText(
++        \\const GRAPHEME_LINES: string[] = [
++        \\  "W2 CJK: 東京都  北京市  서울시  大阪府",
++        \\  "Mixed: こんにちは世界  你好世界  안녕하세요",
++        \\]
++    );
++
++    var view = try TextBufferView.init(std.testing.allocator, tb);
++    defer view.deinit();
++
++    var cli_renderer = try CliRenderer.create(
++        std.testing.allocator,
++        90,
++        6,
++        pool,
++        true,
++    );
++    defer cli_renderer.destroy();
++
++    cli_renderer.terminal.caps.explicit_cursor_positioning = false;
++    cli_renderer.terminal.caps.explicit_width = false;
++
++    const dark_bg = RGBA{ 0.0, 0.0, 0.0, 1.0 };
++    const tint_bg = RGBA{ 1.0, 0.0, 0.0, 0.15 };
++
++    const first_buffer = cli_renderer.getNextBuffer();
++    try first_buffer.clear(dark_bg, null);
++    try first_buffer.drawTextBuffer(view, 0, 0);
++    cli_renderer.render(false);
++
++    const second_buffer = cli_renderer.getNextBuffer();
++    try second_buffer.clear(dark_bg, null);
++    try second_buffer.drawTextBuffer(view, 0, 0);
++    try second_buffer.fillRect(0, 0, 90, 6, tint_bg);
++    cli_renderer.render(false);
++
++    const output = cli_renderer.getLastOutputForTest();
++    try std.testing.expect(std.mem.indexOf(u8, output, "東京都") != null);
++    try std.testing.expect(std.mem.indexOf(u8, output, "北京市") != null);
++    try std.testing.expect(std.mem.indexOf(u8, output, "서울시") != null);
++    try std.testing.expect(std.mem.indexOf(u8, output, "こんにちは世界") != null);
++    try std.testing.expect(std.mem.indexOf(u8, output, "你好世界") != null);
++    try std.testing.expect(std.mem.indexOf(u8, output, "안녕하세요") != null);
++}
++
++test "renderer - explicit_cursor_positioning does not emit continuation spaces after wide graphemes" {
++    const pool = gp.initGlobalPool(std.testing.allocator);
++    defer gp.deinitGlobalPool();
++
++    var cli_renderer = try CliRenderer.create(
++        std.testing.allocator,
++        80,
++        24,
++        pool,
++        true,
++    );
++    defer cli_renderer.destroy();
++
++    cli_renderer.terminal.caps.explicit_cursor_positioning = true;
++    cli_renderer.terminal.caps.explicit_width = false;
++
++    const next_buffer = cli_renderer.getNextBuffer();
++    const fg = RGBA{ 1.0, 1.0, 1.0, 1.0 };
++    const bg = RGBA{ 0.0, 0.0, 0.0, 1.0 };
++    try next_buffer.drawText("世X", 0, 0, fg, bg, 0);
++
++    cli_renderer.render(false);
++
++    const output = cli_renderer.getLastOutputForTest();
++
++    try std.testing.expect(std.mem.indexOf(u8, output, "世") != null);
++    try std.testing.expect(std.mem.indexOf(u8, output, "X") != null);
++    try std.testing.expect(std.mem.indexOf(u8, output, "\x1b[1;3H X") == null);
++}
++
++test "renderer - repainting wide emoji after placeholder preclears span" {
++    const pool = gp.initGlobalPool(std.testing.allocator);
++    defer gp.deinitGlobalPool();
++
++    var cli_renderer = try CliRenderer.create(
++        std.testing.allocator,
++        20,
++        2,
++        pool,
++        true,
++    );
++    defer cli_renderer.destroy();
++
++    cli_renderer.terminal.caps.explicit_cursor_positioning = true;
++    cli_renderer.terminal.caps.explicit_width = false;
++
++    const dark_bg = RGBA{ 0.04, 0.05, 0.08, 1.0 };
++    const tinted_bg = RGBA{ 0.0, 0.0, 1.0, 0.5 };
++    const fg = RGBA{ 1.0, 1.0, 1.0, 1.0 };
++
++    const first_buffer = cli_renderer.getNextBuffer();
++    try first_buffer.clear(dark_bg, null);
++    try first_buffer.drawText("[]", 2, 0, fg, tinted_bg, 0);
++    cli_renderer.render(false);
++
++    const second_buffer = cli_renderer.getNextBuffer();
++    try second_buffer.clear(dark_bg, null);
++    try second_buffer.drawText("👋", 2, 0, fg, dark_bg, 0);
++    cli_renderer.render(false);
++
++    const output = cli_renderer.getLastOutputForTest();
++    try std.testing.expect(std.mem.indexOf(u8, output, "  \x1b[1;3H👋") != null);
++}
++
++test "renderer - explicit_width repainting wide emoji preclears span" {
++    const pool = gp.initGlobalPool(std.testing.allocator);
++    defer gp.deinitGlobalPool();
++
++    var cli_renderer = try CliRenderer.create(
++        std.testing.allocator,
++        20,
++        2,
++        pool,
++        true,
++    );
++    defer cli_renderer.destroy();
++
++    cli_renderer.terminal.caps.explicit_cursor_positioning = false;
++    cli_renderer.terminal.caps.explicit_width = true;
++
++    const dark_bg = RGBA{ 0.04, 0.05, 0.08, 1.0 };
++    const tinted_bg = RGBA{ 0.0, 0.0, 1.0, 0.5 };
++    const fg = RGBA{ 1.0, 1.0, 1.0, 1.0 };
++
++    const first_buffer = cli_renderer.getNextBuffer();
++    try first_buffer.clear(dark_bg, null);
++    try first_buffer.drawText("[]", 2, 0, fg, tinted_bg, 0);
++    cli_renderer.render(false);
++
++    const second_buffer = cli_renderer.getNextBuffer();
++    try second_buffer.clear(dark_bg, null);
++    try second_buffer.drawText("👋", 2, 0, fg, dark_bg, 0);
++    cli_renderer.render(false);
++
++    const output = cli_renderer.getLastOutputForTest();
++    try std.testing.expect(std.mem.indexOf(u8, output, "  \x1b[1;3H\x1b]66;w=2;") != null);
++}
++
++test "renderer - fallback repainting wide emoji preclears span before following cell redraw" {
++    const pool = gp.initGlobalPool(std.testing.allocator);
++    defer gp.deinitGlobalPool();
++
++    var cli_renderer = try CliRenderer.create(
++        std.testing.allocator,
++        20,
++        2,
++        pool,
++        true,
++    );
++    defer cli_renderer.destroy();
++
++    cli_renderer.terminal.caps.explicit_cursor_positioning = false;
++    cli_renderer.terminal.caps.explicit_width = false;
++
++    const dark_bg = RGBA{ 0.04, 0.05, 0.08, 1.0 };
++    const tinted_bg = RGBA{ 0.0, 0.0, 1.0, 0.5 };
++    const fg = RGBA{ 1.0, 1.0, 1.0, 1.0 };
++
++    const first_buffer = cli_renderer.getNextBuffer();
++    try first_buffer.clear(dark_bg, null);
++    try first_buffer.drawText("[]A", 2, 0, fg, tinted_bg, 0);
++    cli_renderer.render(false);
++
++    const second_buffer = cli_renderer.getNextBuffer();
++    try second_buffer.clear(dark_bg, null);
++    try second_buffer.drawText("👋B", 2, 0, fg, dark_bg, 0);
++    cli_renderer.render(false);
++
++    const output = cli_renderer.getLastOutputForTest();
++    try std.testing.expect(std.mem.indexOf(u8, output, "  \x1b[1;3H👋") != null);
++    try std.testing.expect(std.mem.indexOf(u8, output, "👋B") != null);
++    try std.testing.expect(std.mem.indexOf(u8, output, "\x1b[1;5H") == null);
++}

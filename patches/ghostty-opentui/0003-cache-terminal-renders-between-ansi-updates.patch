@@ -1,0 +1,154 @@
+diff --git a/src/terminal-buffer.test.tsx b/src/terminal-buffer.test.tsx
+index 085bb1f..8d5d803 100644
+--- a/src/terminal-buffer.test.tsx
++++ b/src/terminal-buffer.test.tsx
+@@ -841,6 +841,44 @@ drwx------  71 user  staff  2272 Nov 26 19:44 ..
+       expect(renderRequests).toBe(1)
+     })
+ 
++    it("should reuse the cache buffer on clean rerenders", async () => {
++      const ref = { current: null as GhosttyTerminalRenderable | null }
++
++      const { renderOnce } = await testRender(
++        <ghostty-terminal
++          ansi="Hello"
++          cols={40}
++          height={10}
++          ref={(r: GhosttyTerminalRenderable) => {
++            ref.current = r
++          }}
++          rows={10}
++          width={40}
++        />,
++        { width: 40, height: 10 },
++      )
++
++      await renderOnce()
++
++      const terminal = ref.current as GhosttyTerminalRenderable & {
++        _cacheBuffer: { drawTextBuffer: (...args: any[]) => unknown } | null
++      }
++      expect(terminal._cacheBuffer).toBeTruthy()
++
++      const cacheBuffer = terminal._cacheBuffer!
++      const originalDrawTextBuffer = cacheBuffer.drawTextBuffer.bind(cacheBuffer)
++      let redraws = 0
++      cacheBuffer.drawTextBuffer = ((...args: any[]) => {
++        redraws += 1
++        return originalDrawTextBuffer(...args)
++      }) as typeof cacheBuffer.drawTextBuffer
++
++      terminal.requestRender()
++      await renderOnce()
++
++      expect(redraws).toBe(0)
++    })
++
+     it("should reset terminal in persistent mode", async () => {
+       const ref = { current: null as GhosttyTerminalRenderable | null }
+       
+diff --git a/src/terminal-buffer.ts b/src/terminal-buffer.ts
+index 3fcb094..8fc973e 100644
+--- a/src/terminal-buffer.ts
++++ b/src/terminal-buffer.ts
+@@ -3,6 +3,7 @@ import {
+   type TextBufferOptions,
+   StyledText,
+   RGBA,
++  OptimizedBuffer,
+   type RenderContext,
+   type TextChunk,
+ } from "@opentui/core"
+@@ -356,6 +357,9 @@ export class GhosttyTerminalRenderable extends TextBufferRenderable {
+   // Persistent terminal support
+   private _persistent: boolean = false
+   private _persistentTerminal: PersistentTerminal | null = null
++  private _cacheBuffer: OptimizedBuffer | null = null
++  private _cacheBufferWidth: number = 0
++  private _cacheBufferHeight: number = 0
+ 
+   constructor(ctx: RenderContext, options: GhosttyTerminalOptions) {
+     super(ctx, {
+@@ -577,6 +581,14 @@ export class GhosttyTerminalRenderable extends TextBufferRenderable {
+    * Clean up resources. Called automatically when the component unmounts.
+    */
+   override destroy(): void {
++    if (this._cacheBuffer != null) {
++      try {
++        this._cacheBuffer.destroy()
++      } catch {
++        // ignore
++      }
++      this._cacheBuffer = null
++    }
+     if (this._persistentTerminal) {
+       this._persistentTerminal.destroy()
+       this._persistentTerminal = null
+@@ -635,7 +647,43 @@ export class GhosttyTerminalRenderable extends TextBufferRenderable {
+     this.requestRender()
+   }
+ 
++  private ensureCacheBuffer(): boolean {
++    const w = this.width
++    const h = this.height
++    if (w <= 0 || h <= 0) return false
++
++    if (this._cacheBuffer == null) {
++      try {
++        this._cacheBuffer = OptimizedBuffer.create(w, h, (this._ctx as any).widthMethod, {
++          respectAlpha: false,
++          id: `ghostty-terminal-cache-${this.id}`,
++        })
++      } catch {
++        return false
++      }
++      this._cacheBufferWidth = w
++      this._cacheBufferHeight = h
++      this._ansiDirty = true
++      return true
++    }
++
++    if (this._cacheBufferWidth !== w || this._cacheBufferHeight !== h) {
++      try {
++        this._cacheBuffer.resize(w, h)
++      } catch {
++        return false
++      }
++      this._cacheBufferWidth = w
++      this._cacheBufferHeight = h
++      this._ansiDirty = true
++    }
++
++    return true
++  }
++
+   protected renderSelf(buffer: any): void {
++    const haveCache = this.ensureCacheBuffer()
++
+     if (this._ansiDirty) {
+       let data: TerminalData
+       
+@@ -681,10 +729,21 @@ export class GhosttyTerminalRenderable extends TextBufferRenderable {
+       // Update line count based on actual rendered lines
+       const lineInfo = this.textBufferView.logicalLineInfo
+       this._lineCount = getLineStarts(lineInfo).length
+-      
++
++      if (haveCache && this.textBuffer.ptr) {
++        this._cacheBuffer!.clear(this.bg)
++        this._cacheBuffer!.drawTextBuffer(this.textBufferView, 0, 0)
++      }
++
+       this._ansiDirty = false
+     }
+-    super.renderSelf(buffer)
++
++    if (haveCache) {
++      buffer.drawFrameBuffer(this.x, this.y, this._cacheBuffer!)
++    } else {
++      super.renderSelf(buffer)
++    }
++
+     this.renderTerminalCursor()
+   }
+ 

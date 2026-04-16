@@ -1,0 +1,12 @@
+diff --git a/src/reconciler/host-config.ts b/src/reconciler/host-config.ts
+index 690c627..b289038 100644
+--- a/src/reconciler/host-config.ts
++++ b/src/reconciler/host-config.ts
+@@ -145,7 +145,6 @@ export const hostConfig = {
+   // Commit update
+   commitUpdate(instance: Instance, type: Type, oldProps: Props, newProps: Props, internalInstanceHandle: any) {
+     updateProperties(instance, type, oldProps, newProps)
+-    instance.requestRender()
+   },
+ 
+   // Commit text update

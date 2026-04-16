@@ -1,0 +1,38 @@
+{
+  "name": "honeymux",
+  "version": "0.100.0",
+  "module": "src/index.tsx",
+  "scripts": {
+    "build": "bun build --compile --target bun src/index.tsx --outfile dist/hmx",
+    "dev": "bun --watch run src/index.tsx",
+    "format": "prettier --write src/",
+    "format:check": "prettier --check src/",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "postinstall": "bun scripts/patches.ts apply",
+    "start": "bun run src/index.tsx",
+    "typecheck": "tsc --noEmit"
+  },
+  "type": "module",
+  "private": true,
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/bun": "latest",
+    "@types/react": "^19.2.14",
+    "eslint": "^10.2.0",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-perfectionist": "^5.8.0",
+    "prettier": "^3.8.1",
+    "typescript-eslint": "^8.58.0"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "@opentui/core": "0.1.97",
+    "@opentui/react": "0.1.97",
+    "ghostty-opentui": "1.4.10",
+    "react": "^19.2.4",
+    "wcwidth": "^1.0.1"
+  }
+}

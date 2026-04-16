@@ -1,0 +1,74 @@
+diff --git a/src/reconciler/host-config.ts b/src/reconciler/host-config.ts
+--- a/src/reconciler/host-config.ts
++++ b/src/reconciler/host-config.ts
+@@ -11,6 +11,54 @@
+ 
+ let currentUpdatePriority = NoEventPriority
+ 
++type CommitRenderBatchState = {
++  deferred: boolean
++  depth: number
++  originalRequestRender: null | (() => void)
++}
++
++type RenderRequestTarget = {
++  requestRender: () => void
++}
++
++const commitRenderBatchState = new WeakMap<RenderRequestTarget, CommitRenderBatchState>()
++
++function beginCommitRenderBatch(containerInfo: Container): void {
++  const renderTarget = containerInfo.ctx as RenderRequestTarget
++  let state = commitRenderBatchState.get(renderTarget)
++  if (!state) {
++    state = { deferred: false, depth: 0, originalRequestRender: null }
++    commitRenderBatchState.set(renderTarget, state)
++  }
++
++  state.depth += 1
++  if (state.depth !== 1) return
++
++  state.deferred = false
++  state.originalRequestRender = renderTarget.requestRender
++  renderTarget.requestRender = () => {
++    state.deferred = true
++  }
++}
++
++function flushCommitRenderBatch(containerInfo: Container): void {
++  const renderTarget = containerInfo.ctx as RenderRequestTarget
++  const state = commitRenderBatchState.get(renderTarget)
++  if (!state) {
++    renderTarget.requestRender()
++    return
++  }
++  state.depth -= 1
++  if (state.depth > 0) return
++  const originalRequestRender = state.originalRequestRender
++  const deferred = state.deferred
++  state.originalRequestRender = null
++  state.deferred = false
++  if (!originalRequestRender) return
++  renderTarget.requestRender = originalRequestRender
++  if (deferred) originalRequestRender.call(renderTarget)
++}
++
+ // https://github.com/facebook/react/tree/main/packages/react-reconciler#practical-examples
+ export const hostConfig: HostConfig<
+   Type,
+@@ -78,13 +126,13 @@
+ 
+   // Prepare for commit
+   prepareForCommit(containerInfo: Container) {
++    beginCommitRenderBatch(containerInfo)
+     return null
+   },
+ 
+   // Reset after commit
+   resetAfterCommit(containerInfo: Container) {
+-    // Trigger a render update if needed
+-    containerInfo.requestRender()
++    flushCommitRenderBatch(containerInfo)
+   },
+ 
+   // Get root container

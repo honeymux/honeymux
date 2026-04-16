@@ -1,0 +1,387 @@
+diff --git a/src/Renderable.ts b/src/Renderable.ts
+index 2584019e..ea007fd4 100644
+--- a/src/Renderable.ts
++++ b/src/Renderable.ts
+@@ -248,6 +248,9 @@ export abstract class Renderable extends BaseRenderable {
+   private childrenPrimarySortDirty: boolean = true
+   private childrenSortedByPrimaryAxis: Renderable[] = []
+   private _shouldUpdateBefore: Set<Renderable> = new Set()
++  private cachedRenderCommands: RenderCommand[] = []
++  private cachedRenderCommandsValid: boolean = false
++  private subtreeDirty: boolean = true
+ 
+   public onLifecyclePass: (() => void) | null = null
+ 
+@@ -473,9 +476,19 @@ export abstract class Renderable extends BaseRenderable {
+ 
+   public requestRender() {
+     this.markDirty()
++    this.markSubtreeDirty()
+     this._ctx.requestRender()
+   }
+ 
++  protected markSubtreeDirty(): void {
++    let node: Renderable | null = this
++    while (node) {
++      node.subtreeDirty = true
++      node.cachedRenderCommandsValid = false
++      node = node.parent
++    }
++  }
++
+   public get translateX(): number {
+     return this._translateX
+   }
+@@ -1290,9 +1303,18 @@ export abstract class Renderable extends BaseRenderable {
+     return this._childrenInLayoutOrder.length
+   }
+ 
+-  public updateLayout(deltaTime: number, renderList: RenderCommand[] = []): void {
++  public updateLayout(
++    deltaTime: number,
++    renderList: RenderCommand[] = [],
++    ancestorLayoutChanged: boolean = false,
++  ): void {
+     if (!this.visible) return
+ 
++    if (this.canReuseRenderCommands(ancestorLayoutChanged)) {
++      renderList.push(...this.cachedRenderCommands)
++      return
++    }
++
+     this.onUpdate(deltaTime)
+ 
+     // If destroyed during onUpdate, don't add to render list
+@@ -1323,6 +1345,8 @@ export abstract class Renderable extends BaseRenderable {
+ 
+     // Push opacity BEFORE rendering this element so it affects this element and all children
+     const shouldPushOpacity = this._opacity < 1.0
++    const cacheStart = renderList.length
++
+     if (shouldPushOpacity) {
+       renderList.push({ action: "pushOpacity", opacity: this._opacity })
+     }
+@@ -1345,12 +1369,13 @@ export abstract class Renderable extends BaseRenderable {
+       })
+     }
+     const visibleChildren = this._getVisibleChildren()
++    const visibleChildrenSet = visibleChildren ? new Set(visibleChildren) : null
+     for (const child of this._childrenInZIndexOrder) {
+-      if (!visibleChildren.includes(child.num)) {
++      if (visibleChildrenSet && !visibleChildrenSet.has(child.num)) {
+         child.updateFromLayout()
+         continue
+       }
+-      child.updateLayout(deltaTime, renderList)
++      child.updateLayout(deltaTime, renderList, ancestorLayoutChanged)
+     }
+ 
+     if (shouldPushScissor) {
+@@ -1359,6 +1384,8 @@ export abstract class Renderable extends BaseRenderable {
+     if (shouldPushOpacity) {
+       renderList.push({ action: "popOpacity" })
+     }
++
++    this.updateCachedRenderCommands(renderList, cacheStart, ancestorLayoutChanged)
+   }
+ 
+   public render(buffer: OptimizedBuffer, deltaTime: number): void {
+@@ -1385,8 +1412,46 @@ export abstract class Renderable extends BaseRenderable {
+     }
+   }
+ 
+-  protected _getVisibleChildren(): number[] {
+-    return this._childrenInZIndexOrder.map((child) => child.num)
++  protected _getVisibleChildren(): number[] | null {
++    return null
++  }
++
++  private canReuseRenderCommands(ancestorLayoutChanged: boolean): boolean {
++    if (ancestorLayoutChanged) {
++      return false
++    }
++
++    if (this.subtreeDirty || this._liveCount > 0 || this._shouldUpdateBefore.size > 0 || this.needsZIndexSort) {
++      return false
++    }
++
++    return this.cachedRenderCommandsValid
++  }
++
++  private updateCachedRenderCommands(
++    renderList: RenderCommand[],
++    cacheStart: number,
++    ancestorLayoutChanged: boolean,
++  ): void {
++    this.subtreeDirty = false
++
++    if (ancestorLayoutChanged || this._liveCount > 0 || this._shouldUpdateBefore.size > 0 || this.needsZIndexSort) {
++      this.cachedRenderCommandsValid = false
++      this.cachedRenderCommands = []
++      return
++    }
++
++    const subtreeCommands = renderList.slice(cacheStart)
++    if (
++      subtreeCommands.some((command) => command.action === "pushScissorRect" || command.action === "popScissorRect")
++    ) {
++      this.cachedRenderCommandsValid = false
++      this.cachedRenderCommands = []
++      return
++    }
++
++    this.cachedRenderCommands = subtreeCommands
++    this.cachedRenderCommandsValid = true
+   }
+ 
+   protected onUpdate(deltaTime: number): void {
+@@ -1654,13 +1719,14 @@ export class RootRenderable extends Renderable {
+     // but that's only possible if we move the layout tree to native.
+ 
+     // 1. Calculate layout from root
+-    if (this.yogaNode.isDirty()) {
++    const layoutChanged = this.yogaNode.isDirty()
++    if (layoutChanged) {
+       this.calculateLayout()
+     }
+ 
+     // 2. Update layout throughout the tree and collect render list
+     this.renderList.length = 0
+-    this.updateLayout(deltaTime, this.renderList)
++    this.updateLayout(deltaTime, this.renderList, layoutChanged)
+ 
+     // 3. Render all collected renderables
+     this._ctx.clearHitGridScissorRects()
+diff --git a/src/renderables/ScrollBox.ts b/src/renderables/ScrollBox.ts
+index 528379ac..d10acd99 100644
+--- a/src/renderables/ScrollBox.ts
++++ b/src/renderables/ScrollBox.ts
+@@ -31,13 +31,13 @@ class ContentRenderable extends BoxRenderable {
+     this._viewportCulling = value
+   }
+ 
+-  protected _getVisibleChildren(): number[] {
++  protected _getVisibleChildren(): number[] | null {
+     if (this._viewportCulling) {
+       return getObjectsInViewport(this.viewport, this.getChildrenSortedByPrimaryAxis(), this.primaryAxis, 0).map(
+         (child) => child.num,
+       )
+     }
+-    return this.getChildrenSortedByPrimaryAxis().map((child) => child.num)
++    return null
+   }
+ }
+ 
+diff --git a/src/renderables/Text.test.ts b/src/renderables/Text.test.ts
+index e8cf0a27..f4749da4 100644
+--- a/src/renderables/Text.test.ts
++++ b/src/renderables/Text.test.ts
+@@ -84,6 +84,40 @@ describe("TextRenderable Selection", () => {
+     })
+   })
+ 
++  describe("Buffered Rendering", () => {
++    it("reuses the framebuffer for clean buffered text across unrelated rerenders", async () => {
++      const { text } = await createTextRenderable(currentRenderer, {
++        content: "cached",
++        buffered: true,
++      })
++
++      const tick = new TextRenderable(currentRenderer, {
++        id: "tick",
++        content: "a",
++        position: "absolute",
++        left: 0,
++        top: 2,
++      })
++      currentRenderer.root.add(tick)
++      await renderOnce()
++
++      const frameBuffer = (text as any).frameBuffer
++      expect(frameBuffer).toBeTruthy()
++
++      let drawCount = 0
++      const originalDrawTextBuffer = frameBuffer.drawTextBuffer.bind(frameBuffer)
++      frameBuffer.drawTextBuffer = ((...args: unknown[]) => {
++        drawCount++
++        return originalDrawTextBuffer(...(args as Parameters<typeof originalDrawTextBuffer>))
++      }) as typeof frameBuffer.drawTextBuffer
++
++      tick.content = "b"
++      await renderOnce()
++
++      expect(drawCount).toBe(0)
++    })
++  })
++
+   describe("Basic Selection Flow", () => {
+     it("should handle selection from start to end", async () => {
+       const { text } = await createTextRenderable(currentRenderer, {
+diff --git a/src/renderables/TextBufferRenderable.ts b/src/renderables/TextBufferRenderable.ts
+index 73d42b15..deced55b 100644
+--- a/src/renderables/TextBufferRenderable.ts
++++ b/src/renderables/TextBufferRenderable.ts
+@@ -37,6 +37,7 @@ export abstract class TextBufferRenderable extends Renderable implements LineInf
+   protected _scrollX: number = 0
+   protected _scrollY: number = 0
+   protected _truncate: boolean = false
++  private frameBufferRendered: boolean = false
+ 
+   protected textBuffer: TextBuffer
+   protected textBufferView: TextBufferView
+@@ -478,20 +479,40 @@ export abstract class TextBufferRenderable extends Renderable implements LineInf
+   render(buffer: OptimizedBuffer, deltaTime: number): void {
+     if (!this.visible) return
+ 
+-    this.markClean()
+-    this._ctx.addToHitGrid(this.x, this.y, this.width, this.height, this.num)
+-
+-    this.renderSelf(buffer)
+-
+     if (this.buffered && this.frameBuffer) {
++      if (!this.frameBufferRendered || this.isDirty || this.live) {
++        this.frameBuffer.clear(this.bg)
++        this.renderSelf(this.frameBuffer)
++        this.frameBufferRendered = true
++      }
++
+       buffer.drawFrameBuffer(this.x, this.y, this.frameBuffer)
++    } else {
++      this.renderSelf(buffer)
+     }
++
++    this.markClean()
++    this._ctx.addToHitGrid(this.x, this.y, this.width, this.height, this.num)
+   }
+ 
+   protected renderSelf(buffer: OptimizedBuffer): void {
++    const { x, y } = this.getRenderOrigin(buffer)
+     if (this.textBuffer.ptr) {
+-      buffer.drawTextBuffer(this.textBufferView, this.x, this.y)
++      buffer.drawTextBuffer(this.textBufferView, x, y)
++    }
++  }
++
++  protected handleFrameBufferResize(width: number, height: number): void {
++    super.handleFrameBufferResize(width, height)
++    this.frameBufferRendered = false
++  }
++
++  private getRenderOrigin(buffer: OptimizedBuffer): { x: number; y: number } {
++    if (this.buffered && this.frameBuffer === buffer) {
++      return { x: 0, y: 0 }
+     }
++
++    return { x: this.x, y: this.y }
+   }
+ 
+   destroy(): void {
+diff --git a/src/tests/render-command-cache.test.ts b/src/tests/render-command-cache.test.ts
+new file mode 100644
+index 00000000..6d0ab02d
+--- /dev/null
++++ b/src/tests/render-command-cache.test.ts
+@@ -0,0 +1,90 @@
++import { afterEach, beforeEach, describe, expect, it } from "bun:test"
++import type { RenderCommand } from "../Renderable.js"
++import { BoxRenderable } from "../renderables/Box.js"
++import { TextRenderable } from "../renderables/Text.js"
++import { createTestRenderer, type TestRenderer } from "../testing/test-renderer.js"
++
++let currentRenderer: TestRenderer
++let renderOnce: () => Promise<void>
++
++class CountingLeafBox extends BoxRenderable {
++  public updateLayoutCalls = 0
++
++  public override updateLayout(
++    deltaTime: number,
++    renderList: RenderCommand[] = [],
++    ancestorLayoutChanged: boolean = false,
++  ): void {
++    this.updateLayoutCalls++
++    super.updateLayout(deltaTime, renderList, ancestorLayoutChanged)
++  }
++}
++
++describe("Render command cache", () => {
++  beforeEach(async () => {
++    ;({ renderer: currentRenderer, renderOnce } = await createTestRenderer({
++      width: 20,
++      height: 6,
++    }))
++  })
++
++  afterEach(() => {
++    currentRenderer.destroy()
++  })
++
++  it("skips clean static descendants on unrelated rerenders", async () => {
++    const staticParent = new BoxRenderable(currentRenderer, {
++      id: "static-parent",
++      position: "absolute",
++      left: 0,
++      top: 0,
++      width: 12,
++      height: 3,
++      border: false,
++    })
++    const countedLeaf = new CountingLeafBox(currentRenderer, {
++      id: "counted-leaf",
++      position: "absolute",
++      left: 1,
++      top: 1,
++      width: 4,
++      height: 1,
++      border: false,
++    })
++    countedLeaf.add(
++      new TextRenderable(currentRenderer, {
++        id: "label",
++        content: "leaf",
++        position: "absolute",
++        left: 0,
++        top: 0,
++      }),
++    )
++    staticParent.add(countedLeaf)
++
++    const tick = new TextRenderable(currentRenderer, {
++      id: "tick",
++      content: "a",
++      position: "absolute",
++      left: 0,
++      top: 4,
++    })
++
++    currentRenderer.root.add(staticParent)
++    currentRenderer.root.add(tick)
++
++    await renderOnce()
++    const initialCalls = countedLeaf.updateLayoutCalls
++    expect(initialCalls).toBeGreaterThan(0)
++
++    tick.requestRender()
++    await renderOnce()
++    const warmedCalls = countedLeaf.updateLayoutCalls
++
++    tick.requestRender()
++    await renderOnce()
++
++    expect(warmedCalls).toBeGreaterThan(initialCalls)
++    expect(countedLeaf.updateLayoutCalls).toBe(warmedCalls)
++  })
++})
+diff --git a/src/tests/renderable.test.ts b/src/tests/renderable.test.ts
+index 39454c99..4c48c391 100644
+--- a/src/tests/renderable.test.ts
++++ b/src/tests/renderable.test.ts
+@@ -862,7 +862,7 @@ describe("Renderable - Layout with Viewport Filtering", () => {
+       this._filterEnabled = true
+     }
+ 
+-    protected _getVisibleChildren(): number[] {
++    protected _getVisibleChildren(): number[] | null {
+       if (!this._filterEnabled) {
+         return super._getVisibleChildren()
+       }

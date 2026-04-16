@@ -1,0 +1,264 @@
+/**
+ * OpenCode plugin for honeymux.
+ *
+ * This TypeScript module is loaded by OpenCode's plugin system.
+ * It connects to honeymux's Unix socket and sends agent events
+ * corresponding to OpenCode lifecycle events.
+ *
+ * Install location: ~/.config/opencode/plugins/opencode-plugin.ts
+ */
+import { spawnSync } from "node:child_process";
+import { appendFileSync, chmodSync, mkdirSync, readlinkSync } from "node:fs";
+import { hostname } from "node:os";
+import { connect } from "bun";
+
+// --- Socket path (mirrors socket-server.ts logic) ---
+
+const REMOTE_HOOK_SOCKET_OPTION = "@hmx-agent-socket-path";
+const REMOTE_HOOK_SOCKET_RE = /^\/.*?\/hmx-remote-hook-[0-9a-f]{16}\.sock$/;
+
+function getSocketPath(): string {
+  const override = getTmuxRemoteSocketPath();
+  if (override) return override;
+
+  return getRuntimePath("hmx-opencode.sock");
+}
+
+function getTmuxRemoteSocketPath(): null | string {
+  if (!process.env.TMUX) return null;
+
+  try {
+    const proc = spawnSync("tmux", ["show-option", "-gqv", REMOTE_HOOK_SOCKET_OPTION], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+      timeout: 1000,
+    });
+    if (proc.status !== 0) return null;
+    const path = proc.stdout.trim();
+    if (!path.startsWith("/") || !REMOTE_HOOK_SOCKET_RE.test(path)) return null;
+    return path;
+  } catch {
+    return null;
+  }
+}
+
+function getStateHome(): string {
+  return process.env.XDG_STATE_HOME ?? `${process.env.HOME}/.local/state`;
+}
+
+function getRuntimeDir(): string {
+  const runtimeDir = process.env.XDG_RUNTIME_DIR;
+  if (runtimeDir) return ensurePrivateDir(`${runtimeDir}/honeymux`);
+  return ensurePrivateDir(`${getStateHome()}/honeymux/runtime`);
+}
+
+function getRuntimePath(name: string): string {
+  return `${getRuntimeDir()}/${name}`;
+}
+
+function ensurePrivateDir(path: string): string {
+  mkdirSync(path, { recursive: true, mode: 0o700 });
+  try {
+    chmodSync(path, 0o700);
+  } catch {}
+  return path;
+}
+
+// --- TTY detection ---
+
+function getTty(): string | null {
+  try {
+    const ppid = process.ppid;
+    return readlinkSync(`/proc/${ppid}/fd/0`);
+  } catch {
+    return null;
+  }
+}
+
+// --- Send event (fire-and-forget) ---
+
+interface AgentEvent {
+  sessionId: string;
+  agentType: "opencode";
+  status: string;
+  cwd: string;
+  pid?: number;
+  tty?: string | null;
+  timestamp: number;
+  hookEvent?: string;
+  toolName?: string;
+  toolInput?: Record<string, unknown>;
+  toolUseId?: string;
+  remoteHost?: string;
+  prompt?: string;
+}
+
+async function sendEvent(event: AgentEvent): Promise<void> {
+  const socketPath = getSocketPath();
+  try {
+    await connect({
+      unix: socketPath,
+      socket: {
+        data() {},
+        open(socket) {
+          socket.write(JSON.stringify(event) + "\n");
+          socket.end();
+        },
+        error() {},
+        close() {},
+      },
+    });
+  } catch {}
+}
+
+function postPermissionReply(
+  serverFetch: (input: Request | URL | string, init?: RequestInit) => Promise<Response>,
+  baseUrl: string,
+  permissionId: string,
+  reply: "once" | "reject",
+): void {
+  const url = `${baseUrl.replace(/\/$/, "")}/permission/${permissionId}/reply`;
+  log(`POST ${url}`);
+  const req = new Request(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ reply }),
+  });
+  serverFetch(req)
+    .then((res) => {
+      log(`permission POST response: ${res.status}`);
+    })
+    .catch((e: any) => log(`permission POST failed: ${e}`));
+  }
+}
+
+/**
+ * Send a permission event and hold the socket open for a decision.
+ * When honeymux responds with {"decision":"allow"|"deny"}, call the
+ * OpenCode SDK to forward the reply in-process.
+ */
+async function sendPermissionAndWait(
+  event: AgentEvent,
+  serverFetch: (input: Request | URL | string, init?: RequestInit) => Promise<Response>,
+  baseUrl: string,
+  permissionId: string,
+): Promise<void> {
+  const socketPath = getSocketPath();
+  try {
+    await connect({
+      unix: socketPath,
+      socket: {
+        data(_socket, data) {
+          try {
+            const response = JSON.parse(new TextDecoder().decode(data).trim());
+            const reply = response.decision === "allow" ? "once" : "reject";
+            log(`permission reply from honeymux: ${reply} for ${permissionId}`);
+            postPermissionReply(serverFetch, baseUrl, permissionId, reply);
+          } catch (e) {
+            log(`failed to parse permission response: ${e}`);
+          }
+        },
+        open(socket) {
+          socket.write(JSON.stringify(event) + "\n");
+          // keep open — honeymux will hold and respond later
+        },
+        error() {},
+        close() {},
+      },
+    });
+  } catch {
+    log(`permission socket unavailable for ${permissionId}`);
+  }
+}
+
+// --- OpenCode Plugin Export ---
+
+function log(msg: string) {
+  try {
+    appendFileSync(getRuntimePath("hmx-opencode-plugin.log"), `${new Date().toISOString()} ${msg}\n`);
+  } catch {}
+}
+
+function runningInHoneymux(): boolean {
+  return (process.env.TMUX ?? "").includes("honeymux");
+}
+
+export default async function plugin(input: any) {
+  log(`plugin loaded, directory=${input.directory}, keys=${Object.keys(input).join(",")}`);
+  if (!runningInHoneymux()) {
+    log("not running inside honeymux tmux, skipping");
+    return {};
+  }
+  const tty = getTty();
+  const cwd = input.directory || process.cwd();
+  // The client's internal fetch routes through OpenCode's in-process server.
+  // We use it to call the permission reply endpoint without needing a network socket.
+  const baseUrl: string = input.client?._client?.getConfig?.()?.baseUrl ?? "http://localhost:4096";
+  const serverFetch: typeof fetch = input.client?._client?.getConfig?.()?.fetch ?? fetch;
+
+  function baseEvent(sessionId: string, status: string, hookEvent: string): AgentEvent {
+    return {
+      sessionId,
+      agentType: "opencode",
+      status,
+      cwd,
+      pid: process.ppid,
+      tty,
+      timestamp: Date.now() / 1000,
+      hookEvent,
+      remoteHost: hostname(),
+    };
+  }
+
+  // Track the first user prompt per session from message.part.updated events
+  const sessionPrompts = new Map<string, string>();
+
+  return {
+    async event({ event }: { event: any }) {
+      const type: string = event?.type ?? "";
+      const props = event?.properties ?? {};
+
+      // Capture user prompt text from message.part.updated (type: "text")
+      // This fires before permission.asked, so the prompt is available when needed.
+      if (type === "message.part.updated") {
+        const part = props.part;
+        if (part?.type === "text" && part?.text && part?.sessionID) {
+          if (!sessionPrompts.has(part.sessionID)) {
+            sessionPrompts.set(part.sessionID, String(part.text).slice(0, 200));
+          }
+        }
+      }
+
+      if (type === "session.created") {
+        const sessionId = props.info?.id ?? "unknown";
+        const ev = baseEvent(sessionId, "alive", "session.created");
+        const title = props.info?.title;
+        if (title && typeof title === "string" && !title.startsWith("New session")) {
+          ev.prompt = title.slice(0, 200);
+        }
+        sendEvent(ev);
+      } else if (type === "session.deleted") {
+        const sessionId = props.info?.id ?? "unknown";
+        sessionPrompts.delete(sessionId);
+        sendEvent(baseEvent(sessionId, "ended", "session.deleted"));
+      } else if (type === "permission.asked") {
+        const sessionId = props.sessionID ?? "unknown";
+        const permissionId = props.id ?? `perm-${Date.now()}`;
+        const ev = baseEvent(sessionId, "unanswered", "permission.asked");
+        ev.toolName = props.permission ?? props.tool?.tool ?? "tool";
+        ev.toolUseId = permissionId;
+        ev.toolInput = {
+          permission: props.permission,
+          tool: props.tool?.tool,
+          patterns: Array.isArray(props.patterns) ? props.patterns : [],
+          command: props.patterns?.[0],
+        };
+        // Attach prompt captured from earlier message.part.updated event
+        ev.prompt = sessionPrompts.get(sessionId) ?? undefined;
+        // Hold socket open so honeymux can send back allow/deny,
+        // then forward via the in-process server fetch.
+        sendPermissionAndWait(ev, serverFetch, baseUrl, permissionId);
+      }
+    },
+  };
+}

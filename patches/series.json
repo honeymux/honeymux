@@ -1,0 +1,81 @@
+{
+  "@opentui/core": {
+    "sourceRepo": "~/src/opentui",
+    "sourceSubdir": "packages/core",
+    "buildCmd": "bun run build",
+    "nativeLib": {
+      "srcDir": "src/zig/lib/{zigTarget}",
+      "destDir": "@opentui/core-{platform}-{arch}"
+    },
+    "version": "0.1.97",
+    "patches": [
+      {
+        "file": "0001-fix-wide-char-alpha-blending.patch",
+        "description": "Changes from branch 'fix-wide-char-alpha-blending'",
+        "branch": "fix-wide-char-alpha-blending"
+      },
+      {
+        "file": "0002-optimize-clean-render-caching.patch",
+        "description": "Changes from branch 'optimize-clean-render-caching'",
+        "branch": "optimize-clean-render-caching"
+      },
+      {
+        "file": "0003-switch-to-c-allocator.patch",
+        "description": "Switch global allocator from GPA (page-backed, mmap-per-grow) to libc malloc",
+        "branch": "switch-to-c-allocator"
+      },
+      {
+        "file": "0004-cache-perceptual-alpha-curve.patch",
+        "description": "Thread-local cache for blendColors's perceptual alpha curve to avoid recomputing pow per cell",
+        "branch": "cache-perceptual-alpha-curve"
+      },
+      {
+        "file": "0005-skip-noop-box-render-on-fwcab.patch",
+        "description": "Skip BoxRenderable.renderSelf drawBox call for pure layout containers (rebased on fix-wide-char-alpha-blending)",
+        "branch": "skip-noop-box-render-on-fwcab"
+      }
+    ]
+  },
+  "@opentui/react": {
+    "sourceRepo": "~/src/opentui",
+    "sourceSubdir": "packages/react",
+    "buildCmd": "bun run build",
+    "version": "0.1.97",
+    "patches": [
+      {
+        "file": "0001-avoid-duplicate-instance-renders-after-react-commits.patch",
+        "description": "Avoid duplicate instance render requests after React commits",
+        "branch": "avoid-duplicate-instance-renders-after-react-commits"
+      },
+      {
+        "file": "0002-batch-render-requests-during-react-commits.patch",
+        "description": "Batch render requests during React commits",
+        "branch": "batch-render-requests-during-react-commits"
+      }
+    ]
+  },
+  "ghostty-opentui": {
+    "sourceRepo": "~/src/ghostty-opentui",
+    "diffPaths": [
+      "src/"
+    ],
+    "version": "1.4.10",
+    "patches": [
+      {
+        "file": "0001-skip-extra-render-for-fixed-size-terminal-feeds.patch",
+        "description": "Skip redundant post-feed renders for fixed-size terminals",
+        "branch": "skip-extra-render-for-fixed-size-terminal-feeds"
+      },
+      {
+        "file": "0002-fix-opaque-default-background-terminal.patch",
+        "description": "Render implicit terminal background cells with opaque terminal defaults",
+        "branch": "fix-opaque-default-background-terminal"
+      },
+      {
+        "file": "0003-cache-terminal-renders-between-ansi-updates.patch",
+        "description": "Cache terminal text rendering between ANSI updates",
+        "branch": "cache-terminal-renders-between-ansi-updates"
+      }
+    ]
+  }
+}
