@@ -58,6 +58,15 @@ export function emitTmuxKeyBindingHint(
   showTmuxKeyBindingHint(hint);
 }
 
+export function resolveAgentsDialogSelectHandler(
+  onAgentsDialogSelect: TmuxPaneAgentProps["onAgentsDialogSelect"],
+  onTreeAgentSelect: TmuxPaneAgentProps["onTreeAgentSelect"],
+): TmuxPaneAgentProps["onAgentsDialogSelect"] | TmuxPaneAgentProps["onTreeAgentSelect"] {
+  // The agents dialog must prefer its dedicated selection handler so it can
+  // tear down dialog-owned input state before handing off to review preview.
+  return onAgentsDialogSelect ?? onTreeAgentSelect;
+}
+
 export function useTmuxPaneViewModel({
   agent,
   core,
@@ -180,7 +189,7 @@ export function useTmuxPaneViewModel({
     dropdownInputRef,
     height,
     onAgentsDialogClose,
-    onAgentsDialogSelect: onTreeAgentSelect ?? onAgentsDialogSelect,
+    onAgentsDialogSelect: resolveAgentsDialogSelectHandler(onAgentsDialogSelect, onTreeAgentSelect),
     onGoToPane,
     onPermissionRespond,
     registryRef,

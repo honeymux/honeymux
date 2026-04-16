@@ -342,6 +342,44 @@ describe("agent review workflow shortcuts", () => {
     expect(writeToPty).not.toHaveBeenCalled();
   });
 
+  test("agentReviewGoto fires from sidebar-focused preview without unfocusing first", () => {
+    const onGotoAgent = mock(() => {});
+    const onSidebarCancel = mock(() => {});
+    const writeToPty = mock(() => {});
+    const callbacks = createCallbacks({
+      isAgentPreview: () => true,
+      isMuxotronFocusActive: () => true,
+      isSidebarFocused: () => true,
+      onGotoAgent,
+      onSidebarCancel,
+    });
+    const keybindings = new Map<string, KeyAction>([["g", "agentReviewGoto"]]);
+
+    routeKeyboardInput("\x1b[103u", writeToPty, callbacks, keybindings);
+
+    expect(onGotoAgent).toHaveBeenCalledTimes(1);
+    expect(onSidebarCancel).not.toHaveBeenCalled();
+    expect(writeToPty).not.toHaveBeenCalled();
+  });
+
+  test("agentReviewNext fires from sidebar-focused preview without unfocusing first", () => {
+    const onAgentNext = mock(() => {});
+    const onSidebarCancel = mock(() => {});
+    const callbacks = createCallbacks({
+      isAgentPreview: () => true,
+      isMuxotronFocusActive: () => true,
+      isSidebarFocused: () => true,
+      onAgentNext,
+      onSidebarCancel,
+    });
+    const keybindings = new Map<string, KeyAction>([["n", "agentReviewNext"]]);
+
+    routeKeyboardInput("\x1b[110u", () => {}, callbacks, keybindings);
+
+    expect(onAgentNext).toHaveBeenCalledTimes(1);
+    expect(onSidebarCancel).not.toHaveBeenCalled();
+  });
+
   test("agentReviewGoto when latched falls through to PTY", () => {
     const onGotoAgent = mock(() => {});
     const writeToPty = mock(() => {});

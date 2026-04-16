@@ -321,6 +321,21 @@ export function routeKeyboardInput(
   // Sidebar focused: arrows navigate, Enter activates, Esc cancels,
   // any other key cancels focus and is consumed.
   if (owner === "sidebar") {
+    // Review preview entered from the sidebar intentionally keeps sidebar
+    // focus so arrowing the tree can retarget the preview. The review
+    // shortcuts must still work without first consuming a key to unfocus.
+    if (canonicalAction === "agentReviewGoto" && callbacks.isAgentPreview?.()) {
+      callbacks.onGotoAgent?.();
+      return true;
+    }
+    if (canonicalAction === "agentReviewPrev" && callbacks.isAgentPreview?.()) {
+      callbacks.onAgentPrev?.();
+      return true;
+    }
+    if (canonicalAction === "agentReviewNext" && callbacks.isAgentPreview?.()) {
+      callbacks.onAgentNext?.();
+      return true;
+    }
     // `agentPermGoto` is allowed to bypass the sidebar branch so its
     // global handler (which also releases chrome focus) still works from a
     // keyboard shortcut while the sidebar has focus. Other agent actions

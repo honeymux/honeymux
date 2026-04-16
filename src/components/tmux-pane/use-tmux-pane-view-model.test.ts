@@ -5,6 +5,7 @@ import {
   buildAgentsDialogProps,
   closeOverflowDropdown,
   emitTmuxKeyBindingHint,
+  resolveAgentsDialogSelectHandler,
   selectOverflowTab,
 } from "./use-tmux-pane-view-model.ts";
 
@@ -125,6 +126,14 @@ describe("use-tmux-pane-view-model helpers", () => {
     expect(dialog).not.toBeNull();
     expect(dialog?.sessions).toBe(sessions);
     expect(dialog?.width).toBe(120);
+  });
+
+  it("prefers the dialog selection handler over raw tree selection", () => {
+    const dialogSelect = () => {};
+    const treeSelect = () => {};
+
+    expect(resolveAgentsDialogSelectHandler(dialogSelect, treeSelect)).toBe(dialogSelect);
+    expect(resolveAgentsDialogSelectHandler(undefined, treeSelect)).toBe(treeSelect);
   });
 
   it("emits tmux key binding hints only when enabled and present", () => {
