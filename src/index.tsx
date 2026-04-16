@@ -6,6 +6,7 @@ import { readSync, writeSync } from "node:fs";
 // Embed version at build time so it survives `bun build --compile`.
 import pkg from "../package.json";
 import { App } from "./app.tsx";
+import { formatUsage, parseCliArgs } from "./cli/args.ts";
 import { DEFAULT_SCHEME, initTheme, resolveThemeName } from "./themes/theme.ts";
 import { tmuxSessionExists } from "./tmux/control-client.ts";
 import { checkTmuxStartupRequirements } from "./tmux/startup-check.ts";
@@ -46,23 +47,21 @@ type RendererOutputWriter = {
 // Honeymux creates — matching the IPC-permission rule in AGENTS.md.
 process.umask(0o077);
 
-// Print version and exit early if requested.
-if (process.argv.includes("-V")) {
+const cliArgs = parseCliArgs(process.argv.slice(2));
+
+if (cliArgs.kind === "version") {
   process.stdout.write(`Honeymux ${pkg.version}\n`);
   process.exit(0);
 }
 
-// Print usage and exit early if requested.
-if (process.argv.includes("-h") || process.argv.includes("--help")) {
-  process.stdout.write(
-    `Usage: hmx [options] [session]\n` +
-      `\n` +
-      `Options:\n` +
-      `  -h, --help       Show this help message\n` +
-      `  -V               Show version\n` +
-      `  --server <name>  Use a specific tmux server name\n`,
-  );
+if (cliArgs.kind === "help") {
+  process.stdout.write(`${formatUsage()}\n`);
   process.exit(0);
+}
+
+if (cliArgs.kind === "error") {
+  process.stderr.write(`${cliArgs.message}\n\n${formatUsage()}\n`);
+  process.exit(2);
 }
 
 // Bail early if already running inside tmux (nesting is not supported).
@@ -141,19 +140,8 @@ if (!isLocaleUtf8()) {
 
 const STATE_FILE = `${process.env.HOME}/.local/state/honeymux/last-session`;
 
-// Parse CLI args: honeymux [--server <name>] [session]
-let explicitServer: string | undefined;
-let sessionName: string | undefined;
-{
-  const args = process.argv.slice(2);
-  for (let i = 0; i < args.length; i++) {
-    if (args[i] === "--server" && i + 1 < args.length) {
-      explicitServer = args[++i];
-    } else if (!args[i]!.startsWith("-")) {
-      sessionName = args[i];
-    }
-  }
-}
+const explicitServer = cliArgs.explicitServer;
+let sessionName = cliArgs.sessionName;
 
 // --- Determine tmux server name ---
 // Single-instance enforcement means we can use a fixed name.  The new
