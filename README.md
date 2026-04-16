@@ -14,7 +14,7 @@
 
 ## About
 
-Honeymux is an outer TUI layer for tmux designed to make terminal work feel more like a unified workspace, especially when working with coding agents. It adds features like pane tabs, OS-native copy/paste and search, managed remote-backed panes, and quick access to agents running anywhere on the local or remote machines. Built on tmux control mode, [OpenTUI](https://github.com/anomalyco/opentui), [libghostty](https://github.com/ghostty-org/ghostty), and [ghostty-opentui](https://github.com/remorses/ghostty-opentui), Honeymux sits between your terminal emulator and tmux to provide a more interactive, desktop-like terminal experience.
+Honeymux is an outer TUI layer for tmux designed to make terminal work feel more like a unified workspace, especially when working with coding agents. It adds features like pane tabs, OS-native copy/paste and search, sidebar, toolbar, remote pane stitching, and quick access to agents running anywhere on your local or remote machines. Built on tmux control mode, [OpenTUI](https://github.com/anomalyco/opentui), [libghostty](https://github.com/ghostty-org/ghostty), and [ghostty-opentui](https://github.com/remorses/ghostty-opentui), Honeymux sits between your terminal emulator and tmux to provide a more interactive, desktop-like terminal experience.
 
 ## Install
 
