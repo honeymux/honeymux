@@ -27,3 +27,7 @@ curl -fsSL https://get.hmx.dev | bash
 ## Documentation
 
 See the [documentation](https://hmx.dev/docs/) on the Honeymux website.
+
+## Contributing
+
+Coming soon.
