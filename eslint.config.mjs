@@ -30,6 +30,24 @@ export default tseslint.config(
       },
     },
   },
+  {
+    files: ["src/agents/opencode/plugin.source"],
+    languageOptions: {
+      globals: {
+        Request: "readonly",
+        RequestInit: "readonly",
+        Response: "readonly",
+        TextDecoder: "readonly",
+        URL: "readonly",
+        fetch: "readonly",
+        process: "readonly",
+      },
+      parser: tseslint.parser,
+      parserOptions: {
+        extraFileExtensions: [".source"],
+      },
+    },
+  },
   prettier,
   {
     files: [
