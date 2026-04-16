@@ -87,6 +87,7 @@ export const TmuxPane = memo(function TmuxPane({
     onDeny,
     onDismiss,
     onGoto,
+    onInteractiveScrollSequence,
     onMuxotronClick,
     onNextAgent,
     onNotificationsClick,
@@ -266,6 +267,7 @@ export const TmuxPane = memo(function TmuxPane({
       onDragChange={viewModel.handleDragChange}
       onExpandedWidthChange={setExpandedMuxotronWidth}
       onGoto={onGoto}
+      onInteractiveScrollSequence={onInteractiveScrollSequence}
       onLayoutProfileClick={onLayoutProfileClick}
       onMoveWindowToSession={onMoveWindowToSession}
       onMuxotronClick={onMuxotronClick}

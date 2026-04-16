@@ -48,6 +48,7 @@ interface UseMainPaneModelOptions {
   keybindingConfig: KeybindingConfig;
   layoutProfiles: LayoutProfilesApi;
   muxotronFocusActive: boolean;
+  onInteractiveScrollSequence: (sequence: string) => void;
   onTreeAgentSelect: (session: AgentSession) => void;
   optionsWorkflow: OptionsWorkflowApi;
   paneTabsApi: PaneTabsApi;
@@ -108,6 +109,7 @@ export function useMainPaneModel({
   keybindingConfig,
   layoutProfiles,
   muxotronFocusActive,
+  onInteractiveScrollSequence,
   onTreeAgentSelect,
   optionsWorkflow,
   paneTabsApi,
@@ -181,6 +183,7 @@ export function useMainPaneModel({
         layoutProfiles,
         mainMenuBindingLabel,
         muxotronFocusActive,
+        onInteractiveScrollSequence,
         onMuxotronDismiss: () => refs.handleMuxotronDismissRef.current(),
         onSidebarViewChange: handleSidebarViewChange,
         onTreeAgentSelect,
@@ -231,7 +234,6 @@ export function useMainPaneModel({
       bufferZoomBinding,
       mainMenuBindingLabel,
       dimEnabled,
-      uiChromeState.dropdownOpen,
       displayWindows,
       effectiveUIMode,
       handleSidebarViewChange,
@@ -251,6 +253,8 @@ export function useMainPaneModel({
       layoutProfiles.handleSetFavorite,
       layoutProfiles.layoutDropdownOpen,
       layoutProfiles.layoutProfiles,
+      muxotronFocusActive,
+      onInteractiveScrollSequence,
       onTreeAgentSelect,
       optionsWorkflow.config,
       optionsWorkflow.configAgentAlertAnimGlow,
@@ -307,9 +311,9 @@ export function useMainPaneModel({
       uiActions.handleSplitHorizontal,
       uiActions.handleSplitVertical,
       uiActions.handleTextInputActive,
+      uiChromeState.dropdownOpen,
       warningCount,
       width,
-      muxotronFocusActive,
     ],
   );
 

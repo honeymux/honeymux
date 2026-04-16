@@ -49,6 +49,7 @@ interface TmuxPaneNormalModeProps {
   onDragChange: (dragging: boolean) => void;
   onExpandedWidthChange?: (width: number) => void;
   onGoto?: () => void;
+  onInteractiveScrollSequence?: (sequence: string) => void;
   onLayoutProfileClick?: () => void;
   onMoveWindowToSession?: (index: number, targetSession: string) => void;
   onMuxotronClick?: () => void;
@@ -128,6 +129,7 @@ export function TmuxPaneNormalMode({
   onDragChange,
   onExpandedWidthChange,
   onGoto,
+  onInteractiveScrollSequence,
   onLayoutProfileClick,
   onMoveWindowToSession,
   onMuxotronClick,
@@ -205,6 +207,7 @@ export function TmuxPaneNormalMode({
         onDragChange={onDragChange}
         onExpandedWidthChange={onExpandedWidthChange}
         onGoto={onGoto}
+        onInteractiveScrollSequence={onInteractiveScrollSequence}
         onLayoutProfileClick={onLayoutProfileClick}
         onMoveWindowToSession={onMoveWindowToSession}
         onMuxotronClick={onMuxotronClick}

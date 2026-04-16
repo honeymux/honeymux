@@ -78,6 +78,7 @@ export interface MuxotronProps {
   /** Called when the expanded muxotronEnabled's computed width changes. */
   onExpandedWidthChange?: (width: number) => void;
   onGoto?: () => void;
+  onInteractiveScrollSequence?: (sequence: string) => void;
   /** Navigate to next agent in the sidebar tree (tree-selection mode only). */
   onNextAgent?: () => void;
   onNotificationsClick?: () => void;
@@ -122,6 +123,7 @@ export function Muxotron({
   onDismiss,
   onExpandedWidthChange,
   onGoto,
+  onInteractiveScrollSequence,
   onNextAgent,
   onNotificationsClick,
   onPrevAgent,
@@ -711,6 +713,7 @@ export function Muxotron({
         hmPad={hmPad}
         honeymuxState={honeymuxState}
         labelColor={labelColor}
+        onInteractiveScrollSequence={interactiveActive ? onInteractiveScrollSequence : undefined}
         onMouseScroll={
           !interactiveActive && allWrappedLines.length > clampedExtraLines
             ? (e: MouseEvent) => {

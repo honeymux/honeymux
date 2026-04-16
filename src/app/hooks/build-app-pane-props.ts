@@ -59,6 +59,7 @@ interface BuildAppPanePropsOptions {
   mainMenuBindingLabel?: string;
   /** True when the mux-o-tron has keyboard focus in muxotron-focus mode (dim terminal). */
   muxotronFocusActive?: boolean;
+  onInteractiveScrollSequence?: (sequence: string) => void;
   /** Called when user clicks the dimmed terminal area to dismiss muxotron focus. */
   onMuxotronDismiss?: () => void;
   onSidebarViewChange: (view: "agents" | "hook-sniffer" | "server") => void;
@@ -115,6 +116,7 @@ export function buildAppPaneProps({
   layoutProfiles,
   mainMenuBindingLabel,
   muxotronFocusActive,
+  onInteractiveScrollSequence,
   onMuxotronDismiss,
   onSidebarViewChange,
   onTreeAgentSelect,
@@ -311,6 +313,7 @@ export function buildAppPaneProps({
     onDismiss: () => refs.handleDismissRef.current(),
     onGoToPane: agentActions.handleGoToPane,
     onGoto: () => refs.handleGotoAgentRef.current(),
+    onInteractiveScrollSequence,
     onMuxotronClick: agentActions.handleOpenAgentsDialog,
     onNextAgent: selectedSession ? () => refs.handleAgentNextRef.current() : undefined,
     onNotificationsClick: () => refs.handleNotificationsClickRef.current(),

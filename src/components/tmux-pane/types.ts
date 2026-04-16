@@ -61,6 +61,7 @@ export interface TmuxPaneAgentProps {
   onDismiss?: () => void;
   onGoToPane?: (session: AgentSession) => void;
   onGoto?: () => void;
+  onInteractiveScrollSequence?: (sequence: string) => void;
   onMuxotronClick?: () => void;
   /** Navigate to next agent in sidebar tree (tree-selection mode). */
   onNextAgent?: () => void;

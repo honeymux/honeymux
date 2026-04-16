@@ -6,6 +6,7 @@ import type { HoneymuxState } from "../../agents/types.ts";
 import type { MuxotronBorderOverlay } from "./muxotron-model.ts";
 
 import { theme } from "../../themes/theme.ts";
+import { buildInteractiveScrollSequence } from "./muxotron-interactive-mouse.ts";
 import { MuxotronMascotOverlay } from "./muxotron-mascot-overlay.tsx";
 
 interface MuxotronExpandedViewProps {
@@ -27,6 +28,7 @@ interface MuxotronExpandedViewProps {
   hmPad: number;
   honeymuxState: HoneymuxState;
   labelColor: string;
+  onInteractiveScrollSequence?: (sequence: string) => void;
   onMouseScroll?: (event: MouseEvent) => void;
   realBg: string;
   sideBar: string;
@@ -57,6 +59,7 @@ export function MuxotronExpandedView({
   hmPad,
   honeymuxState,
   labelColor,
+  onInteractiveScrollSequence,
   onMouseScroll,
   realBg,
   sideBar,
@@ -68,6 +71,12 @@ export function MuxotronExpandedView({
   zIndex,
 }: MuxotronExpandedViewProps) {
   const showInteractiveTerminal = agentTerminalNode != null && terminalContentRows > 0;
+  const interactiveFrame = {
+    height: terminalContentRows,
+    left: expandedIl + bx + 1,
+    top: 3,
+    width: expandedInner,
+  };
   return (
     <box
       height={totalHeight}
@@ -175,7 +184,23 @@ export function MuxotronExpandedView({
               />
             </box>
           ))}
-          <box height={terminalContentRows} left={bx + 1} position="absolute" top={3} width={expandedInner}>
+          <box
+            height={terminalContentRows}
+            left={bx + 1}
+            onMouse={
+              onInteractiveScrollSequence
+                ? (event: MouseEvent) => {
+                    const sequence = buildInteractiveScrollSequence(event, interactiveFrame);
+                    if (!sequence) return;
+                    event.stopPropagation();
+                    onInteractiveScrollSequence(sequence);
+                  }
+                : undefined
+            }
+            position="absolute"
+            top={3}
+            width={expandedInner}
+          >
             {agentTerminalNode}
           </box>
         </>

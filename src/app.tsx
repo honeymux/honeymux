@@ -393,6 +393,12 @@ export function App({ sessionName }: AppProps) {
       showCursor
     />
   ) : null;
+  const handleInteractiveMuxotronScroll = useCallback(
+    (sequence: string) => {
+      appRuntimeRefs.writeFnRef.current(sequence);
+    },
+    [appRuntimeRefs.writeFnRef],
+  );
 
   const rootPanes = detectedRootPanes;
   const agentInstallDialogOpen =
@@ -696,6 +702,7 @@ export function App({ sessionName }: AppProps) {
     keybindingConfig,
     layoutProfiles: layoutProfilesState,
     muxotronFocusActive,
+    onInteractiveScrollSequence: handleInteractiveMuxotronScroll,
     onTreeAgentSelect: handleTreeAgentSelect,
     optionsWorkflow,
     paneTabsApi,

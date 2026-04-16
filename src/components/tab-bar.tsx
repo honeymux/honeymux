@@ -62,6 +62,7 @@ interface TabBarProps {
   onDragChange?: (dragging: boolean) => void;
   onExpandedWidthChange?: (width: number) => void;
   onGoto?: () => void;
+  onInteractiveScrollSequence?: (sequence: string) => void;
   onLayoutProfileClick?: () => void;
   onMoveWindowToSession?: (index: number, targetSession: string) => void;
   onMuxotronClick?: () => void;
@@ -138,6 +139,7 @@ export function TabBar({
   onDragChange,
   onExpandedWidthChange,
   onGoto,
+  onInteractiveScrollSequence,
   onLayoutProfileClick,
   onMoveWindowToSession,
   onMuxotronClick,
@@ -659,6 +661,7 @@ export function TabBar({
           onDismiss={onDismiss}
           onExpandedWidthChange={onExpandedWidthChange}
           onGoto={onGoto}
+          onInteractiveScrollSequence={onInteractiveScrollSequence}
           onNextAgent={onNextAgent}
           onNotificationsClick={onNotificationsClick}
           onPrevAgent={onPrevAgent}
