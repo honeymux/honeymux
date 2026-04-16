@@ -18,6 +18,7 @@ import { getTmuxServer } from "../util/tmux-server.ts";
 import { type RemotePaneBinding, validateRemoteAgentEvent } from "./agent-event-validator.ts";
 import { ForwardedRemoteAgentIngressFactory } from "./agent-transport.ts";
 import { MirrorLayoutManager } from "./mirror-layout.ts";
+import { buildRemoteProxyProcessArgv } from "./proxy-command.ts";
 import { RemoteProxyServer } from "./proxy-server.ts";
 import { RemoteControlClient } from "./remote-control-client.ts";
 import { validateSshDestination } from "./ssh.ts";
@@ -77,6 +78,7 @@ interface RemotePermissionState {
  * Manages remote server connections, mirror layouts, and pane mappings.
  *
  * Events:
+ *   mirror-state-change()
  *   server-status-change(serverName: string, status: RemoteConnectionStatus, error?: string)
  *   pane-converted(localPaneId: string, serverName: string)
  *   pane-reverted(localPaneId: string)
@@ -130,36 +132,59 @@ export class RemoteServerManager extends EventEmitter {
       throw new Error(err);
     }
 
-    log("remote", `convertPane: remotePaneId=${remotePaneId}, respawning remote pane`);
+    const proxyToken = randomBytes(32).toString("hex");
 
-    // Respawn the remote pane with a shell
-    await client.sendCommand(`respawn-pane -k -t ${remotePaneId}`);
-
-    // Store mapping
+    // Install the mapping and proxy expectation before the remote shell is
+    // respawned so any early prompt/output can be queued for the local proxy.
     this.paneMappings.set(localPaneId, {
       localPaneId,
       remotePaneId,
       serverName,
     });
-
-    // Mark the pane as remote and set the remote border format BEFORE the
-    // local respawn, so that the layout-change tmux emits during the respawn
-    // is observed by downstream features (e.g. pane tabs bootstrap) with the
-    // remote metadata already in place. Otherwise a bootstrap pass can race
-    // in and overwrite the remote border format with a pane tab.
-    await this.setLocalPaneOption(localPaneId, "@hmx-remote-host", serverName);
-    await this.setLocalPaneOption(localPaneId, "@hmx-remote-pane", remotePaneId);
-    await this.updatePaneBorder(localPaneId, serverName);
-
-    // Respawn the local pane with the proxy process
-    const proxyScript = `${import.meta.dir}/proxy.ts`;
-    const proxyToken = randomBytes(32).toString("hex");
     this.proxyServer.expectProxy(localPaneId, proxyToken);
-    log("remote", `convertPane: spawning proxy in local pane ${localPaneId}`);
-    await this.localClient.respawnPane(localPaneId, ["bun", proxyScript, localPaneId, proxyToken]);
+
+    log("remote", `convertPane: remotePaneId=${remotePaneId}, respawning remote pane`);
+
+    try {
+      // Respawn the remote pane with a shell
+      await client.sendCommand(`respawn-pane -k -t ${remotePaneId}`);
+
+      // Mark the pane as remote and set the remote border format BEFORE the
+      // local respawn, so that the layout-change tmux emits during the respawn
+      // is observed by downstream features (e.g. pane tabs bootstrap) with the
+      // remote metadata already in place. Otherwise a bootstrap pass can race
+      // in and overwrite the remote border format with a pane tab.
+      await this.setLocalPaneOption(localPaneId, "@hmx-remote-host", serverName);
+      await this.setLocalPaneOption(localPaneId, "@hmx-remote-pane", remotePaneId);
+      await this.updatePaneBorder(localPaneId, serverName);
+
+      // Respawn the local pane with the proxy process
+      log("remote", `convertPane: spawning proxy in local pane ${localPaneId}`);
+      await this.localClient.respawnPane(localPaneId, buildRemoteProxyProcessArgv(localPaneId, proxyToken));
+    } catch (error) {
+      this.proxyServer.forgetProxy(localPaneId);
+      this.paneMappings.delete(localPaneId);
+      await this.clearLocalPaneOption(localPaneId, "@hmx-remote-host").catch(() => {});
+      await this.clearLocalPaneOption(localPaneId, "@hmx-remote-pane").catch(() => {});
+      await this.resetPaneBorder(localPaneId).catch(() => {});
+      throw error;
+    }
 
     log("remote", `convertPane done: local=${localPaneId} → remote=${remotePaneId} on ${this.serverTag(serverName)}`);
     this.emit("pane-converted", localPaneId, serverName);
+  }
+
+  getRemoteConversionAvailability(localPaneId: string, serverName: string): "ready" | "unavailable" | "waiting" {
+    const client = this.clients.get(serverName);
+    const mirror = this.mirrors.get(serverName);
+    if (!client || !mirror || !client.isConnected) {
+      return "unavailable";
+    }
+    return mirror.getRemotePaneId(localPaneId) ? "ready" : "waiting";
+  }
+
+  hasConvertibleRemoteServer(localPaneId: string): boolean {
+    return this.configs.some((config) => this.getRemoteConversionAvailability(localPaneId, config.name) === "ready");
   }
 
   /** Check if a pane is remote. */
@@ -197,6 +222,7 @@ export class RemoteServerManager extends EventEmitter {
     if (!mapping) return;
 
     log("remote", `revertPane: local=${localPaneId} server=${this.serverTag(mapping.serverName)}`);
+    this.proxyServer.forgetProxy(localPaneId);
 
     // Respawn local pane with a shell
     await this.localClient.respawnPane(localPaneId);
@@ -305,13 +331,16 @@ export class RemoteServerManager extends EventEmitter {
       client.on("layout-change", (_windowId: string) => {
         this.checkForDeadRemotePanes(config.name).catch(() => {});
       });
+      client.on("tmux-exit", () => {
+        this.handleRemoteTmuxExit(config.name);
+      });
       client.on("warning", (message: string) => {
         log("remote", `server ${config.name} warning: ${message}`);
         this.emit("warning", `Remote server ${config.name}: ${message}`);
       });
-      // Note: we do NOT revert pane mappings on "exit" — the remote session
-      // survives SSH disconnects and the mappings should persist through reconnects.
-      // Dead panes are detected via checkForDeadRemotePanes on layout-change/window-close.
+      // Plain SSH disconnects do not emit "tmux-exit", so pane mappings survive
+      // reconnects. A protocol %exit means the remote tmux session itself ended,
+      // so the mapped local proxy panes must be torn down.
 
       // Track status changes
       client.on("status-change", (status: RemoteConnectionStatus, error?: string, sshPid?: number) => {
@@ -333,6 +362,9 @@ export class RemoteServerManager extends EventEmitter {
           mirror
             .fullSync()
             .then(() => this.checkForDeadRemotePanes(config.name))
+            .then(() => {
+              this.emitMirrorStateChange();
+            })
             .catch((err) => {
               log("remote", `mirror sync failed for ${this.serverTag(config.name)}: ${err.message}`);
               this.emit("warning", `Mirror sync failed for ${config.name}: ${err.message}`);
@@ -448,6 +480,10 @@ export class RemoteServerManager extends EventEmitter {
     await client.sendCommand(
       `set-option -gq ${REMOTE_HOOK_SOCKET_TMUX_OPTION} ${quoteTmuxArg("remote hook socket path", remoteHookSocketPath)}`,
     );
+  }
+
+  private emitMirrorStateChange(): void {
+    this.emit("mirror-state-change");
   }
 
   private endRemoteSessionsForLocalPane(localPaneId: string): void {
@@ -577,6 +613,14 @@ export class RemoteServerManager extends EventEmitter {
     this.checkForDeadRemotePanes(serverName).catch(() => {});
   }
 
+  private handleRemoteTmuxExit(serverName: string): void {
+    log("remote", `handleRemoteTmuxExit: ${this.serverTag(serverName)}`);
+    for (const [localPaneId, mapping] of [...this.paneMappings]) {
+      if (mapping.serverName !== serverName) continue;
+      this.killLocalProxyPane(localPaneId);
+    }
+  }
+
   private async isRemotePidBoundToPane(
     serverName: string,
     pid: number,
@@ -616,6 +660,7 @@ export class RemoteServerManager extends EventEmitter {
     log("remote", `killLocalProxyPane: ${localPaneId} (remote pane died)`);
     this.endRemoteSessionsForLocalPane(localPaneId);
     this.paneMappings.delete(localPaneId);
+    this.proxyServer.forgetProxy(localPaneId);
     this.clearLocalPaneOption(localPaneId, "@hmx-remote-host").catch(() => {});
     this.clearLocalPaneOption(localPaneId, "@hmx-remote-pane").catch(() => {});
     this.resetPaneBorder(localPaneId).catch(() => {});
@@ -727,21 +772,36 @@ export class RemoteServerManager extends EventEmitter {
   private wireLocalEvents(): void {
     this.localClient.on("layout-change", (windowId: string, layoutStr: string) => {
       for (const mirror of this.mirrors.values()) {
-        mirror.onLayoutChange(windowId, layoutStr).catch((err) => {
-          this.emit("warning", `Mirror layout sync failed: ${err.message}`);
-        });
+        mirror
+          .onLayoutChange(windowId, layoutStr)
+          .then(() => {
+            this.emitMirrorStateChange();
+          })
+          .catch((err) => {
+            this.emit("warning", `Mirror layout sync failed: ${err.message}`);
+          });
       }
     });
 
     this.localClient.on("window-add", (windowId: string) => {
       for (const mirror of this.mirrors.values()) {
-        mirror.onWindowAdd(windowId).catch(() => {});
+        mirror
+          .onWindowAdd(windowId)
+          .then(() => {
+            this.emitMirrorStateChange();
+          })
+          .catch(() => {});
       }
     });
 
     this.localClient.on("window-close", (windowId: string) => {
       for (const mirror of this.mirrors.values()) {
-        mirror.onWindowClose(windowId).catch(() => {});
+        mirror
+          .onWindowClose(windowId)
+          .then(() => {
+            this.emitMirrorStateChange();
+          })
+          .catch(() => {});
       }
     });
   }

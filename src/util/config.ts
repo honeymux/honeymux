@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync } from "node:fs";
+import { mkdirSync, readFileSync, renameSync, unlinkSync } from "node:fs";
 
 import type { RemoteServerConfig } from "../remote/types.ts";
 import type { Base16Palette, Base16SchemeName, ThemeMode } from "../themes/theme.ts";
@@ -113,6 +113,7 @@ export function defaultConfig(): HoneymuxConfig {
     privilegedPaneDetection: true,
     privilegedPaneDetectionOpacity: 15,
     quickTerminalSize: 90,
+    remote: undefined,
     screenshotDir: "~/.local/state/honeymux/screenshots",
     screenshotFlash: true,
     screenshotMaxHeightPixels: 65535,
@@ -167,14 +168,28 @@ export function mergeLoadedConfig(parsed: LoadedHoneymuxConfig): HoneymuxConfig 
 }
 
 export async function saveConfig(config: HoneymuxConfig): Promise<void> {
+  let tempFile: null | string = null;
   try {
     mkdirSync(CONFIG_DIR, { recursive: true });
-    const obj = { ...config, metaSavedAt: Date.now() };
-    const sorted = Object.fromEntries(Object.entries(obj).sort(([a], [b]) => a.localeCompare(b)));
-    await Bun.write(CONFIG_FILE, JSON.stringify(sorted, null, 2));
+    tempFile = `${CONFIG_FILE}.${process.pid}.${Date.now()}.tmp`;
+    await Bun.write(tempFile, serializeConfigForSave(config));
+    renameSync(tempFile, CONFIG_FILE);
   } catch {
+    if (tempFile) {
+      try {
+        unlinkSync(tempFile);
+      } catch {
+        // best-effort
+      }
+    }
     // best-effort
   }
+}
+
+export function serializeConfigForSave(config: HoneymuxConfig, metaSavedAt = Date.now()): string {
+  const obj = { ...config, metaSavedAt };
+  const sorted = Object.fromEntries(Object.entries(obj).sort(([a], [b]) => a.localeCompare(b)));
+  return JSON.stringify(sorted, null, 2);
 }
 
 const VALID_UI_MODES: UIMode[] = ["adaptive", "marquee-top", "marquee-bottom", "raw"];

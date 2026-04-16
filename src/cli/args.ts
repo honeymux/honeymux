@@ -1,3 +1,5 @@
+import { getInternalRemoteProxyFlag } from "../remote/proxy-command.ts";
+
 export type CliParseResult =
   | {
       explicitServer: string | undefined;
@@ -6,6 +8,11 @@ export type CliParseResult =
     }
   | { kind: "error"; message: string }
   | { kind: "help" }
+  | {
+      kind: "internal-remote-proxy";
+      localPaneId: string;
+      proxyToken: string;
+    }
   | { kind: "version" };
 
 const USAGE = [
@@ -23,6 +30,7 @@ export function formatUsage(): string {
 
 export function parseCliArgs(args: string[]): CliParseResult {
   let explicitServer: string | undefined;
+  const internalRemoteProxyFlag = getInternalRemoteProxyFlag();
   let parsingOptions = true;
   let sessionName: string | undefined;
 
@@ -44,6 +52,21 @@ export function parseCliArgs(args: string[]): CliParseResult {
 
     if (parsingOptions && arg === "-V") {
       return { kind: "version" };
+    }
+
+    if (parsingOptions && arg === internalRemoteProxyFlag) {
+      const localPaneId = args[i + 1];
+      if (localPaneId === undefined) {
+        return { kind: "error", message: `honeymux: option '${internalRemoteProxyFlag}' requires a pane id` };
+      }
+      const proxyToken = args[i + 2];
+      if (proxyToken === undefined) {
+        return { kind: "error", message: `honeymux: option '${internalRemoteProxyFlag}' requires a proxy token` };
+      }
+      if (args[i + 3] !== undefined) {
+        return { kind: "error", message: `honeymux: unexpected argument '${args[i + 3]}'` };
+      }
+      return { kind: "internal-remote-proxy", localPaneId, proxyToken };
     }
 
     if (parsingOptions && arg === "--server") {

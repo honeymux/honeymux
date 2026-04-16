@@ -20,6 +20,25 @@ function createClient(): RemoteControlClient {
 }
 
 describe("RemoteControlClient parser wiring", () => {
+  test("emits a dedicated tmux-exit event on protocol exit", () => {
+    const client = createClient();
+    const onExit = mock(() => {});
+    const onTmuxExit = mock(() => {});
+
+    client.on("exit", onExit);
+    client.on("tmux-exit", onTmuxExit);
+
+    const parseLine = (client as unknown as { parseLine: (line: string) => void }).parseLine.bind(client);
+    (client as unknown as { parser: unknown }).parser = (
+      client as unknown as { createParser: () => unknown }
+    ).createParser();
+
+    parseLine("%exit");
+
+    expect(onTmuxExit).toHaveBeenCalledTimes(1);
+    expect(onExit).toHaveBeenCalledTimes(1);
+  });
+
   test("emits pane output and layout notifications through the shared parser", () => {
     const client = createClient();
     const onPaneOutput = mock((_paneId: string, _data: string) => {});

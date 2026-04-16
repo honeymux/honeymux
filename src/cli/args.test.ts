@@ -43,6 +43,28 @@ describe("parseCliArgs", () => {
     expect(parseCliArgs(["-V"])).toEqual({ kind: "version" });
   });
 
+  test("parses the internal remote proxy mode", () => {
+    expect(parseCliArgs(["--internal-remote-proxy", "%10", "token-123"])).toEqual({
+      kind: "internal-remote-proxy",
+      localPaneId: "%10",
+      proxyToken: "token-123",
+    });
+  });
+
+  test("rejects a missing internal remote proxy pane id", () => {
+    expect(parseCliArgs(["--internal-remote-proxy"])).toEqual({
+      kind: "error",
+      message: "honeymux: option '--internal-remote-proxy' requires a pane id",
+    });
+  });
+
+  test("rejects a missing internal remote proxy token", () => {
+    expect(parseCliArgs(["--internal-remote-proxy", "%10"])).toEqual({
+      kind: "error",
+      message: "honeymux: option '--internal-remote-proxy' requires a proxy token",
+    });
+  });
+
   test("rejects an unknown long option", () => {
     expect(parseCliArgs(["--version"])).toEqual({
       kind: "error",

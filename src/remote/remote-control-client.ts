@@ -40,6 +40,7 @@ const MAX_SSH_WARNING_CHARS = 512;
  *   pane-output(paneId: string, data: string)
  *   pane-output-bytes(paneId: string, data: Uint8Array)
  *   layout-change(windowId: string, layoutString: string)
+ *   tmux-exit() — remote tmux session/client exited cleanly via `%exit`
  *   window-add(windowId: string)
  *   window-close(windowId: string)
  *   window-pane-changed(windowId: string, paneId: string)
@@ -244,6 +245,7 @@ export class RemoteControlClient extends EventEmitter {
       notifications: {
         onExit: () => {
           this.closed = true;
+          this.emit("tmux-exit");
           this.emit("exit");
         },
         onLayoutChange: (windowId, layoutString) => this.emit("layout-change", windowId, layoutString),

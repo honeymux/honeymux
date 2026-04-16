@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import type { AgentEvent } from "../../agents/types.ts";
 import type { RemoteServerConfig } from "../../remote/types.ts";
@@ -31,8 +31,12 @@ export function useRemoteManager({
   handleSshServerStatusChange,
   refs,
   remoteConfigs,
-}: UseRemoteManagerOptions): void {
+}: UseRemoteManagerOptions): number {
   const remoteConfigKey = getRemoteConfigKey(remoteConfigs);
+  const [mirrorStateVersion, setMirrorStateVersion] = useState(0);
+  const bumpMirrorStateVersion = useCallback(() => {
+    setMirrorStateVersion((version) => version + 1);
+  }, []);
   const stableRemoteConfigs = useMemo(() => remoteConfigs, [remoteConfigKey]);
 
   useEffect(() => {
@@ -48,7 +52,12 @@ export function useRemoteManager({
 
     const manager = new RemoteServerManager(client, stableRemoteConfigs);
     refs.remoteManagerRef.current = manager;
-    manager.on("server-status-change", handleSshServerStatusChange);
+    const handleRemoteServerStatusChange = (serverName: string, status: string, error?: string) => {
+      handleSshServerStatusChange(serverName, status, error);
+      bumpMirrorStateVersion();
+    };
+    manager.on("mirror-state-change", bumpMirrorStateVersion);
+    manager.on("server-status-change", handleRemoteServerStatusChange);
     const forwardAgentEvent = (event: AgentEvent) => {
       refs.registryRef.current?.forwardEvent(event);
     };
@@ -57,7 +66,8 @@ export function useRemoteManager({
 
     return () => {
       manager.off("agent-event", forwardAgentEvent);
-      manager.off("server-status-change", handleSshServerStatusChange);
+      manager.off("mirror-state-change", bumpMirrorStateVersion);
+      manager.off("server-status-change", handleRemoteServerStatusChange);
       void manager.stopAll();
       if (refs.remoteManagerRef.current === manager) {
         refs.remoteManagerRef.current = null;
@@ -67,10 +77,13 @@ export function useRemoteManager({
   }, [
     clearSshErrors,
     connected,
+    bumpMirrorStateVersion,
     handleSshServerStatusChange,
     refs.clientRef,
     refs.registryRef,
     refs.remoteManagerRef,
     stableRemoteConfigs,
   ]);
+
+  return mirrorStateVersion;
 }

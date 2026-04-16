@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { defaultConfig, mergeLoadedConfig, validateConfig } from "./config.ts";
+import { defaultConfig, mergeLoadedConfig, serializeConfigForSave, validateConfig } from "./config.ts";
 
 describe("config", () => {
   test("defaults local OSC passthrough policies", () => {
@@ -49,12 +49,35 @@ describe("config", () => {
     ).toBe("off");
   });
 
+  test("preserves persisted remote servers when merging loaded config", () => {
+    expect(
+      mergeLoadedConfig({
+        remote: [{ agentForwarding: true, host: "dev-box", name: "dev" }],
+      }).remote,
+    ).toEqual([{ agentForwarding: true, host: "dev-box", name: "dev" }]);
+  });
+
   test("ignores unknown loaded config keys", () => {
     const merged = mergeLoadedConfig({
       policyOsc52Passthrough: "all",
     } as any);
     expect(Object.hasOwn(merged, "policyOsc52Passthrough")).toBe(false);
     expect(merged.policyLocalOsc52Passthrough).toBe("write-only");
+  });
+
+  test("serializes config with sorted keys and a replaced save timestamp", () => {
+    const config = {
+      ...defaultConfig(),
+      metaSavedAt: 1,
+      remote: [{ host: "dev-box", name: "dev" }],
+    };
+    const serialized = serializeConfigForSave(config, 1234);
+    const parsed = JSON.parse(serialized) as ReturnType<typeof defaultConfig>;
+    const keys = Object.keys(parsed);
+
+    expect(parsed.metaSavedAt).toBe(1234);
+    expect(parsed.remote).toEqual([{ host: "dev-box", name: "dev" }]);
+    expect(keys).toEqual([...keys].sort((a, b) => a.localeCompare(b)));
   });
 
   test("rejects invalid local OSC52 passthrough values", () => {

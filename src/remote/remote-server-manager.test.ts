@@ -3,6 +3,7 @@ import { describe, expect, it, mock } from "bun:test";
 import type { AgentEvent } from "../agents/types.ts";
 import type { RemoteAgentIngress, RemotePermissionRoute } from "./agent-transport.ts";
 
+import { buildRemoteProxyProcessArgv } from "./proxy-command.ts";
 import { RemoteServerManager } from "./remote-server-manager.ts";
 
 function makeStubIngress(): {
@@ -199,7 +200,75 @@ describe("RemoteServerManager remote hook ingress", () => {
     expect(respawnPane).toHaveBeenCalledTimes(1);
     const [paneId, argv] = respawnPane.mock.calls[0]! as unknown as [string, string[]];
     expect(paneId).toBe("%10");
-    expect(argv).toEqual(["bun", expect.stringContaining("/src/remote/proxy.ts"), "%10", expect.any(String)]);
+    const proxyToken = argv.at(-1);
+    expect(proxyToken).toEqual(expect.any(String));
+    expect(argv).toEqual(buildRemoteProxyProcessArgv("%10", proxyToken!));
+  });
+
+  it("reports remote conversion availability from connection and mirror state", () => {
+    const manager = new RemoteServerManager({} as any, [{ host: "dev-box", name: "dev-box" }]);
+
+    expect(manager.getRemoteConversionAvailability("%10", "dev-box")).toBe("unavailable");
+    expect(manager.hasConvertibleRemoteServer("%10")).toBe(false);
+
+    (manager as any).clients.set("dev-box", {
+      isConnected: true,
+    });
+    (manager as any).mirrors.set("dev-box", {
+      getRemotePaneId: () => undefined,
+    });
+
+    expect(manager.getRemoteConversionAvailability("%10", "dev-box")).toBe("waiting");
+    expect(manager.hasConvertibleRemoteServer("%10")).toBe(false);
+
+    (manager as any).mirrors.set("dev-box", {
+      getRemotePaneId: () => "%77",
+    });
+
+    expect(manager.getRemoteConversionAvailability("%10", "dev-box")).toBe("ready");
+    expect(manager.hasConvertibleRemoteServer("%10")).toBe(true);
+  });
+
+  it("installs proxy expectations before the remote pane respawns", async () => {
+    const proxyExpectState: { hadExpectation: boolean; hadMapping: boolean } = {
+      hadExpectation: false,
+      hadMapping: false,
+    };
+    const localClient = {
+      respawnPane: mock(async () => {}),
+      runCommandArgs: mock(async () => {}),
+      setPaneBorderFormat: mock(async () => {}),
+    } as any;
+
+    const manager = new RemoteServerManager(localClient, [{ host: "dev-box", name: "dev-box" }]);
+    const expectProxy = mock((_paneId: string, _token: string) => {});
+    const forgetProxy = mock((_paneId: string) => {});
+    (manager as any).proxyServer = {
+      expectProxy,
+      forgetProxy,
+    };
+
+    (manager as any).clients.set("dev-box", {
+      isConnected: true,
+      sendCommand: mock(async (command: string) => {
+        if (command === "respawn-pane -k -t %77") {
+          proxyExpectState.hadExpectation = expectProxy.mock.calls.length === 1;
+          proxyExpectState.hadMapping = (manager as any).paneMappings.get("%10")?.remotePaneId === "%77";
+        }
+        return "";
+      }),
+    });
+    (manager as any).mirrors.set("dev-box", {
+      getRemotePaneId: () => "%77",
+    });
+
+    await manager.convertPane("%10", "dev-box");
+
+    expect(proxyExpectState).toEqual({
+      hadExpectation: true,
+      hadMapping: true,
+    });
+    expect(forgetProxy).not.toHaveBeenCalled();
   });
 
   it("stores the remote hook socket path in tmux state instead of process environment", async () => {
@@ -217,5 +286,37 @@ describe("RemoteServerManager remote hook ingress", () => {
     expect(sendCommand).toHaveBeenCalledWith(
       "set-option -gq @hmx-agent-socket-path '/home/dev/.local/state/honeymux/runtime/hmx-remote-hook-0123456789abcdef.sock'",
     );
+  });
+
+  it("kills mapped local proxy panes when the remote tmux session exits", () => {
+    const killPaneById = mock(async () => {});
+    const runCommandArgs = mock(async () => {});
+    const localClient = {
+      killPaneById,
+      runCommandArgs,
+    } as any;
+    const manager = new RemoteServerManager(localClient, [
+      { host: "dev-a", name: "dev-a" },
+      { host: "dev-b", name: "dev-b" },
+    ]);
+
+    (manager as any).paneMappings.set("%10", {
+      localPaneId: "%10",
+      remotePaneId: "%77",
+      serverName: "dev-a",
+    });
+    (manager as any).paneMappings.set("%11", {
+      localPaneId: "%11",
+      remotePaneId: "%88",
+      serverName: "dev-b",
+    });
+
+    (manager as any).handleRemoteTmuxExit("dev-a");
+
+    expect(killPaneById).toHaveBeenCalledTimes(1);
+    expect(killPaneById).toHaveBeenCalledWith("%10");
+    expect((manager as any).paneMappings.has("%10")).toBe(false);
+    expect((manager as any).paneMappings.has("%11")).toBe(true);
+    expect(runCommandArgs).toHaveBeenCalledTimes(3);
   });
 });

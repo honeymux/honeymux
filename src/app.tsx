@@ -1,7 +1,7 @@
 import type { GhosttyTerminalRenderable } from "ghostty-opentui/terminal-buffer";
 
 import { useRenderer, useTerminalDimensions } from "@opentui/react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type { KeybindingConfig } from "./util/keybindings.ts";
 
@@ -571,13 +571,24 @@ export function App({ sessionName }: AppProps) {
     return setupTmuxRuntime(runtimeContext);
   }, [sessionKey]);
 
-  useRemoteManager({
+  const remoteManagerVersion = useRemoteManager({
     clearSshErrors,
     connected,
     handleSshServerStatusChange,
     refs: appRuntimeRefs,
     remoteConfigs: config.remote,
   });
+  const paneBorderRemoteServers = useMemo(() => {
+    return (
+      config.remote?.map((server) => ({
+        availability: paneBorderMenu
+          ? (remoteManagerRef.current?.getRemoteConversionAvailability(paneBorderMenu.paneId, server.name) ??
+            "unavailable")
+          : "unavailable",
+        name: server.name,
+      })) ?? []
+    );
+  }, [config.remote, paneBorderMenu, remoteManagerVersion]);
 
   const { activity: codingAgentActivity, lastOutputByPaneRef: codingAgentLastOutputByPaneRef } = useAgentPaneActivity({
     agentSessions,
@@ -802,13 +813,18 @@ export function App({ sessionName }: AppProps) {
         onClose={closePaneBorderMenu}
         onConvertToRemote={(paneId, serverName) => {
           void (async () => {
+            const manager = remoteManagerRef.current;
+            if (!manager || manager.getRemoteConversionAvailability(paneId, serverName) !== "ready") {
+              log("remote", `convertPane skipped: mirror not ready for ${paneId} on ${serverName}`);
+              return;
+            }
             // Evict the pane from any pane-tab group BEFORE conversion so the
             // remote pane's border format (set by remoteManager.convertPane)
             // is not overwritten by a racing label-refresh triggered by the
             // local respawn.
             await paneTabsApi.handleEvictPaneFromGroup(paneId);
             try {
-              await remoteManagerRef.current?.convertPane(paneId, serverName);
+              await manager.convertPane(paneId, serverName);
             } catch (err) {
               log("remote", `convertPane error: ${err instanceof Error ? err.message : String(err)}`);
             }
@@ -823,7 +839,7 @@ export function App({ sessionName }: AppProps) {
         remotePaneServer={
           paneBorderMenu ? (remoteManagerRef.current?.isRemotePane(paneBorderMenu.paneId)?.serverName ?? null) : null
         }
-        remoteServers={config.remote?.map((s) => s.name) ?? []}
+        remoteServers={paneBorderRemoteServers}
       />
       <PaneTabOverflowDropdown dropdownInputRef={dropdownInputRef} paneTabsApi={paneTabsApi} width={width} />
       {paneTabDisableConfirmOpen && (

@@ -7,6 +7,7 @@ import { readSync, writeSync } from "node:fs";
 import pkg from "../package.json";
 import { App } from "./app.tsx";
 import { formatUsage, parseCliArgs } from "./cli/args.ts";
+import { runRemoteProxyProcess } from "./remote/proxy.ts";
 import { DEFAULT_SCHEME, initTheme, resolveThemeName } from "./themes/theme.ts";
 import { tmuxSessionExists } from "./tmux/control-client.ts";
 import { checkTmuxStartupRequirements } from "./tmux/startup-check.ts";
@@ -62,6 +63,11 @@ if (cliArgs.kind === "help") {
 if (cliArgs.kind === "error") {
   process.stderr.write(`${cliArgs.message}\n\n${formatUsage()}\n`);
   process.exit(2);
+}
+
+if (cliArgs.kind === "internal-remote-proxy") {
+  await runRemoteProxyProcess(cliArgs.localPaneId, cliArgs.proxyToken);
+  process.exit(0);
 }
 
 // Bail early if already running inside tmux (nesting is not supported).
