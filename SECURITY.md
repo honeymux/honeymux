@@ -6,7 +6,7 @@ Please **do not** report security vulnerabilities via public GitHub issues, disc
 
 Instead, email: **security@honeymux.com**
 
-Please include:
+Be sure to include:
 
 - A clear description of the issue and potential impact
 - Affected version(s) or commit(s)
