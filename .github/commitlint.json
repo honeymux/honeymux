@@ -1,0 +1,16 @@
+{
+  "types": [
+    "build",
+    "chore",
+    "ci",
+    "docs",
+    "feat",
+    "fix",
+    "hmx",
+    "perf",
+    "refactor",
+    "revert",
+    "style",
+    "test"
+  ]
+}
