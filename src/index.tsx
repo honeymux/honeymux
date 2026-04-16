@@ -8,6 +8,7 @@ import pkg from "../package.json";
 import { App } from "./app.tsx";
 import { DEFAULT_SCHEME, initTheme, resolveThemeName } from "./themes/theme.ts";
 import { tmuxSessionExists } from "./tmux/control-client.ts";
+import { checkTmuxStartupRequirements } from "./tmux/startup-check.ts";
 import { killTrackedChildren } from "./util/child-pids.ts";
 import { loadConfig, validateConfig } from "./util/config.ts";
 // Workaround: OpenTUI's Zig renderer emits OSC 12 to set the cursor color
@@ -97,42 +98,13 @@ if (!isLocaleUtf8()) {
 //   - list-windows -f filter expressions (3.0)
 //   - pane-border-lines option (3.2)
 {
-  const MIN_MAJOR = 3;
-  const MIN_MINOR = 3;
-  const MIN_LABEL = "3.3";
-
-  const proc = Bun.spawn(["tmux", "-V"], { stderr: "pipe", stdout: "pipe" });
-  const versionOutput = (await new Response(proc.stdout).text()).trim();
-  const exitCode = await proc.exited;
-
-  if (exitCode !== 0 || !versionOutput) {
-    console.error(
-      "honeymux requires tmux but it doesn't appear to be installed.\n" +
-        "Install it with your package manager — e.g.:\n" +
-        "  brew install tmux        # macOS\n" +
-        "  sudo apt install tmux    # Debian/Ubuntu\n" +
-        "  sudo dnf install tmux    # Fedora",
-    );
+  const tmuxStartupCheck = await checkTmuxStartupRequirements();
+  if (!tmuxStartupCheck.ok) {
+    console.error(tmuxStartupCheck.message);
     process.exit(1);
   }
 
-  // tmux -V prints e.g. "tmux 3.4" or "tmux 3.3a" or "tmux next-3.5"
-  const match = versionOutput.match(/(\d+)\.(\d+)/);
-  if (match) {
-    const major = parseInt(match[1]!, 10);
-    const minor = parseInt(match[2]!, 10);
-    if (major < MIN_MAJOR || (major === MIN_MAJOR && minor < MIN_MINOR)) {
-      console.error(
-        `honeymux requires tmux ${MIN_LABEL} or later but found ${versionOutput}.\n` +
-          "Upgrade tmux with your package manager — e.g.:\n" +
-          "  brew upgrade tmux        # macOS\n" +
-          "  sudo apt install tmux    # Debian/Ubuntu (may need a newer repo)\n" +
-          "  sudo dnf install tmux    # Fedora",
-      );
-      process.exit(1);
-    }
-  }
-  setTmuxVersion(versionOutput);
+  setTmuxVersion(tmuxStartupCheck.version);
 }
 
 // --- Single-instance enforcement ---
