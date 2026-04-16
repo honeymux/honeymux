@@ -9,7 +9,6 @@ import type { Dispatch, MutableRefObject, SetStateAction } from "react";
  *   - Auto-pop the agent install dialog (first detection)
  *   - Add to the deferred warning badge (after "Not Now")
  */
-import { readFileSync } from "node:fs";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { TmuxControlClient } from "../../tmux/control-client.ts";
@@ -18,6 +17,9 @@ import { areClaudeHooksInstalled, isClaudeIgnored } from "../../agents/claude/in
 import { areCodexHooksInstalled, isCodexIgnored } from "../../agents/codex/installer.ts";
 import { areGeminiHooksInstalled, isGeminiIgnored } from "../../agents/gemini/installer.ts";
 import { isOpenCodeIgnored, isOpenCodePluginInstalled } from "../../agents/opencode/installer.ts";
+import { type AgentType, detectRunningAgentTypes } from "./agent-binary-detection-core.ts";
+
+export type { AgentType } from "./agent-binary-detection-core.ts";
 
 export interface AgentBinaryInfo {
   displayName: string;
@@ -26,8 +28,6 @@ export interface AgentBinaryInfo {
   isInstalled: () => boolean;
   type: AgentType;
 }
-
-export type AgentType = "claude" | "codex" | "gemini" | "opencode";
 
 const AGENTS: AgentBinaryInfo[] = [
   {
@@ -58,20 +58,6 @@ const AGENTS: AgentBinaryInfo[] = [
     isInstalled: areCodexHooksInstalled,
     type: "codex",
   },
-];
-
-/** Map pane_current_command to agent type. */
-const BINARY_MAP: Record<string, AgentType> = {
-  claude: "claude",
-  codex: "codex",
-  gemini: "gemini",
-  opencode: "opencode",
-};
-
-/** Agents whose binary runs as a child of a wrapper (e.g. node). */
-const WRAPPER_AGENTS: { pattern: RegExp; type: AgentType }[] = [
-  { pattern: /opencode/i, type: "opencode" },
-  { pattern: /gemini/i, type: "gemini" },
 ];
 
 const POLL_INTERVAL_MS = 5000;
@@ -156,47 +142,9 @@ export function useAgentBinaryDetection({
       if (!client || cancelled) return;
 
       try {
-        const output = await client.runCommand("list-panes -a -F '#{pane_current_command} #{pane_pid}'");
+        const output = await client.runCommand("list-panes -a -F '#{pane_current_command}\t#{pane_pid}\t#{pane_tty}'");
         if (cancelled) return;
-
-        // Collect unique running agent types
-        const running = new Set<AgentType>();
-        const wrapperPids: number[] = [];
-        for (const line of output.split("\n")) {
-          const trimmed = line.trim();
-          if (!trimmed) continue;
-          const spaceIdx = trimmed.indexOf(" ");
-          const cmd = spaceIdx > 0 ? trimmed.slice(0, spaceIdx) : trimmed;
-          const pid = spaceIdx > 0 ? parseInt(trimmed.slice(spaceIdx + 1), 10) : NaN;
-          const agent = BINARY_MAP[cmd];
-          if (agent) {
-            running.add(agent);
-          } else if (!isNaN(pid) && (cmd === "node" || cmd === "bun")) {
-            wrapperPids.push(pid);
-          }
-        }
-
-        // For wrapper processes (node/bun), check child cmdlines for agent binaries
-        if (wrapperPids.length > 0 && WRAPPER_AGENTS.length > 0) {
-          for (const pid of wrapperPids) {
-            try {
-              const children = readFileSync(`/proc/${pid}/task/${pid}/children`, "utf-8").trim();
-              for (const childPid of children.split(/\s+/)) {
-                if (!childPid) continue;
-                try {
-                  const cmdline = readFileSync(`/proc/${childPid}/cmdline`, "utf-8");
-                  for (const wa of WRAPPER_AGENTS) {
-                    if (wa.pattern.test(cmdline)) running.add(wa.type);
-                  }
-                } catch {
-                  /* process vanished */
-                }
-              }
-            } catch {
-              /* /proc not available or no children */
-            }
-          }
-        }
+        const running = detectRunningAgentTypes(output);
 
         // For each running agent: check if we should show a dialog
         for (const agentType of running) {

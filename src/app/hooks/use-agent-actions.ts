@@ -11,6 +11,7 @@ import type { UiActionsApi } from "./use-ui-actions.ts";
 
 import { ClaudeHookProvider } from "../../agents/claude/hook-provider.ts";
 import { installClaudeHooks, saveClaudeConsent, saveClaudeIgnored } from "../../agents/claude/installer.ts";
+import { CodexHookProvider } from "../../agents/codex/hook-provider.ts";
 import { installCodexHooks, saveCodexConsent, saveCodexIgnored } from "../../agents/codex/installer.ts";
 import { GeminiHookProvider } from "../../agents/gemini/hook-provider.ts";
 import { installGeminiHooks, saveGeminiConsent, saveGeminiIgnored } from "../../agents/gemini/installer.ts";
@@ -319,8 +320,17 @@ export function useAgentActions({
     setCodexDialogPending(false);
     setDialogSelected("install");
     undeferAgent("codex");
-    await installCodexHooks();
-  }, [setCodexDialogPending, setDialogSelected, undeferAgent]);
+    const success = await installCodexHooks();
+    const client = clientRef.current;
+    if (success && client) {
+      const registry = registryRef.current;
+      if (registry) {
+        const codexProvider = new CodexHookProvider(client);
+        registry.register(codexProvider);
+        codexProvider.start();
+      }
+    }
+  }, [clientRef, registryRef, setCodexDialogPending, setDialogSelected, undeferAgent]);
 
   const handleCodexSkip = useCallback(async () => {
     setCodexDialogPending(false);

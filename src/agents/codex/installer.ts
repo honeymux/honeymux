@@ -1,6 +1,7 @@
-import { chmodSync, existsSync, mkdirSync, readFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
+import { formatArgv } from "../../util/argv.ts";
 // Embed hook script at build time so it survives `bun build --compile`.
 import HOOK_CONTENT from "./hooks.py" with { type: "text" };
 
@@ -27,19 +28,26 @@ type HookMatcherGroup = {
   hooks: HookHandler[];
 };
 
+type ResolveExecutable = (name: string) => null | string | undefined;
+
 export function areCodexHooksInstalled(): boolean {
   const scriptPath = join(HOOKS_DIR, HOOK_SCRIPT_NAME);
-  if (!existsSync(scriptPath) || !existsSync(HOOKS_FILE) || !isCodexHooksFeatureEnabled()) {
-    return false;
-  }
+  if (!existsSync(scriptPath)) return false;
 
   try {
-    const content = readFileSync(HOOKS_FILE, "utf-8");
-    const settings = JSON.parse(content);
-    return containsOurHook(settings?.hooks);
+    return syncCodexHookInstall(scriptPath);
   } catch {
     return false;
   }
+}
+
+export function buildCodexHookCommand(
+  scriptPath: string,
+  resolveExecutable: ResolveExecutable = (name) => Bun.which(name),
+): null | string {
+  const interpreter = resolveCodexHookPython(resolveExecutable);
+  if (!interpreter) return null;
+  return formatArgv([interpreter, scriptPath]);
 }
 
 export async function installCodexHooks(): Promise<boolean> {
@@ -47,43 +55,7 @@ export async function installCodexHooks(): Promise<boolean> {
     mkdirSync(HOOKS_DIR, { recursive: true });
 
     const destPath = join(HOOKS_DIR, HOOK_SCRIPT_NAME);
-    await Bun.write(destPath, HOOK_CONTENT);
-    chmodSync(destPath, 0o755);
-
-    let settings: CodexSettings = {};
-    try {
-      const content = await Bun.file(HOOKS_FILE).text();
-      settings = JSON.parse(content);
-    } catch {
-      // no existing hook config
-    }
-
-    if (!settings.hooks || typeof settings.hooks !== "object") {
-      settings.hooks = {};
-    }
-
-    settings.hooks["SessionStart"] = Array.isArray(settings.hooks["SessionStart"])
-      ? settings.hooks["SessionStart"].filter((group: unknown) => !containsOurHook(group))
-      : [];
-
-    settings.hooks["SessionStart"].push({
-      hooks: [
-        {
-          command: `python3 ${destPath}`,
-          type: "command",
-        },
-      ],
-    });
-
-    await Bun.write(HOOKS_FILE, JSON.stringify(settings, null, 2));
-
-    let configText = "";
-    try {
-      configText = await Bun.file(CONFIG_FILE).text();
-    } catch {
-      // create a new config file
-    }
-    await Bun.write(CONFIG_FILE, ensureCodexHooksFeature(configText));
+    if (!syncCodexHookInstall(destPath)) return false;
 
     await saveCodexConsent(true);
     return true;
@@ -102,6 +74,12 @@ export function isCodexIgnored(): boolean {
   }
 }
 
+export function resolveCodexHookPython(
+  resolveExecutable: ResolveExecutable = (name) => Bun.which(name),
+): null | string {
+  return resolveExecutable("python3") ?? resolveExecutable("python") ?? null;
+}
+
 export async function saveCodexConsent(consented: boolean): Promise<void> {
   try {
     mkdirSync(CONSENT_DIR, { recursive: true });
@@ -118,6 +96,29 @@ export async function saveCodexIgnored(): Promise<void> {
   } catch {
     // best-effort
   }
+}
+
+export function upsertCodexHookSettings(settings: CodexSettings, command: string): CodexSettings {
+  const next: CodexSettings = {
+    ...settings,
+    hooks: { ...(settings.hooks ?? {}) },
+  };
+  const hooks = next.hooks!;
+
+  hooks["SessionStart"] = Array.isArray(hooks["SessionStart"])
+    ? hooks["SessionStart"].filter((group: unknown) => !containsOurHook(group))
+    : [];
+
+  hooks["SessionStart"].push({
+    hooks: [
+      {
+        command,
+        type: "command",
+      },
+    ],
+  });
+
+  return next;
 }
 
 function containsOurHook(obj: unknown): boolean {
@@ -165,22 +166,39 @@ function ensureCodexHooksFeature(configText: string): string {
   return `${lines.join("\n")}\n`;
 }
 
-function isCodexHooksFeatureEnabled(): boolean {
+function loadCodexSettings(): CodexSettings {
   try {
-    const content = readFileSync(CONFIG_FILE, "utf-8");
-    const lines = content.split(/\r?\n/);
-    let inFeatures = false;
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (!trimmed || trimmed.startsWith("#")) continue;
-      if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
-        inFeatures = trimmed === "[features]";
-        continue;
-      }
-      if (inFeatures && /^codex_hooks\s*=\s*true\b/.test(trimmed)) {
-        return true;
-      }
-    }
-  } catch {}
-  return false;
+    const content = readFileSync(HOOKS_FILE, "utf-8");
+    return JSON.parse(content);
+  } catch {
+    return {};
+  }
+}
+
+function syncCodexHookInstall(scriptPath: string): boolean {
+  const command = buildCodexHookCommand(scriptPath);
+  if (!command) return false;
+
+  mkdirSync(HOOKS_DIR, { recursive: true });
+
+  const currentScript = existsSync(scriptPath) ? readFileSync(scriptPath, "utf-8") : null;
+  if (currentScript !== HOOK_CONTENT) {
+    writeFileSync(scriptPath, HOOK_CONTENT);
+    chmodSync(scriptPath, 0o755);
+  }
+
+  const currentHooksText = existsSync(HOOKS_FILE) ? readFileSync(HOOKS_FILE, "utf-8") : null;
+  const settings = upsertCodexHookSettings(loadCodexSettings(), command);
+  const nextHooksText = JSON.stringify(settings, null, 2);
+  if (currentHooksText !== nextHooksText) {
+    writeFileSync(HOOKS_FILE, nextHooksText);
+  }
+
+  const currentConfigText = existsSync(CONFIG_FILE) ? readFileSync(CONFIG_FILE, "utf-8") : "";
+  const nextConfigText = ensureCodexHooksFeature(currentConfigText);
+  if (currentConfigText !== nextConfigText) {
+    writeFileSync(CONFIG_FILE, nextConfigText);
+  }
+
+  return true;
 }

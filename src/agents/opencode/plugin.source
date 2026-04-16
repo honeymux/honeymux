@@ -9,7 +9,7 @@ import { connect } from "bun";
  * Install location: ~/.config/opencode/plugins/opencode-plugin.ts
  */
 import { spawnSync } from "node:child_process";
-import { appendFileSync, chmodSync, mkdirSync, readlinkSync } from "node:fs";
+import { appendFileSync, chmodSync, mkdirSync } from "node:fs";
 import { hostname } from "node:os";
 
 // --- Socket path (mirrors socket-server.ts logic) ---
@@ -165,18 +165,25 @@ function getTmuxRemoteSocketPath(): null | string {
 }
 
 function getTty(): null | string {
-  try {
-    const ppid = process.ppid;
-    return readlinkSync(`/proc/${ppid}/fd/0`);
-  } catch {
-    return null;
-  }
+  const proc = spawnSync("ps", ["-ww", "-o", "tty=", "-p", String(process.ppid)], {
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "ignore"],
+    timeout: 1000,
+  });
+  if (proc.status !== 0) return null;
+  return normalizeTty(proc.stdout);
 }
 
 function log(msg: string) {
   try {
     appendFileSync(getRuntimePath("hmx-opencode-plugin.log"), `${new Date().toISOString()} ${msg}\n`);
   } catch {}
+}
+
+function normalizeTty(value: string): null | string {
+  const tty = value.trim();
+  if (!tty || tty === "-" || tty === "?" || tty === "??") return null;
+  return tty.startsWith("/dev/") ? tty : `/dev/${tty}`;
 }
 
 function postPermissionReply(

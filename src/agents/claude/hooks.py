@@ -9,6 +9,7 @@ import json
 import os
 import platform
 import re
+import shlex
 import socket
 import subprocess
 import sys
@@ -94,20 +95,90 @@ def re_match_remote_hook_socket(path):
     return re.match(REMOTE_HOOK_SOCKET_RE, path) is not None
 
 
-def running_in_honeymux():
-    """Check if we're inside a honeymux-managed tmux session."""
-    tmux = os.environ.get("TMUX", "")
-    return "honeymux" in tmux
+def get_parent_pid(pid):
+    if pid <= 1:
+        return None
+
+    if sys.platform.startswith("linux"):
+        try:
+            with open(f"/proc/{pid}/stat", "r") as f:
+                stat = f.read()
+            close_idx = stat.rfind(")")
+            if close_idx == -1:
+                return None
+            fields = stat[close_idx + 2:].strip().split()
+            parent_pid = int(fields[1])
+            return parent_pid if parent_pid > 0 else None
+        except (OSError, ValueError, IndexError):
+            pass
+
+    try:
+        proc = subprocess.run(
+            ["ps", "-ww", "-o", "ppid=", "-p", str(pid)],
+            capture_output=True,
+            stdin=subprocess.DEVNULL,
+            text=True,
+            timeout=1,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+
+    if proc.returncode != 0:
+        return None
+
+    try:
+        parent_pid = int(proc.stdout.strip())
+    except ValueError:
+        return None
+
+    return parent_pid if parent_pid > 0 else None
+
+
+def normalize_tty(tty_name):
+    tty = tty_name.strip()
+    if not tty or tty in ("-", "?", "??"):
+        return None
+    if tty.startswith("/dev/"):
+        return tty
+    return f"/dev/{tty}"
 
 
 def extract_cmdline_args(pid):
-    """Extract command-line arguments from /proc/[pid]/cmdline as a dict."""
-    try:
-        with open(f"/proc/{pid}/cmdline", "r") as f:
-            # cmdline is null-separated, split and parse as args
-            args = f.read().rstrip('\0').split('\0')
-    except OSError:
+    """Extract command-line arguments from the process argv."""
+    if pid <= 1:
         return {}
+
+    args = None
+    if sys.platform.startswith("linux"):
+        try:
+            with open(f"/proc/{pid}/cmdline", "r") as f:
+                args = f.read().rstrip('\0').split('\0')
+        except OSError:
+            args = None
+
+    if args is None:
+        try:
+            proc = subprocess.run(
+                ["ps", "-ww", "-o", "command=", "-p", str(pid)],
+                capture_output=True,
+                stdin=subprocess.DEVNULL,
+                text=True,
+                timeout=1,
+            )
+        except (OSError, subprocess.SubprocessError):
+            return {}
+
+        if proc.returncode != 0:
+            return {}
+
+        command = proc.stdout.strip()
+        if not command:
+            return {}
+
+        try:
+            args = shlex.split(command)
+        except ValueError:
+            return {}
 
     result = {}
     for i, arg in enumerate(args):
@@ -151,28 +222,31 @@ def find_claude_code_ancestor_team_info():
                     "parentSessionId": parent_session_id,
                 }
 
-            # Check if this process looks like Claude Code main (check command)
-            try:
-                with open(f"/proc/{ppid}/comm", "r") as f:
-                    comm = f.read().strip()
-            except OSError:
-                pass
-
-            # Move to parent
-            try:
-                with open(f"/proc/{ppid}/stat", "r") as f:
-                    # ppid is in field 3 (0-indexed)
-                    stat_fields = f.read().split()
-                    new_ppid = int(stat_fields[3])
-                    if new_ppid == ppid:  # reached init or similar
-                        break
-                    ppid = new_ppid
-            except (OSError, ValueError, IndexError):
+            new_ppid = get_parent_pid(ppid)
+            if new_ppid is None or new_ppid == ppid:
                 break
+            ppid = new_ppid
         except OSError:
             break
 
     return None
+
+
+def get_tty():
+    ppid = os.getppid()
+    try:
+        proc = subprocess.run(
+            ["ps", "-ww", "-o", "tty=", "-p", str(ppid)],
+            capture_output=True,
+            stdin=subprocess.DEVNULL,
+            text=True,
+            timeout=1,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if proc.returncode != 0:
+        return None
+    return normalize_tty(proc.stdout)
 
 
 def detect_team_membership_by_session_id(session_id):
@@ -234,9 +308,6 @@ def detect_team_membership_by_session_id(session_id):
 
 
 def main():
-    if not running_in_honeymux():
-        sys.exit(0)
-
     # Read event data from stdin — Claude Code passes JSON payload here,
     # including the hook_event_name field.
     try:
@@ -259,12 +330,7 @@ def main():
     tool_input = data.get("tool_input")
     tool_use_id = data.get("tool_use_id")
 
-    # Get TTY for this process (needed for agent tree rendering)
-    try:
-        ppid = os.getppid()
-        tty = os.readlink(f"/proc/{ppid}/fd/0")
-    except OSError:
-        tty = None
+    tty = get_tty()
 
     # Try detection strategies in order of reliability:
     # 1. Team metadata in hook event (TeammateIdle, TaskCompleted - most reliable, arrives ~1min later)

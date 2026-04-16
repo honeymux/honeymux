@@ -80,24 +80,33 @@ def re_match_remote_hook_socket(path):
     return re.match(REMOTE_HOOK_SOCKET_RE, path) is not None
 
 
+def normalize_tty(tty_name):
+    tty = tty_name.strip()
+    if not tty or tty in ("-", "?", "??"):
+        return None
+    if tty.startswith("/dev/"):
+        return tty
+    return f"/dev/{tty}"
+
+
 def get_tty():
     ppid = os.getppid()
     try:
-        return os.readlink(f"/proc/{ppid}/fd/0")
-    except OSError:
+        proc = subprocess.run(
+            ["ps", "-ww", "-o", "tty=", "-p", str(ppid)],
+            capture_output=True,
+            stdin=subprocess.DEVNULL,
+            text=True,
+            timeout=1,
+        )
+    except (OSError, subprocess.SubprocessError):
         return None
-
-
-def running_in_honeymux():
-    """Check if we're inside a honeymux-managed tmux session."""
-    tmux = os.environ.get("TMUX", "")
-    return "honeymux" in tmux
+    if proc.returncode != 0:
+        return None
+    return normalize_tty(proc.stdout)
 
 
 def main():
-    if not running_in_honeymux():
-        sys.exit(0)
-
     try:
         raw = sys.stdin.read()
         data = json.loads(raw) if raw.strip() else {}

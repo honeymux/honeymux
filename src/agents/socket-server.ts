@@ -1,7 +1,7 @@
 import type { Socket } from "bun";
 
 import { createHash } from "node:crypto";
-import { chmodSync, mkdirSync, readFileSync, readdirSync, readlinkSync, unlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, readFileSync, readdirSync, unlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 import type { AgentEvent, AgentType } from "./types.ts";
@@ -9,8 +9,11 @@ import type { AgentEvent, AgentType } from "./types.ts";
 import { listPanePidsByTtySync } from "../tmux/control-client.ts";
 import { appendBoundedLines } from "../util/bounded-line-buffer.ts";
 import { EventEmitter } from "../util/event-emitter.ts";
+import { getProcessParentPidSync, getProcessStdinTtySync } from "../util/process-introspection.ts";
 import { getPrivateRuntimePath, getPrivateSocketPath } from "../util/runtime-paths.ts";
 import { parseWireAgentEvent } from "./wire-event.ts";
+
+export { parseProcStatParentPid } from "../util/process-introspection.ts";
 
 const LOCAL_PANE_CACHE_MS = 1000;
 const MAX_HOOK_SOCKET_LINE_BYTES = 256 * 1024;
@@ -314,17 +317,6 @@ export function loadPersistedSessions(agentType?: AgentType): AgentEvent[] {
   return events;
 }
 
-export function parseProcStatParentPid(statLine: string): null | number {
-  const closeIdx = statLine.lastIndexOf(")");
-  if (closeIdx === -1) return null;
-  const fields = statLine
-    .slice(closeIdx + 2)
-    .trim()
-    .split(/\s+/);
-  const parentPid = parseInt(fields[1] ?? "", 10);
-  return Number.isInteger(parentPid) && parentPid > 0 ? parentPid : null;
-}
-
 function getPanePidsByTty(): Map<string, number> {
   const now = Date.now();
   if (now - cachedPanePidsAt < LOCAL_PANE_CACHE_MS) return cachedPanePidsByTty;
@@ -335,19 +327,11 @@ function getPanePidsByTty(): Map<string, number> {
 }
 
 function getProcessParentPid(pid: number): null | number {
-  try {
-    return parseProcStatParentPid(readFileSync(`/proc/${pid}/stat`, "utf-8"));
-  } catch {
-    return null;
-  }
+  return getProcessParentPidSync(pid);
 }
 
 function getProcessStdinTty(pid: number): null | string {
-  try {
-    return readlinkSync(`/proc/${pid}/fd/0`);
-  } catch {
-    return null;
-  }
+  return getProcessStdinTtySync(pid);
 }
 
 function getSessionsDir(): string {

@@ -1,6 +1,7 @@
-import { chmodSync, existsSync, mkdirSync, readFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
+import { formatArgv } from "../../util/argv.ts";
 // Embed hook script at build time so it survives `bun build --compile`.
 import HOOK_CONTENT from "./hooks.py" with { type: "text" };
 
@@ -27,63 +28,37 @@ type HookMatcherGroup = {
   hooks: HookHandler[];
 };
 
+type ResolveExecutable = (name: string) => null | string | undefined;
+
 // PermissionRequest is synchronous (script blocks for approval); all others async
 const SYNC_EVENTS = new Set(["PermissionRequest"]);
 
 export function areClaudeHooksInstalled(): boolean {
-  // The script must actually exist on disk, not just be referenced in settings
   const scriptPath = join(HOOKS_DIR, HOOK_SCRIPT_NAME);
-  return existsSync(scriptPath);
+  if (!existsSync(scriptPath)) return false;
+
+  try {
+    return syncClaudeHookInstall(scriptPath);
+  } catch {
+    return false;
+  }
+}
+
+export function buildClaudeHookCommand(
+  scriptPath: string,
+  resolveExecutable: ResolveExecutable = (name) => Bun.which(name),
+): null | string {
+  const interpreter = resolveClaudeHookPython(resolveExecutable);
+  if (!interpreter) return null;
+  return formatArgv([interpreter, scriptPath]);
 }
 
 export async function installClaudeHooks(): Promise<boolean> {
   try {
-    // Ensure hooks directory exists
     mkdirSync(HOOKS_DIR, { recursive: true });
 
-    // Copy hook script
     const destPath = join(HOOKS_DIR, HOOK_SCRIPT_NAME);
-    await Bun.write(destPath, HOOK_CONTENT);
-    chmodSync(destPath, 0o755);
-
-    // Read existing settings
-    let settings: ClaudeSettings = {};
-    try {
-      const content = await Bun.file(SETTINGS_FILE).text();
-      settings = JSON.parse(content);
-    } catch {
-      // no existing settings — start fresh
-    }
-
-    if (!settings.hooks) settings.hooks = {};
-
-    // New format: each event has an array of matcher groups.
-    // Each matcher group has { matcher?: string, hooks: HookHandler[] }
-    // We add one matcher group per event with no matcher (matches everything).
-    for (const event of HOOK_EVENTS) {
-      if (!Array.isArray(settings.hooks[event])) {
-        settings.hooks[event] = [];
-      }
-
-      // Remove any existing honeymux matcher groups
-      settings.hooks[event] = settings.hooks[event].filter((group: any) => !containsOurHook(group));
-
-      const hookHandler: HookHandler = {
-        command: `python3 ${destPath}`,
-        type: "command",
-      };
-
-      if (!SYNC_EVENTS.has(event)) {
-        hookHandler.async = true;
-      }
-
-      // Wrap in the matcher group format: { hooks: [handler] }
-      settings.hooks[event].push({
-        hooks: [hookHandler],
-      });
-    }
-
-    await Bun.write(SETTINGS_FILE, JSON.stringify(settings, null, 2));
+    if (!syncClaudeHookInstall(destPath)) return false;
 
     await saveClaudeConsent(true);
     return true;
@@ -100,6 +75,12 @@ export function isClaudeIgnored(): boolean {
   } catch {
     return false;
   }
+}
+
+export function resolveClaudeHookPython(
+  resolveExecutable: ResolveExecutable = (name) => Bun.which(name),
+): null | string {
+  return resolveExecutable("python3") ?? resolveExecutable("python") ?? null;
 }
 
 export async function saveClaudeConsent(consented: boolean): Promise<void> {
@@ -120,9 +101,69 @@ export async function saveClaudeIgnored(): Promise<void> {
   }
 }
 
+export function upsertClaudeHookSettings(settings: ClaudeSettings, command: string): ClaudeSettings {
+  const next: ClaudeSettings = {
+    ...settings,
+    hooks: { ...(settings.hooks ?? {}) },
+  };
+
+  for (const event of HOOK_EVENTS) {
+    const existing = Array.isArray(next.hooks?.[event]) ? next.hooks[event] : [];
+    const filtered = existing.filter((group: unknown) => !containsOurHook(group));
+    const hookHandler: HookHandler = {
+      command,
+      type: "command",
+    };
+
+    if (!SYNC_EVENTS.has(event)) {
+      hookHandler.async = true;
+    }
+
+    next.hooks![event] = [
+      ...filtered,
+      {
+        hooks: [hookHandler],
+      },
+    ];
+  }
+
+  return next;
+}
+
 function containsOurHook(obj: any): boolean {
   if (typeof obj === "string") return obj.includes(HOOK_SCRIPT_NAME);
   if (Array.isArray(obj)) return obj.some(containsOurHook);
   if (obj && typeof obj === "object") return Object.values(obj).some(containsOurHook);
   return false;
+}
+
+function loadClaudeSettings(): ClaudeSettings {
+  try {
+    const content = readFileSync(SETTINGS_FILE, "utf-8");
+    return JSON.parse(content);
+  } catch {
+    return {};
+  }
+}
+
+function syncClaudeHookInstall(scriptPath: string): boolean {
+  const command = buildClaudeHookCommand(scriptPath);
+  if (!command) return false;
+
+  mkdirSync(HOOKS_DIR, { recursive: true });
+
+  const currentScript = existsSync(scriptPath) ? readFileSync(scriptPath, "utf-8") : null;
+  if (currentScript !== HOOK_CONTENT) {
+    writeFileSync(scriptPath, HOOK_CONTENT);
+    chmodSync(scriptPath, 0o755);
+  }
+
+  const currentSettingsText = existsSync(SETTINGS_FILE) ? readFileSync(SETTINGS_FILE, "utf-8") : null;
+  const settings = upsertClaudeHookSettings(loadClaudeSettings(), command);
+  const nextSettingsText = JSON.stringify(settings, null, 2);
+  if (currentSettingsText !== nextSettingsText) {
+    writeFileSync(SETTINGS_FILE, nextSettingsText);
+  }
+
+  return true;
 }
