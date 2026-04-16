@@ -592,8 +592,12 @@ export function dispatchDialogInput(data: string, deps: DialogInputDispatchDeps)
       return;
     }
     // Letter keys dispatch functions (Functions tab only)
-    if (mainMenuTab === "functions" && data.length === 1 && data >= "a" && data <= "z") {
-      const action = LETTER_MAP[data];
+    if (
+      mainMenuTab === "functions" &&
+      data.length === 1 &&
+      ((data >= "a" && data <= "z") || (data >= "A" && data <= "Z"))
+    ) {
+      const action = LETTER_MAP[data.toLowerCase()];
       if (
         action &&
         action !== "mainMenu" &&
