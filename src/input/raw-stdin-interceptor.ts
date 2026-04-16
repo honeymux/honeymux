@@ -62,6 +62,15 @@ export function installRawStdinInterceptor(
   const parser = createBracketedPasteParser();
   const stdin = process.stdin as any;
   let controlCarry = "";
+  let carryTimer: ReturnType<typeof setTimeout> | null = null;
+
+  // On terminals without Kitty keyboard protocol, a lone ESC (0x1b) is
+  // ambiguous: it could be the Escape key or the start of a CSI/SS3
+  // sequence whose remaining bytes haven't arrived yet.  We buffer it in
+  // controlCarry.  If no follow-up bytes arrive within this window, flush
+  // the buffered ESC so OpenTUI (which has its own disambiguation) can
+  // process it.  20 ms matches OpenTUI's own timeout.
+  const CARRY_FLUSH_MS = 20;
 
   const isDigit = (ch: string | undefined): boolean => ch !== undefined && ch >= "0" && ch <= "9";
 
@@ -162,17 +171,9 @@ export function installRawStdinInterceptor(
     originalEmit("data", Buffer.from(text, "utf-8"));
   };
 
-  const forwardTextSegment = (text: string): void => {
-    let pending = controlCarry + text;
-    controlCarry = "";
-    const trailingControlPrefix = takeTrailingControlPrefix(pending);
-    if (trailingControlPrefix.length > 0) {
-      pending = pending.slice(0, pending.length - trailingControlPrefix.length);
-      controlCarry = trailingControlPrefix;
-    }
-    if (pending.length === 0) return;
-
-    const cleaned = stripAndForwardFocusEvents(pending, writeToPty);
+  const forwardCompleteText = (text: string): void => {
+    if (text.length === 0) return;
+    const cleaned = stripAndForwardFocusEvents(text, writeToPty);
     if (cleaned.length === 0) return;
 
     let lastIdx = 0;
@@ -213,6 +214,43 @@ export function installRawStdinInterceptor(
     }
   };
 
+  const flushCarry = (): void => {
+    if (carryTimer !== null) {
+      clearTimeout(carryTimer);
+      carryTimer = null;
+    }
+    if (controlCarry.length === 0) return;
+    const flushed = controlCarry;
+    controlCarry = "";
+    // Bypass takeTrailingControlPrefix — the timeout has expired so the
+    // buffered bytes are not the start of a longer sequence.
+    forwardCompleteText(flushed);
+  };
+
+  const armCarryTimer = (): void => {
+    if (carryTimer !== null) clearTimeout(carryTimer);
+    carryTimer = setTimeout(flushCarry, CARRY_FLUSH_MS);
+  };
+
+  const forwardTextSegment = (text: string): void => {
+    if (carryTimer !== null) {
+      clearTimeout(carryTimer);
+      carryTimer = null;
+    }
+    let pending = controlCarry + text;
+    controlCarry = "";
+    const trailingControlPrefix = takeTrailingControlPrefix(pending);
+    if (trailingControlPrefix.length > 0) {
+      pending = pending.slice(0, pending.length - trailingControlPrefix.length);
+      controlCarry = trailingControlPrefix;
+      if (pending.length === 0) {
+        armCarryTimer();
+        return;
+      }
+    }
+    forwardCompleteText(pending);
+  };
+
   const processDecodedChunk = (chunk: string): void => {
     if (chunk.length === 0) return;
     // NFC-normalize early so that combining sequences (e.g. NFD å = a + ◌̊)
@@ -240,6 +278,10 @@ export function installRawStdinInterceptor(
   stdin.emit = patchedEmit;
 
   return () => {
+    if (carryTimer !== null) {
+      clearTimeout(carryTimer);
+      carryTimer = null;
+    }
     processDecodedChunk(decoder.end());
     parser.reset();
     controlCarry = "";

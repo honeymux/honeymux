@@ -172,4 +172,39 @@ describe("raw stdin interceptor", () => {
 
     expect(forwarded).toEqual(["prompt", "\x1b[5A"]);
   });
+
+  test("flushes lone ESC after carry timeout", async () => {
+    const forwarded = captureForwardedInput();
+
+    cleanup = installRawStdinInterceptor(() => {}, {
+      mapCoordinates: () => null,
+    });
+
+    // Send a lone ESC — should be buffered, not forwarded immediately.
+    (process.stdin as any).emit("data", Buffer.from("\x1b", "utf-8"));
+    expect(forwarded).toEqual([]);
+
+    // After the carry timeout (20 ms), the ESC should be flushed.
+    await new Promise((resolve) => setTimeout(resolve, 40));
+    expect(forwarded).toEqual(["\x1b"]);
+  });
+
+  test("does not double-flush ESC when follow-up bytes arrive before timeout", async () => {
+    const forwarded = captureForwardedInput();
+
+    cleanup = installRawStdinInterceptor(() => {}, {
+      mapCoordinates: () => null,
+    });
+
+    // Send lone ESC, then complete the CSI sequence before timeout fires.
+    (process.stdin as any).emit("data", Buffer.from("\x1b", "utf-8"));
+    (process.stdin as any).emit("data", Buffer.from("[A", "utf-8"));
+
+    // The complete sequence should be forwarded, not a lone ESC.
+    expect(forwarded).toEqual(["\x1b[A"]);
+
+    // Wait past the timeout — nothing extra should appear.
+    await new Promise((resolve) => setTimeout(resolve, 40));
+    expect(forwarded).toEqual(["\x1b[A"]);
+  });
 });
