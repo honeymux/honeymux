@@ -24,6 +24,9 @@ Built on tmux control mode, [OpenTUI](https://github.com/anomalyco/opentui), [li
 curl -fsSL https://get.hmx.dev | bash
 ```
 
+> [!WARNING]
+> This is new, pre-1.0 release software and definitely contains bugs. Please do try it out, but don't count on it as a daily driver just yet.
+
 ## Documentation
 
 See the [documentation](https://hmx.dev/docs/) on the Honeymux website.
