@@ -131,6 +131,22 @@ export function usePtyLifecycle({
     }
   }, [connected, ptyRef, termCols, termRows, tooNarrow, tooSmall]);
 
+  // Keep the control client's per-client size tracking the outer terminal.
+  // With `window-size smallest`, the window picks min(control-client, PTY).
+  // We size the control client to the outer terminal (always >= the PTY's
+  // pane-content dims), so the control client never acts as a ceiling and
+  // the window size is always driven by the PTY. Using pane-content dims
+  // here would race the transient UI-chrome deduction at startup and let
+  // a tiny control-client size leak through to the remote mirror via
+  // syncClientSize.
+  useEffect(() => {
+    if (!connected || tooSmall || tooNarrow) return;
+    const cols = process.stdout.columns ?? termCols;
+    const rows = process.stdout.rows ?? termRows;
+    if (cols <= 0 || rows <= 0) return;
+    clientRef.current?.setClientSize({ cols, rows }).catch(() => {});
+  }, [clientRef, connected, termCols, termRows, tooNarrow, tooSmall]);
+
   // Spawn deferred PTY when window widens past the tooNarrow threshold
   useEffect(() => {
     if (!tooNarrow && deferredSessionRef.current) {

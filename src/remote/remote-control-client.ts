@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 
 import type { RemoteConnectionStatus, RemoteServerConfig } from "./types.ts";
 
+import { MIN_CONTROL_CLIENT_SIZE } from "../tmux/control-client-bootstrap.ts";
 import { ControlModeParser } from "../tmux/control-mode-parser.ts";
 import { EventEmitter } from "../util/event-emitter.ts";
 import { log } from "../util/log.ts";
@@ -143,7 +144,10 @@ export class RemoteControlClient extends EventEmitter {
     await this.sendCommand("set-option -g window-size smallest");
     await this.sendCommand("set-option status off");
     await this.sendCommand("set-option -g pane-border-status top");
-    await this.sendCommand("refresh-client -C 300,300");
+    // Bootstrap at the floor; MirrorLayoutManager.syncClientSize takes over
+    // on the first layout-change and drives the remote to match the local
+    // window dims (which are themselves bounded by the user's real terminal).
+    await this.sendCommand(`refresh-client -C ${MIN_CONTROL_CLIENT_SIZE.cols},${MIN_CONTROL_CLIENT_SIZE.rows}`);
   }
 
   /** Intentionally stop — don't reconnect. */

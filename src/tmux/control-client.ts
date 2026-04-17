@@ -7,9 +7,12 @@ import { EventEmitter } from "../util/event-emitter.ts";
 import { cleanEnv } from "../util/pty.ts";
 import { tmuxCmd } from "../util/tmux-server.ts";
 import {
+  type ControlClientSize,
+  MIN_CONTROL_CLIENT_SIZE,
   applyControlClientBootstrap,
   buildDefaultPaneBorderFormat,
-  setLargeControlClientSize,
+  clampControlClientSize,
+  setControlClientSize,
 } from "./control-client-bootstrap.ts";
 import {
   parseActivePaneGeometryOutput,
@@ -57,6 +60,7 @@ export { unescapeTmuxOutput } from "./control-mode-parser.ts";
  */
 export class TmuxControlClient extends EventEmitter {
   private closed = false;
+  private lastClientSize: ControlClientSize | null = null;
   private parser: ControlModeParser | null = null;
   private pendingQueue: PendingCommand[] = [];
   private proc: {
@@ -85,9 +89,11 @@ export class TmuxControlClient extends EventEmitter {
    * Intended for passive observation roles such as the cross-session activity
    * watchers that forward `pane-output` back to the agent pane-activity map.
    */
-  async attachExisting(sessionName: string): Promise<void> {
+  async attachExisting(sessionName: string, size: ControlClientSize = MIN_CONTROL_CLIENT_SIZE): Promise<void> {
     await this.spawnControlModeProcess(["-C", "attach-session", "-t", sessionName]);
-    await setLargeControlClientSize((command) => this.sendCommand(command));
+    const clamped = clampControlClientSize(size);
+    await setControlClientSize((command) => this.sendCommand(command), clamped);
+    this.lastClientSize = clamped;
   }
 
   async clearFormatSubscription(name: string): Promise<void> {
@@ -99,9 +105,16 @@ export class TmuxControlClient extends EventEmitter {
    * Connect to (or create) a tmux session in control mode.
    * Waits for tmux to send its initial %begin/%end before returning.
    */
-  async connect(sessionName: string): Promise<void> {
+  async connect(sessionName: string, size: ControlClientSize = MIN_CONTROL_CLIENT_SIZE): Promise<void> {
     await this.spawnControlModeProcess(["-C", "new-session", "-A", "-s", sessionName]);
-    await applyControlClientBootstrap((command) => this.sendCommand(command), terminalFgRgb, getTerminalCursorStyle());
+    const clamped = clampControlClientSize(size);
+    await applyControlClientBootstrap(
+      (command) => this.sendCommand(command),
+      terminalFgRgb,
+      getTerminalCursorStyle(),
+      clamped,
+    );
+    this.lastClientSize = clamped;
   }
 
   /**
@@ -745,6 +758,22 @@ export class TmuxControlClient extends EventEmitter {
     if (!text) return;
     await this.sendCommand(`send-keys -l -t ${quoteTmuxArg("paneId", paneId)} ${quoteTmuxArg("text", text)}`);
     await this.sendCommand(`send-keys -t ${quoteTmuxArg("paneId", paneId)} Enter`);
+  }
+
+  /**
+   * Update the per-client size reported to tmux via `refresh-client -C`.
+   * With `window-size smallest`, this acts as a ceiling on pane dimensions
+   * when the control client is the smallest attached client. Dedups against
+   * the last applied size so rapid resize bursts do not thrash tmux.
+   */
+  async setClientSize(size: ControlClientSize): Promise<void> {
+    if (this.closed) return;
+    const clamped = clampControlClientSize(size);
+    if (this.lastClientSize && this.lastClientSize.cols === clamped.cols && this.lastClientSize.rows === clamped.rows) {
+      return;
+    }
+    this.lastClientSize = clamped;
+    await setControlClientSize((command) => this.sendCommand(command), clamped);
   }
 
   /**

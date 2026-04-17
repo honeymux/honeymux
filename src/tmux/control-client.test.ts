@@ -11,6 +11,34 @@ describe("TmuxControlClient connection guards", () => {
   });
 });
 
+describe("TmuxControlClient.setClientSize", () => {
+  test("sends refresh-client -C on the first call and dedups identical subsequent calls", async () => {
+    const client = new TmuxControlClient();
+    const sendCommand = mock(async (_command: string) => "");
+
+    (client as unknown as { sendCommand: typeof sendCommand }).sendCommand = sendCommand;
+
+    await client.setClientSize({ cols: 120, rows: 40 });
+    await client.setClientSize({ cols: 120, rows: 40 });
+    await client.setClientSize({ cols: 200, rows: 60 });
+
+    expect(sendCommand).toHaveBeenCalledTimes(2);
+    expect(sendCommand).toHaveBeenNthCalledWith(1, "refresh-client -C 120,40");
+    expect(sendCommand).toHaveBeenNthCalledWith(2, "refresh-client -C 200,60");
+  });
+
+  test("clamps to the minimum floor before sending", async () => {
+    const client = new TmuxControlClient();
+    const sendCommand = mock(async (_command: string) => "");
+
+    (client as unknown as { sendCommand: typeof sendCommand }).sendCommand = sendCommand;
+
+    await client.setClientSize({ cols: 10, rows: 5 });
+
+    expect(sendCommand).toHaveBeenCalledWith("refresh-client -C 80,24");
+  });
+});
+
 describe("TmuxControlClient.getSessionInfo", () => {
   test("collects pane-tab markers across all windows in the target session", async () => {
     const client = new TmuxControlClient();

@@ -56,7 +56,15 @@ export function bootstrapConnectedSession({
   (async () => {
     try {
       const initialConfig = loadConfig();
-      await client.connect(targetSession);
+      // Use the outer terminal's dims (process.stdout) rather than pane-
+      // content dims so the control client is always >= the PTY client.
+      // With `window-size smallest` this keeps the window size pinned to the
+      // PTY (pane) rather than having the control-client act as a ceiling.
+      // process.stdout is reliable from process start, unlike dimsRef which
+      // may still be at its initial placeholder when this runs.
+      const cols = process.stdout.columns ?? 80;
+      const rows = process.stdout.rows ?? 24;
+      await client.connect(targetSession, { cols, rows });
 
       setConnected(true);
 

@@ -142,7 +142,13 @@ export function useAgentPaneActivity({
       const onPaneOutput = (paneId: string): void => handlePaneOutputRef.current(paneId);
       client.on("pane-output", onPaneOutput);
 
-      void client.attachExisting(sessionName).catch(() => {
+      // Aux clients attach to foreign sessions purely for %output
+      // observation. They use a deliberately large fixed size so that
+      // `window-size smallest` never clamps another session's panes down
+      // just because we started watching it. This is a different tradeoff
+      // than the primary client, which tracks the user's real terminal
+      // dims to keep pane grids minimally sized.
+      void client.attachExisting(sessionName, { cols: 300, rows: 300 }).catch(() => {
         // Attach failed (session gone, tmux server issue, etc.) — drop it
         // from the pool. A later state change can retry by recomputing the
         // desired set.
