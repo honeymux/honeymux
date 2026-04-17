@@ -207,6 +207,82 @@ export class RemoteServerManager extends EventEmitter {
     return this.paneMappings.get(paneId);
   }
 
+  /**
+   * Rebuild paneMappings for a server after Honeymux restart.
+   *
+   * Panes converted in a previous run have `@hmx-remote-host` and
+   * `@hmx-remote-pane` set in tmux state (which survives restart), but
+   * Honeymux's in-memory paneMappings and the proxy-server token table do
+   * not, so keystrokes and remote output stop flowing. This queries local
+   * panes whose `@hmx-remote-host` matches the given server, resolves the
+   * corresponding remote pane via the mirror (authoritative after
+   * {@link MirrorLayoutManager.fullSync}), and for each live pair:
+   *
+   *  - registers the mapping in `paneMappings`,
+   *  - mints a fresh proxy token,
+   *  - respawns the local pane with a new proxy process using that token.
+   *
+   * Panes whose mirror mapping no longer resolves are treated as orphaned:
+   * their remote-pane metadata is cleared and the border is reset, so they
+   * no longer look remote. Expected to run after fullSync completes.
+   */
+  async recoverPaneMappings(serverName: string): Promise<void> {
+    const mirror = this.mirrors.get(serverName);
+    const client = this.clients.get(serverName);
+    if (!mirror || !client || !client.isConnected) return;
+
+    let output: string;
+    try {
+      output = await this.localClient.runCommand("list-panes -a -F ' #{pane_id}\t#{@hmx-remote-host}'");
+    } catch (err) {
+      log("remote", `recover: list-panes failed: ${err instanceof Error ? err.message : String(err)}`);
+      return;
+    }
+
+    const candidates: string[] = [];
+    for (const line of output.split("\n")) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+      const [paneId, host] = trimmed.split("\t");
+      if (!paneId || host !== serverName) continue;
+      if (this.paneMappings.has(paneId)) continue;
+      candidates.push(paneId);
+    }
+
+    for (const localPaneId of candidates) {
+      const remotePaneId = mirror.getRemotePaneId(localPaneId);
+      if (!remotePaneId) {
+        log("remote", `recover: no mirror mapping for ${localPaneId}, clearing metadata`);
+        await this.clearLocalPaneOption(localPaneId, "@hmx-remote-host").catch(() => {});
+        await this.clearLocalPaneOption(localPaneId, "@hmx-remote-pane").catch(() => {});
+        await this.resetPaneBorder(localPaneId).catch(() => {});
+        continue;
+      }
+
+      const proxyToken = randomBytes(32).toString("hex");
+      this.paneMappings.set(localPaneId, {
+        localPaneId,
+        remotePaneId,
+        serverName,
+      });
+      this.proxyServer.expectProxy(localPaneId, proxyToken);
+
+      try {
+        // Refresh @hmx-remote-pane in case the mirror assigned a different
+        // remote pane id than the one stored from a previous run.
+        await this.setLocalPaneOption(localPaneId, "@hmx-remote-pane", remotePaneId);
+        await this.updatePaneBorder(localPaneId, serverName);
+        await this.localClient.respawnPane(localPaneId, buildRemoteProxyProcessArgv(localPaneId, proxyToken));
+        log("remote", `recovered: local=${localPaneId} → remote=${remotePaneId} on ${this.serverTag(serverName)}`);
+        this.emit("pane-converted", localPaneId, serverName);
+      } catch (err) {
+        this.proxyServer.forgetProxy(localPaneId);
+        this.paneMappings.delete(localPaneId);
+        log("remote", `recover failed for ${localPaneId}: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
+  }
+
   respondToPermission(sessionId: string, toolUseId: string, decision: "allow" | "deny", paneId?: string): void {
     const key = toolUseId || sessionId;
     const serverNameHint = paneId ? this.paneMappings.get(paneId)?.serverName : undefined;
@@ -376,6 +452,7 @@ export class RemoteServerManager extends EventEmitter {
           });
           mirror
             .fullSync()
+            .then(() => this.recoverPaneMappings(config.name))
             .then(() => this.checkForDeadRemotePanes(config.name))
             .then(() => {
               this.emitMirrorStateChange();
