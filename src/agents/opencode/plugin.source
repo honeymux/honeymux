@@ -33,6 +33,10 @@ interface AgentEvent {
   tty?: null | string;
 }
 
+interface PendingPermissionSocket {
+  end(): void;
+}
+
 export default async function plugin(input: any) {
   log(`plugin loaded, directory=${input.directory}, keys=${Object.keys(input).join(",")}`);
   if (!runningInHoneymux()) {
@@ -62,6 +66,7 @@ export default async function plugin(input: any) {
 
   // Track the first user prompt per session from message.part.updated events
   const sessionPrompts = new Map<string, string>();
+  const pendingPermissionSockets = new Map<string, PendingPermissionSocket>();
 
   return {
     async event({ event }: { event: any }) {
@@ -89,11 +94,13 @@ export default async function plugin(input: any) {
         sendEvent(ev);
       } else if (type === "session.deleted") {
         const sessionId = props.info?.id ?? "unknown";
+        closePendingPermissionSocket(pendingPermissionSockets, sessionId);
         sessionPrompts.delete(sessionId);
         sendEvent(baseEvent(sessionId, "ended", "session.deleted"));
       } else if (type === "permission.asked") {
         const sessionId = props.sessionID ?? "unknown";
         const permissionId = props.id ?? `perm-${Date.now()}`;
+        closePendingPermissionSocket(pendingPermissionSockets, sessionId);
         const ev = baseEvent(sessionId, "unanswered", "permission.asked");
         ev.toolName = props.permission ?? props.tool?.tool ?? "tool";
         ev.toolUseId = permissionId;
@@ -107,10 +114,33 @@ export default async function plugin(input: any) {
         ev.prompt = sessionPrompts.get(sessionId) ?? undefined;
         // Hold socket open so honeymux can send back allow/deny,
         // then forward via the in-process server fetch.
-        sendPermissionAndWait(ev, serverFetch, baseUrl, permissionId);
+        sendPermissionAndWait(ev, serverFetch, baseUrl, permissionId, pendingPermissionSockets);
       }
     },
   };
+}
+
+function clearPendingPermissionSocket(
+  pendingPermissionSockets: Map<string, PendingPermissionSocket>,
+  sessionId: string,
+  socket?: PendingPermissionSocket,
+): void {
+  const current = pendingPermissionSockets.get(sessionId);
+  if (!current) return;
+  if (socket && current !== socket) return;
+  pendingPermissionSockets.delete(sessionId);
+}
+
+function closePendingPermissionSocket(
+  pendingPermissionSockets: Map<string, PendingPermissionSocket>,
+  sessionId: string,
+): void {
+  const current = pendingPermissionSockets.get(sessionId);
+  if (!current) return;
+  pendingPermissionSockets.delete(sessionId);
+  try {
+    current.end();
+  } catch {}
 }
 
 function ensurePrivateDir(path: string): string {
@@ -127,9 +157,13 @@ function getRuntimeDir(): string {
   return ensurePrivateDir(`${getStateHome()}/honeymux/runtime`);
 }
 
+// --- TTY detection ---
+
 function getRuntimePath(name: string): string {
   return `${getRuntimeDir()}/${name}`;
 }
+
+// --- Send event (fire-and-forget) ---
 
 function getSocketPath(): string {
   const override = getTmuxRemoteSocketPath();
@@ -138,13 +172,9 @@ function getSocketPath(): string {
   return getRuntimePath("hmx-opencode.sock");
 }
 
-// --- TTY detection ---
-
 function getStateHome(): string {
   return process.env.XDG_STATE_HOME ?? `${process.env.HOME}/.local/state`;
 }
-
-// --- Send event (fire-and-forget) ---
 
 function getTmuxRemoteSocketPath(): null | string {
   if (!process.env.TMUX) return null;
@@ -240,13 +270,16 @@ async function sendPermissionAndWait(
   serverFetch: (input: Request | URL | string, init?: RequestInit) => Promise<Response>,
   baseUrl: string,
   permissionId: string,
+  pendingPermissionSockets: Map<string, PendingPermissionSocket>,
 ): Promise<void> {
   const socketPath = getSocketPath();
   try {
     await connect({
       socket: {
-        close() {},
-        data(_socket, data) {
+        close(socket) {
+          clearPendingPermissionSocket(pendingPermissionSockets, event.sessionId, socket);
+        },
+        data(socket, data) {
           try {
             const response = JSON.parse(new TextDecoder().decode(data).trim());
             const reply = response.decision === "allow" ? "once" : "reject";
@@ -255,9 +288,16 @@ async function sendPermissionAndWait(
           } catch (e) {
             log(`failed to parse permission response: ${e}`);
           }
+          clearPendingPermissionSocket(pendingPermissionSockets, event.sessionId, socket);
+          try {
+            socket.end();
+          } catch {}
         },
-        error() {},
+        error(socket) {
+          clearPendingPermissionSocket(pendingPermissionSockets, event.sessionId, socket);
+        },
         open(socket) {
+          pendingPermissionSockets.set(event.sessionId, socket);
           socket.write(JSON.stringify(event) + "\n");
           // keep open — honeymux will hold and respond later
         },

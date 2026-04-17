@@ -24,7 +24,7 @@ EVENT_STATUS_MAP = {
     "TaskCompleted": "alive",  # Team task completion update
 }
 
-PERMISSION_TIMEOUT = None  # block indefinitely; Claude Code kills the hook on cancel
+PERMISSION_POLL_INTERVAL = 2.0
 REMOTE_HOOK_SOCKET_OPTION = "@hmx-agent-socket-path"
 REMOTE_HOOK_SOCKET_RE = r"^/.*?/hmx-remote-hook-[0-9a-f]{16}\.sock$"
 TMUX_PANE_RE = r"^%\d+$"
@@ -127,6 +127,40 @@ def get_tmux_pane_id():
     return pane_id
 
 
+def is_original_parent_alive(parent_pid):
+    if parent_pid <= 1:
+        return False
+
+    if os.getppid() != parent_pid:
+        return False
+
+    try:
+        os.kill(parent_pid, 0)
+    except OSError:
+        return False
+
+    return True
+
+
+def read_permission_response(sock, parent_pid):
+    response = b""
+
+    while True:
+        try:
+            chunk = sock.recv(4096)
+        except socket.timeout:
+            if not is_original_parent_alive(parent_pid):
+                return None
+            continue
+
+        if not chunk:
+            return None
+
+        response += chunk
+        if b"\n" in response:
+            return response.strip()
+
+
 def main():
     # Read event data from stdin — Claude Code passes JSON payload here,
     # including the hook_event_name field.
@@ -149,6 +183,7 @@ def main():
     tool_name = data.get("tool_name")
     tool_input = data.get("tool_input")
     tool_use_id = data.get("tool_use_id")
+    parent_pid = os.getppid()
 
     remote_socket_path = get_tmux_remote_socket_path()
     pane_id = get_tmux_pane_id()
@@ -168,7 +203,7 @@ def main():
         "agentType": "claude",
         "status": status,
         "cwd": cwd,
-        "pid": os.getppid(),
+        "pid": parent_pid,
         "timestamp": time.time(),
         "hookEvent": hook_event,
         "remoteHost": platform.node(),
@@ -213,19 +248,12 @@ def main():
 
         if hook_event == "PermissionRequest":
             # Block waiting for approval decision
-            sock.settimeout(PERMISSION_TIMEOUT)
+            sock.settimeout(PERMISSION_POLL_INTERVAL)
             try:
-                response = b""
-                while True:
-                    chunk = sock.recv(4096)
-                    if not chunk:
-                        break
-                    response += chunk
-                    if b"\n" in response:
-                        break
+                response = read_permission_response(sock, parent_pid)
 
-                if response.strip():
-                    raw = json.loads(response.strip())
+                if response:
+                    raw = json.loads(response)
                     # Build the format Claude Code expects:
                     # {"hookSpecificOutput":{"hookEventName":"PermissionRequest","decision":{"behavior":"allow|deny"}}}
                     behavior = raw.get("decision", "deny")
@@ -242,8 +270,13 @@ def main():
                     # Output decision for Claude Code to enforce
                     json.dump(output, sys.stdout)
                     sys.stdout.flush()
-            except socket.timeout:
+            except (ValueError, socket.error, OSError):
                 pass
+            finally:
+                try:
+                    sock.close()
+                except OSError:
+                    pass
         else:
             sock.close()
 
