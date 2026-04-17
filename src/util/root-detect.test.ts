@@ -1,6 +1,12 @@
 import { describe, expect, it } from "bun:test";
 
-import { parseProcStatTpgid, parseProcStatusIsRootUid, parsePsTpgidOutput, parsePsUidOutput } from "./root-detect.ts";
+import {
+  parseProcStatTpgid,
+  parseProcStatusIsRootUid,
+  parsePsPidTpgidUidOutput,
+  parsePsTpgidOutput,
+  parsePsUidOutput,
+} from "./root-detect.ts";
 
 describe("parseProcStatTpgid", () => {
   it("extracts tpgid from a simple stat line", () => {
@@ -74,6 +80,23 @@ describe("parsePsTpgidOutput", () => {
   it("rejects non-numeric output", () => {
     expect(parsePsTpgidOutput("TPGID\n")).toBeNull();
     expect(parsePsTpgidOutput("n/a")).toBeNull();
+  });
+});
+
+describe("parsePsPidTpgidUidOutput", () => {
+  it("parses pid/tpgid/uid rows", () => {
+    expect(parsePsPidTpgidUidOutput(" 1234 5678 501\n 5678 5678 0\n")).toEqual([
+      { pid: 1234, tpgid: 5678, uid: 501 },
+      { pid: 5678, tpgid: 5678, uid: 0 },
+    ]);
+  });
+
+  it("drops rows with missing or invalid numeric fields", () => {
+    expect(parsePsPidTpgidUidOutput("1234 -1 501\nbad row\n1234 5678 -1\n")).toEqual([]);
+  });
+
+  it("ignores surrounding whitespace and blank lines", () => {
+    expect(parsePsPidTpgidUidOutput("\n   4321 4321 0   \n\n")).toEqual([{ pid: 4321, tpgid: 4321, uid: 0 }]);
   });
 });
 

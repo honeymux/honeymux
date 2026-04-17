@@ -16,17 +16,18 @@ export interface RootPaneRect {
 interface UseRootDetectionOptions {
   clientRef: MutableRefObject<TmuxControlClient | null>;
   connected: boolean;
+  enabled?: boolean;
   targetSession?: string;
 }
 
 const POLL_INTERVAL_MS = 2000;
 
-export function useRootDetection({ clientRef, connected, targetSession }: UseRootDetectionOptions) {
+export function useRootDetection({ clientRef, connected, enabled = true, targetSession }: UseRootDetectionOptions) {
   const [rootPanes, setRootPanes] = useState<RootPaneRect[]>([]);
   const lastJsonRef = useRef("[]");
 
   useEffect(() => {
-    if (!connected) {
+    if (!connected || !enabled) {
       if (lastJsonRef.current !== "[]") {
         lastJsonRef.current = "[]";
         setRootPanes([]);
@@ -35,8 +36,9 @@ export function useRootDetection({ clientRef, connected, targetSession }: UseRoo
     }
 
     let cancelled = false;
+    let nextPollTimer: ReturnType<typeof setTimeout> | null = null;
 
-    async function poll() {
+    async function pollOnce() {
       const client = clientRef.current;
       if (!client || cancelled) return;
 
@@ -46,7 +48,7 @@ export function useRootDetection({ clientRef, connected, targetSession }: UseRoo
 
         const results = await Promise.all(
           panes.map(async (pane) => {
-            const isRoot = await isActivePaneRoot(pane.pid);
+            const isRoot = await isActivePaneRoot(pane.pid, pane.tty);
             return isRoot ? { height: pane.height, left: pane.left, top: pane.top, width: pane.width } : null;
           }),
         );
@@ -63,13 +65,20 @@ export function useRootDetection({ clientRef, connected, targetSession }: UseRoo
       }
     }
 
-    poll();
-    const id = setInterval(poll, POLL_INTERVAL_MS);
+    const scheduleNextPoll = (delayMs: number) => {
+      nextPollTimer = setTimeout(() => {
+        void pollOnce().finally(() => {
+          if (!cancelled) scheduleNextPoll(POLL_INTERVAL_MS);
+        });
+      }, delayMs);
+    };
+
+    scheduleNextPoll(0);
     return () => {
       cancelled = true;
-      clearInterval(id);
+      if (nextPollTimer !== null) clearTimeout(nextPollTimer);
     };
-  }, [clientRef, connected, targetSession]);
+  }, [clientRef, connected, enabled, targetSession]);
 
   return { rootPanes };
 }

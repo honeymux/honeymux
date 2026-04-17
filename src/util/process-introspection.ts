@@ -186,6 +186,7 @@ export function parsePsTtyOutput(output: string): null | string {
 function runPsSync(args: string[]): { exitCode: number; stdout: string } {
   const proc = Bun.spawnSync(["ps", ...args], {
     stderr: "ignore",
+    stdin: "ignore",
     stdout: "pipe",
   });
   return {

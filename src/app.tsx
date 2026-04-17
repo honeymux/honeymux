@@ -257,8 +257,14 @@ export function App({ sessionName }: AppProps) {
     setConfigPaneTabsEnabled: guardedSetConfigPaneTabsEnabled,
   };
 
+  const privilegedPaneDetectionEnabled = configPrivilegedPaneDetection !== false;
   const rootTargetSession = currentSessionName;
-  const { rootPanes: detectedRootPanes } = useRootDetection({ clientRef, connected, targetSession: rootTargetSession });
+  const { rootPanes: detectedRootPanes } = useRootDetection({
+    clientRef,
+    connected,
+    enabled: privilegedPaneDetectionEnabled,
+    targetSession: rootTargetSession,
+  });
 
   const agentDetection = useAgentBinaryDetection({
     clientRef,
@@ -777,7 +783,7 @@ export function App({ sessionName }: AppProps) {
     optionsDialogRow,
     optionsDialogTab,
     paneTabDragFloat: paneTabsApi.paneTabDragFloat,
-    privilegedPaneDetectionEnabled: configPrivilegedPaneDetection !== false,
+    privilegedPaneDetectionEnabled,
     recoveringPaneRects,
     refs: appRuntimeRefs,
     rootPanes,

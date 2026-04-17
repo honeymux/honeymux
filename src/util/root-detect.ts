@@ -1,3 +1,9 @@
+interface PsPidTpgidUidRow {
+  pid: number;
+  tpgid: number;
+  uid: number;
+}
+
 /**
  * Detect whether the foreground process in a pane is running as root.
  *
@@ -8,9 +14,9 @@
  * check. Platform-aware: uses /proc on Linux, `ps` on macOS. Returns false on
  * any error (graceful degradation).
  */
-export async function isActivePaneRoot(panePid: number): Promise<boolean> {
+export async function isActivePaneRoot(panePid: number, paneTty?: string): Promise<boolean> {
   try {
-    if (process.platform === "darwin") return await isRootDarwin(panePid);
+    if (process.platform === "darwin") return await isRootDarwin(panePid, paneTty);
     if (process.platform === "linux") return await isRootLinux(panePid);
     return false;
   } catch {
@@ -46,6 +52,27 @@ export function parseProcStatusIsRootUid(status: string): boolean {
   return false;
 }
 
+/** Parse `ps -o pid= -o tpgid= -o uid=` output into numeric rows. */
+export function parsePsPidTpgidUidOutput(output: string): PsPidTpgidUidRow[] {
+  const rows: PsPidTpgidUidRow[] = [];
+  for (const line of output.split("\n")) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    const match = trimmed.match(/^(\d+)\s+(-?\d+)\s+(\d+)$/);
+    if (!match) continue;
+
+    const pid = parseInt(match[1] ?? "", 10);
+    const tpgid = parseInt(match[2] ?? "", 10);
+    const uid = parseInt(match[3] ?? "", 10);
+    if (!Number.isInteger(pid) || pid <= 0) continue;
+    if (!Number.isInteger(tpgid) || tpgid <= 0) continue;
+    if (!Number.isInteger(uid) || uid < 0) continue;
+
+    rows.push({ pid, tpgid, uid });
+  }
+  return rows;
+}
+
 /** Parse `ps -o tpgid=` output. Rejects -1, 0, empty, and non-numeric. */
 export function parsePsTpgidOutput(output: string): null | number {
   const trimmed = output.trim();
@@ -62,13 +89,17 @@ export function parsePsUidOutput(output: string): null | number {
   return Number.isInteger(uid) && uid >= 0 ? uid : null;
 }
 
-async function isRootDarwin(panePid: number): Promise<boolean> {
-  const tpgidOut = await runPs(["-o", "tpgid=", "-p", String(panePid)]);
-  const tpgid = parsePsTpgidOutput(tpgidOut);
-  if (tpgid === null) return false;
+async function isRootDarwin(panePid: number, paneTty?: string): Promise<boolean> {
+  const tty = paneTty?.replace(/^\/dev\//, "").trim();
+  if (!tty) return false;
 
-  const uidOut = await runPs(["-o", "uid=", "-p", String(tpgid)]);
-  return parsePsUidOutput(uidOut) === 0;
+  const output = await runPs(["-ww", "-o", "pid=", "-o", "tpgid=", "-o", "uid=", "-t", tty]);
+  const rows = parsePsPidTpgidUidOutput(output);
+  const paneRow = rows.find((row) => row.pid === panePid);
+  if (!paneRow) return false;
+
+  const leaderRow = rows.find((row) => row.pid === paneRow.tpgid);
+  return leaderRow?.uid === 0;
 }
 
 async function isRootLinux(panePid: number): Promise<boolean> {
@@ -81,7 +112,11 @@ async function isRootLinux(panePid: number): Promise<boolean> {
 }
 
 async function runPs(args: string[]): Promise<string> {
-  const proc = Bun.spawn(["ps", ...args], { stderr: "ignore", stdout: "pipe" });
+  const proc = Bun.spawn(["ps", ...args], {
+    stderr: "ignore",
+    stdin: "ignore",
+    stdout: "pipe",
+  });
   const out = await new Response(proc.stdout).text();
   await proc.exited;
   return out;
