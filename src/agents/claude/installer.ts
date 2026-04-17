@@ -3,6 +3,7 @@ import { join } from "node:path";
 import type { InstallHost } from "../install-host.ts";
 
 import { formatArgv } from "../../util/argv.ts";
+import { log } from "../../util/log.ts";
 import { type HostConsent, readHostConsent, writeHostConsent } from "../consent-store.ts";
 import { localInstallHost } from "../install-host.ts";
 // Embed hook script at build time so it survives `bun build --compile`.
@@ -36,12 +37,8 @@ export async function areClaudeHooksInstalled(host: InstallHost = localInstallHo
   const scriptPath = join(await getHooksDir(host), HOOK_SCRIPT_NAME);
   const script = await host.readFile(scriptPath);
   if (script === null) return false;
-
-  try {
-    return await syncClaudeHookInstall(host, scriptPath);
-  } catch {
-    return false;
-  }
+  const resolver = await buildHostResolver(host);
+  return buildClaudeHookCommand(scriptPath, resolver) !== null;
 }
 
 export function buildClaudeHookCommand(
@@ -70,6 +67,22 @@ export async function installClaudeHooks(host: InstallHost = localInstallHost): 
 
 export function isClaudeIgnored(hostId: string = "local"): boolean {
   return readHostConsent(CONSENT_FILE, hostId).ignored === true;
+}
+
+/**
+ * If the user has granted consent for this host and the hook script is already
+ * present on disk, re-run the sync so script + settings stay current with the
+ * bundled version. No-op when consent is missing or the script is absent.
+ */
+export async function refreshClaudeHooksIfConsented(host: InstallHost = localInstallHost): Promise<void> {
+  if (readHostConsent(CONSENT_FILE, host.hostId).consented !== true) return;
+  const scriptPath = join(await getHooksDir(host), HOOK_SCRIPT_NAME);
+  if ((await host.readFile(scriptPath)) === null) return;
+  try {
+    await syncClaudeHookInstall(host, scriptPath);
+  } catch {
+    // best-effort — silent failure, normal flows will re-surface on next detection
+  }
 }
 
 export function resolveClaudeHookPython(
@@ -156,6 +169,10 @@ async function syncClaudeHookInstall(host: InstallHost, scriptPath: string): Pro
   const currentScript = await host.readFile(scriptPath);
   if (currentScript !== HOOK_CONTENT) {
     await host.writeFile(scriptPath, HOOK_CONTENT, { mode: 0o755 });
+    log(
+      "hooks",
+      `claude: ${currentScript === null ? "installed" : "updated"} hook script on ${host.hostId} at ${scriptPath}`,
+    );
   }
 
   const settingsFile = await getSettingsFile(host);
@@ -165,6 +182,10 @@ async function syncClaudeHookInstall(host: InstallHost, scriptPath: string): Pro
   const nextSettingsText = JSON.stringify(nextSettings, null, 2);
   if (currentSettingsText !== nextSettingsText) {
     await host.writeFile(settingsFile, nextSettingsText);
+    log(
+      "hooks",
+      `claude: ${currentSettingsText === null ? "installed" : "updated"} settings on ${host.hostId} at ${settingsFile}`,
+    );
   }
 
   return true;

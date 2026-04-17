@@ -3,6 +3,7 @@ import { join } from "node:path";
 import type { InstallHost } from "../install-host.ts";
 
 import { formatArgv } from "../../util/argv.ts";
+import { log } from "../../util/log.ts";
 import { type HostConsent, readHostConsent, writeHostConsent } from "../consent-store.ts";
 import { localInstallHost } from "../install-host.ts";
 // Embed hook script at build time so it survives `bun build --compile`.
@@ -34,12 +35,8 @@ export async function areCodexHooksInstalled(host: InstallHost = localInstallHos
   const scriptPath = join(await getHooksDir(host), HOOK_SCRIPT_NAME);
   const script = await host.readFile(scriptPath);
   if (script === null) return false;
-
-  try {
-    return await syncCodexHookInstall(host, scriptPath);
-  } catch {
-    return false;
-  }
+  const resolver = await buildHostResolver(host);
+  return buildCodexHookCommand(scriptPath, resolver) !== null;
 }
 
 export function buildCodexHookCommand(
@@ -68,6 +65,23 @@ export async function installCodexHooks(host: InstallHost = localInstallHost): P
 
 export function isCodexIgnored(hostId: string = "local"): boolean {
   return readHostConsent(CONSENT_FILE, hostId).ignored === true;
+}
+
+/**
+ * If the user has granted consent for this host and the hook script is already
+ * present on disk, re-run the sync so script + hooks.json + config.toml stay
+ * current with the bundled version. No-op when consent is missing or the
+ * script is absent.
+ */
+export async function refreshCodexHooksIfConsented(host: InstallHost = localInstallHost): Promise<void> {
+  if (readHostConsent(CONSENT_FILE, host.hostId).consented !== true) return;
+  const scriptPath = join(await getHooksDir(host), HOOK_SCRIPT_NAME);
+  if ((await host.readFile(scriptPath)) === null) return;
+  try {
+    await syncCodexHookInstall(host, scriptPath);
+  } catch {
+    // best-effort — silent failure, normal flows will re-surface on next detection
+  }
 }
 
 export function resolveCodexHookPython(
@@ -190,6 +204,10 @@ async function syncCodexHookInstall(host: InstallHost, scriptPath: string): Prom
   const currentScript = await host.readFile(scriptPath);
   if (currentScript !== HOOK_CONTENT) {
     await host.writeFile(scriptPath, HOOK_CONTENT, { mode: 0o755 });
+    log(
+      "hooks",
+      `codex: ${currentScript === null ? "installed" : "updated"} hook script on ${host.hostId} at ${scriptPath}`,
+    );
   }
 
   const hooksFile = await getHooksFile(host);
@@ -199,6 +217,10 @@ async function syncCodexHookInstall(host: InstallHost, scriptPath: string): Prom
   const nextHooksText = JSON.stringify(nextSettings, null, 2);
   if (currentHooksText !== nextHooksText) {
     await host.writeFile(hooksFile, nextHooksText);
+    log(
+      "hooks",
+      `codex: ${currentHooksText === null ? "installed" : "updated"} hooks.json on ${host.hostId} at ${hooksFile}`,
+    );
   }
 
   const configFile = await getConfigFile(host);
@@ -206,6 +228,7 @@ async function syncCodexHookInstall(host: InstallHost, scriptPath: string): Prom
   const nextConfigText = ensureCodexHooksFeature(currentConfigText);
   if (currentConfigText !== nextConfigText) {
     await host.writeFile(configFile, nextConfigText);
+    log("hooks", `codex: updated config.toml on ${host.hostId} at ${configFile}`);
   }
 
   return true;

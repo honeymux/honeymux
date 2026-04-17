@@ -4,12 +4,12 @@ import type { TmuxWindow } from "../../tmux/types.ts";
 import type { SetupTmuxRuntimeContext } from "./runtime-context.ts";
 
 import { ClaudeHookProvider } from "../../agents/claude/hook-provider.ts";
-import { areClaudeHooksInstalled } from "../../agents/claude/installer.ts";
+import { areClaudeHooksInstalled, refreshClaudeHooksIfConsented } from "../../agents/claude/installer.ts";
 import { CodexHookProvider } from "../../agents/codex/hook-provider.ts";
-import { areCodexHooksInstalled } from "../../agents/codex/installer.ts";
+import { areCodexHooksInstalled, refreshCodexHooksIfConsented } from "../../agents/codex/installer.ts";
 import { GeminiHookProvider } from "../../agents/gemini/hook-provider.ts";
-import { areGeminiHooksInstalled } from "../../agents/gemini/installer.ts";
-import { isOpenCodePluginInstalled } from "../../agents/opencode/installer.ts";
+import { areGeminiHooksInstalled, refreshGeminiHooksIfConsented } from "../../agents/gemini/installer.ts";
+import { isOpenCodePluginInstalled, refreshOpenCodePluginIfConsented } from "../../agents/opencode/installer.ts";
 import { OpenCodePluginProvider } from "../../agents/opencode/plugin-provider.ts";
 import { AgentProviderRegistry } from "../../agents/provider.ts";
 import { AgentSessionStore } from "../../agents/session-store.ts";
@@ -133,6 +133,17 @@ export function bootstrapConnectedSession({
         muxotronExpandedRef.current = shouldExpand;
       });
       store.startLivenessCheck();
+
+      // One-shot at startup: refresh hook files for agents the user has
+      // already consented to, so newer bundled versions replace stale scripts.
+      // Agents without local consent are left alone; the normal install flow
+      // (via useAgentBinaryDetection) will sync them when consent is granted.
+      await Promise.all([
+        refreshClaudeHooksIfConsented(),
+        refreshCodexHooksIfConsented(),
+        refreshGeminiHooksIfConsented(),
+        refreshOpenCodePluginIfConsented(),
+      ]);
 
       // Register hook providers for agents with hooks already installed.
       // Detection of agents that need hooks is handled by useAgentBinaryDetection.

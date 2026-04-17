@@ -6,7 +6,9 @@ import {
   areClaudeHooksInstalled,
   buildClaudeHookCommand,
   installClaudeHooks,
+  refreshClaudeHooksIfConsented,
   resolveClaudeHookPython,
+  saveClaudeConsent,
   upsertClaudeHookSettings,
 } from "./installer.ts";
 
@@ -90,6 +92,35 @@ describe("installClaudeHooks (via InstallHost)", () => {
     const { host } = makeFakeHost();
     await installClaudeHooks(host);
     expect(await areClaudeHooksInstalled(host)).toBe(true);
+  });
+});
+
+describe("refreshClaudeHooksIfConsented", () => {
+  const scriptPath = "/home/test/.claude/hooks/honeymux.py";
+
+  it("rewrites an outdated script when consent is recorded for the host", async () => {
+    const { files, host } = makeFakeHost({ hostId: "refresh-consented-claude" });
+    await installClaudeHooks(host);
+    const bundledContent = files.get(scriptPath);
+    expect(bundledContent).toBeString();
+
+    files.set(scriptPath, "# outdated honeymux hook\n");
+    await refreshClaudeHooksIfConsented(host);
+    expect(files.get(scriptPath)).toBe(bundledContent!);
+  });
+
+  it("leaves a stale script untouched when consent has not been granted", async () => {
+    const { files, host } = makeFakeHost({ hostId: "refresh-unconsented-claude" });
+    files.set(scriptPath, "# stale honeymux hook\n");
+    await refreshClaudeHooksIfConsented(host);
+    expect(files.get(scriptPath)).toBe("# stale honeymux hook\n");
+  });
+
+  it("does not install a script when only consent exists", async () => {
+    const { files, host } = makeFakeHost({ hostId: "refresh-noscript-claude" });
+    await saveClaudeConsent(true, host.hostId);
+    await refreshClaudeHooksIfConsented(host);
+    expect(files.has(scriptPath)).toBe(false);
   });
 });
 
