@@ -32,6 +32,28 @@ describe("raw stdin interceptor", () => {
     return forwarded;
   }
 
+  test("routes completed pastes to writePaste when provided, bypassing writeToPty", () => {
+    const writes: string[] = [];
+    const pastes: string[] = [];
+
+    cleanup = installRawStdinInterceptor(
+      (data) => {
+        writes.push(data);
+      },
+      {
+        mapCoordinates: () => null,
+        writePaste: (data) => {
+          pastes.push(data);
+        },
+      },
+    );
+
+    (process.stdin as any).emit("data", Buffer.from("\x1b[200~hello\x1b[201~", "utf-8"));
+
+    expect(pastes).toEqual(["\x1b[200~hello\x1b[201~"]);
+    expect(writes).toEqual([]);
+  });
+
   test("does not treat focus replies embedded in paste as standalone focus events", () => {
     const writes: string[] = [];
 

@@ -378,6 +378,10 @@ export function setupInputLayer(ctx: SetupTmuxRuntimeContext): () => void {
         onDropdownInput: (data: string) => {
           dropdownInputRef.current?.(data);
         },
+        writePaste: (data: string) => {
+          if (!inputReady.current) return;
+          writeFnRef.current(data);
+        },
       },
     );
     cleanupFns.push(teardownMouseForward);

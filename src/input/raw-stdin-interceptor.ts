@@ -42,6 +42,7 @@ export interface MouseForwardConfig {
   ) => "consume" | { x: number; y: number } | null;
   onDialogInput?: (data: string) => void;
   onDropdownInput?: (data: string) => void;
+  writePaste?: (data: string) => void;
 }
 
 /**
@@ -163,7 +164,7 @@ export function installRawStdinInterceptor(
       }
       return;
     }
-    writeToPty(`\x1b[200~${text}\x1b[201~`);
+    (mouseConfig.writePaste ?? writeToPty)(`\x1b[200~${text}\x1b[201~`);
   };
 
   const emitOriginalText = (text: string): void => {
