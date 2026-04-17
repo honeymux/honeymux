@@ -7,7 +7,7 @@ interface SendCommand {
   (command: string): Promise<unknown>;
 }
 
-export const CONTROL_CLIENT_SIZE = { cols: 300, rows: 300 } as const;
+export const CONTROL_CLIENT_SIZE = { cols: 1000, rows: 300 } as const;
 
 export async function applyControlClientBootstrap(
   sendCommand: SendCommand,
