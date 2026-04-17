@@ -203,4 +203,143 @@ describe("HookSocketServer", () => {
     expect(writes).toEqual([JSON.stringify({ decision: "deny" }) + "\n"]);
     expect(ended).toBe(true);
   });
+
+  it("keeps only the newest held permission socket per session", async () => {
+    const server = new HookSocketServer(join(tempDir, "honeymux", "remote-hook.sock"), true, {
+      eventValidator: async () => true,
+      persistEvents: false,
+    });
+
+    const events: AgentEvent[] = [];
+    server.on("event", (event: AgentEvent) => {
+      events.push(event);
+    });
+
+    let firstEndCount = 0;
+    const firstSocket = {
+      data: { buffer: "", pendingWork: Promise.resolve() },
+      end() {
+        firstEndCount += 1;
+      },
+      flush() {},
+      write(data: string) {
+        return data.length;
+      },
+    };
+
+    await (server as any).processLine(
+      firstSocket,
+      JSON.stringify({
+        agentType: "claude",
+        cwd: "/srv/project",
+        hookEvent: "PermissionRequest",
+        pid: 900,
+        sessionId: "sess-1",
+        status: "unanswered",
+        timestamp: 1,
+        toolUseId: "tool-1",
+        tty: "/dev/pts/7",
+      }),
+    );
+
+    expect((server as any).pendingConnections.size).toBe(1);
+
+    let secondEndCount = 0;
+    const secondSocket = {
+      data: { buffer: "", pendingWork: Promise.resolve() },
+      end() {
+        secondEndCount += 1;
+      },
+      flush() {},
+      write(data: string) {
+        return data.length;
+      },
+    };
+
+    await (server as any).processLine(
+      secondSocket,
+      JSON.stringify({
+        agentType: "claude",
+        cwd: "/srv/project",
+        hookEvent: "PermissionRequest",
+        pid: 901,
+        sessionId: "sess-1",
+        status: "unanswered",
+        timestamp: 2,
+        toolUseId: "tool-2",
+        tty: "/dev/pts/7",
+      }),
+    );
+
+    expect(firstEndCount).toBe(1);
+    expect(secondEndCount).toBe(0);
+    expect((server as any).pendingConnections.size).toBe(1);
+    expect((server as any).pendingConnectionKeysBySessionId.get("sess-1")).toBe("tool-2");
+    expect(events.filter((event) => event.hookEvent === "PermissionCancelled")).toHaveLength(0);
+
+    (server as any).handleSocketClose(firstSocket);
+
+    expect(events.filter((event) => event.hookEvent === "PermissionCancelled")).toHaveLength(0);
+  });
+
+  it("closes a held permission socket when SessionEnd arrives for the same session", async () => {
+    const server = new HookSocketServer(join(tempDir, "honeymux", "remote-hook.sock"), true, {
+      eventValidator: async () => true,
+      persistEvents: false,
+    });
+
+    let endCount = 0;
+    const permissionSocket = {
+      data: { buffer: "", pendingWork: Promise.resolve() },
+      end() {
+        endCount += 1;
+      },
+      flush() {},
+      write(data: string) {
+        return data.length;
+      },
+    };
+
+    await (server as any).processLine(
+      permissionSocket,
+      JSON.stringify({
+        agentType: "claude",
+        cwd: "/srv/project",
+        hookEvent: "PermissionRequest",
+        pid: 900,
+        sessionId: "sess-1",
+        status: "unanswered",
+        timestamp: 1,
+        toolUseId: "tool-1",
+        tty: "/dev/pts/7",
+      }),
+    );
+
+    const sessionEndSocket = {
+      data: { buffer: "", pendingWork: Promise.resolve() },
+      end() {},
+      flush() {},
+      write(data: string) {
+        return data.length;
+      },
+    };
+
+    await (server as any).processLine(
+      sessionEndSocket,
+      JSON.stringify({
+        agentType: "claude",
+        cwd: "/srv/project",
+        hookEvent: "SessionEnd",
+        pid: 901,
+        sessionId: "sess-1",
+        status: "ended",
+        timestamp: 2,
+        tty: "/dev/pts/7",
+      }),
+    );
+
+    expect(endCount).toBe(1);
+    expect((server as any).pendingConnections.size).toBe(0);
+    expect((server as any).pendingConnectionKeysBySessionId.size).toBe(0);
+  });
 });

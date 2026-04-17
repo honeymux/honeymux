@@ -69,7 +69,15 @@ export function useAgentActions({
   tmuxSessionState,
   uiActions,
 }: UseAgentActionsOptions): AgentActionsApi {
-  const { clientRef, dropdownInputRef, registryRef, remoteManagerRef, storeRef, treeAgentSelectRef } = refs;
+  const {
+    clientRef,
+    dropdownInputRef,
+    handlePermissionRespondRef,
+    registryRef,
+    remoteManagerRef,
+    storeRef,
+    treeAgentSelectRef,
+  } = refs;
   const { currentSessionName } = tmuxSessionState;
   const {
     agentSessions,
@@ -262,6 +270,7 @@ export function useAgentActions({
     },
     [registryRef, storeRef],
   );
+  handlePermissionRespondRef.current = handlePermissionRespond;
 
   const handleClaudeInstall = useCallback(async () => {
     const hostId = dialogHostIdRef.current;

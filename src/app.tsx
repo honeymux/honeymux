@@ -26,7 +26,7 @@ import { useOptionsWorkflow } from "./app/hooks/use-options-workflow.ts";
 import { usePaneTabsIntegration } from "./app/hooks/use-pane-tabs-integration.ts";
 import { usePromptClickState } from "./app/hooks/use-prompt-click-state.ts";
 import { usePtyLifecycle } from "./app/hooks/use-pty-lifecycle.ts";
-import { shouldMarkPermissionPromptAnswered, usePtyWritePipeline } from "./app/hooks/use-pty-write-pipeline.ts";
+import { handlePermissionPromptInput, usePtyWritePipeline } from "./app/hooks/use-pty-write-pipeline.ts";
 import { useRecoveringPaneRects } from "./app/hooks/use-recovering-pane-rects.ts";
 import { useRemoteAgentBinaryDetection } from "./app/hooks/use-remote-agent-binary-detection.ts";
 import { useRemoteManager } from "./app/hooks/use-remote-manager.ts";
@@ -387,8 +387,13 @@ export function App({ sessionName }: AppProps) {
   const agentBridge = useAgentPtyBridge({
     clientRef,
     onAgentInput: (data) => {
-      if (interactiveAgent && shouldMarkPermissionPromptAnswered(data)) {
-        appRuntimeRefs.storeRef.current?.markAnswered(interactiveAgent.sessionId);
+      const action = handlePermissionPromptInput({
+        data,
+        paneId: interactiveAgent?.paneId ?? null,
+        respondToPermission: appRuntimeRefs.handlePermissionRespondRef.current,
+        store: appRuntimeRefs.storeRef.current,
+      });
+      if (interactiveAgent && action) {
         appRuntimeRefs.handleMuxotronDismissRef.current();
       }
     },

@@ -24,6 +24,12 @@ interface HookSocketServerOptions {
   shouldHoldPermissionConnection?: (event: AgentEvent) => boolean;
 }
 
+interface PendingPermissionConnection {
+  permissionEvent: AgentEvent;
+  sessionId: string;
+  socket: Socket<SocketData>;
+}
+
 let cachedPanePidsByTty = new Map<string, number>();
 let cachedPanePidsById = new Map<string, number>();
 let cachedPanePidsAt = 0;
@@ -39,7 +45,8 @@ interface SocketData {
 export class HookSocketServer extends EventEmitter {
   private eventValidator: (event: AgentEvent) => Promise<boolean> | boolean;
   private holdPermissionConnections: boolean;
-  private pendingConnections = new Map<string, Socket<SocketData>>();
+  private pendingConnectionKeysBySessionId = new Map<string, string>();
+  private pendingConnections = new Map<string, PendingPermissionConnection>();
   private persistEvents: boolean;
   private server: ReturnType<typeof Bun.listen> | null = null;
   private shouldHoldPermissionConnection?: (event: AgentEvent) => boolean;
@@ -55,19 +62,21 @@ export class HookSocketServer extends EventEmitter {
   }
 
   respondToPermission(id: string, decision: "allow" | "deny"): boolean {
-    const socket = this.pendingConnections.get(id);
-    if (!socket) return false;
+    const pending = this.removePendingConnection(id);
+    if (!pending) return false;
     // Remove from map BEFORE writing to prevent the close handler from
     // deleting the key while we're still using the socket
-    this.pendingConnections.delete(id);
-    socket.data.toolUseId = undefined; // prevent close handler from double-deleting
-    socket.data.permissionEvent = undefined; // prevent synthetic cancel event
+    this.clearPendingSocketData(pending.socket);
     let ok = true;
     try {
       const payload = JSON.stringify({ decision }) + "\n";
-      socket.write(payload);
-      socket.flush();
-      socket.end();
+      pending.socket.write(payload);
+      pending.socket.flush();
+    } catch {
+      ok = false;
+    }
+    try {
+      pending.socket.end();
     } catch {
       ok = false;
     }
@@ -84,32 +93,7 @@ export class HookSocketServer extends EventEmitter {
 
     this.server = Bun.listen<SocketData>({
       socket: {
-        close: (socket) => {
-          if (socket.data.toolUseId) {
-            // Only clean up if this socket is still the active one for its key.
-            // A newer socket may have already replaced it in pendingConnections.
-            const stored = this.pendingConnections.get(socket.data.toolUseId);
-            if (stored === socket) {
-              this.pendingConnections.delete(socket.data.toolUseId);
-
-              // Socket closed without us responding — user approved/denied
-              // directly in the agent TUI. Emit a synthetic event to clear
-              // unanswered state.
-              const orig = socket.data.permissionEvent;
-              if (orig) {
-                this.emit("event", {
-                  ...orig,
-                  hookEvent: "PermissionCancelled",
-                  status: "alive",
-                  timestamp: Date.now() / 1000,
-                  toolInput: undefined,
-                  toolName: undefined,
-                  toolUseId: undefined,
-                } satisfies AgentEvent);
-              }
-            }
-          }
-        },
+        close: (socket) => this.handleSocketClose(socket),
         data: (socket, data) => {
           if (socket.data.ignoreFurtherInput) return;
           const result = appendBoundedLines(
@@ -149,12 +133,14 @@ export class HookSocketServer extends EventEmitter {
 
   stop(): void {
     // Close all pending connections
-    for (const socket of this.pendingConnections.values()) {
+    for (const pending of this.pendingConnections.values()) {
+      this.clearPendingSocketData(pending.socket);
       try {
-        socket.end();
+        pending.socket.end();
       } catch {}
     }
     this.pendingConnections.clear();
+    this.pendingConnectionKeysBySessionId.clear();
 
     this.server?.stop(true);
     this.server = null;
@@ -166,8 +152,44 @@ export class HookSocketServer extends EventEmitter {
     }
   }
 
+  private clearPendingSocketData(socket: Socket<SocketData>): void {
+    socket.data.permissionEvent = undefined;
+    socket.data.toolUseId = undefined;
+  }
+
+  private emitPermissionCancelled(event: AgentEvent): void {
+    this.emit("event", {
+      ...event,
+      hookEvent: "PermissionCancelled",
+      status: "alive",
+      timestamp: Date.now() / 1000,
+      toolInput: undefined,
+      toolName: undefined,
+      toolUseId: undefined,
+    } satisfies AgentEvent);
+  }
+
   private getShouldHoldPermissionConnection(event: AgentEvent): boolean {
     return this.shouldHoldPermissionConnection?.(event) ?? this.holdPermissionConnections;
+  }
+
+  private handleSocketClose(socket: Socket<SocketData>): void {
+    if (!socket.data.toolUseId) return;
+
+    // Only clean up if this socket is still the active one for its key.
+    // A newer socket may have already replaced it in pendingConnections.
+    const stored = this.pendingConnections.get(socket.data.toolUseId);
+    if (!stored || stored.socket !== socket) return;
+
+    this.removePendingConnection(socket.data.toolUseId);
+
+    // Socket closed without us responding — user approved/denied
+    // directly in the agent TUI. Emit a synthetic event to clear
+    // unanswered state.
+    const orig = socket.data.permissionEvent;
+    if (orig) {
+      this.emitPermissionCancelled(orig);
+    }
   }
 
   private async processLine(socket: Socket<SocketData>, line: string): Promise<void> {
@@ -193,25 +215,50 @@ export class HookSocketServer extends EventEmitter {
         persistSessionEvent(event);
       }
 
+      if (event.hookEvent === "PermissionCancelled" || event.status === "ended") {
+        const pendingForSession = this.removePendingConnectionForSession(event.sessionId);
+        if (pendingForSession && pendingForSession.socket !== socket) {
+          this.clearPendingSocketData(pendingForSession.socket);
+          try {
+            pendingForSession.socket.end();
+          } catch {}
+        }
+      }
+
       // Hold connection open for permission requests (only for agents
       // that support programmatic allow/deny, e.g. Claude).  Agents
       // like Gemini fire-and-forget: their hook closes immediately, so
       // holding the connection would trigger a spurious cancel event.
       if (event.status === "unanswered" && shouldHold) {
         const key = event.toolUseId ?? event.sessionId;
+        const priorKeyForSession = this.pendingConnectionKeysBySessionId.get(event.sessionId);
+        if (priorKeyForSession && priorKeyForSession !== key) {
+          const oldPendingForSession = this.removePendingConnection(priorKeyForSession);
+          if (oldPendingForSession) {
+            this.clearPendingSocketData(oldPendingForSession.socket);
+            try {
+              oldPendingForSession.socket.end();
+            } catch {}
+          }
+        }
+
         // Clean up any old socket for this key so its close handler
         // won't delete the new entry from pendingConnections.
-        const oldSocket = this.pendingConnections.get(key);
-        if (oldSocket && oldSocket !== socket) {
-          oldSocket.data.toolUseId = undefined;
-          oldSocket.data.permissionEvent = undefined;
+        const oldPending = this.removePendingConnection(key);
+        if (oldPending && oldPending.socket !== socket) {
+          this.clearPendingSocketData(oldPending.socket);
           try {
-            oldSocket.end();
+            oldPending.socket.end();
           } catch {}
         }
         socket.data.toolUseId = key;
         socket.data.permissionEvent = event;
-        this.pendingConnections.set(key, socket);
+        this.pendingConnections.set(key, {
+          permissionEvent: event,
+          sessionId: event.sessionId,
+          socket,
+        });
+        this.pendingConnectionKeysBySessionId.set(event.sessionId, key);
       }
     } catch {
       // invalid JSON — skip
@@ -220,8 +267,7 @@ export class HookSocketServer extends EventEmitter {
 
   private rejectPendingPermissionSocket(socket: Socket<SocketData>): void {
     socket.data.ignoreFurtherInput = true;
-    socket.data.permissionEvent = undefined;
-    socket.data.toolUseId = undefined;
+    this.clearPendingSocketData(socket);
     try {
       socket.write(JSON.stringify({ decision: "deny" }) + "\n");
       socket.flush();
@@ -229,6 +275,24 @@ export class HookSocketServer extends EventEmitter {
     try {
       socket.end();
     } catch {}
+  }
+
+  private removePendingConnection(key: string): PendingPermissionConnection | undefined {
+    const pending = this.pendingConnections.get(key);
+    if (!pending) return undefined;
+
+    this.pendingConnections.delete(key);
+    const sessionKey = this.pendingConnectionKeysBySessionId.get(pending.sessionId);
+    if (sessionKey === key) {
+      this.pendingConnectionKeysBySessionId.delete(pending.sessionId);
+    }
+    return pending;
+  }
+
+  private removePendingConnectionForSession(sessionId: string): PendingPermissionConnection | undefined {
+    const key = this.pendingConnectionKeysBySessionId.get(sessionId);
+    if (!key) return undefined;
+    return this.removePendingConnection(key);
   }
 }
 

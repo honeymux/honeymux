@@ -52,6 +52,9 @@ export interface AppRuntimeRefs {
   handleNotificationsClickRef: MutableRefObject<() => void>;
   handleOpenQuickTerminalRef: MutableRefObject<() => void>;
   handleOptionsClickRef: MutableRefObject<() => void>;
+  handlePermissionRespondRef: MutableRefObject<
+    ((sessionId: string, toolUseId: string, decision: "allow" | "deny") => void) | null
+  >;
   handlePrevPaneTabRef: MutableRefObject<() => void>;
   handleQuickApproveRef: MutableRefObject<() => void>;
   handleQuickDenyRef: MutableRefObject<() => void>;
@@ -272,6 +275,9 @@ export function useAppRuntimeRefs({ sequenceMap }: UseAppRuntimeRefsOptions): Ap
   const handleScreenshotRef = useRef<() => void>(() => {});
   const handleBufferZoomRef = useRef<() => void>(() => {});
   const handleNotificationsClickRef = useRef<() => void>(() => {});
+  const handlePermissionRespondRef = useRef<
+    ((sessionId: string, toolUseId: string, decision: "allow" | "deny") => void) | null
+  >(null);
   const writeFnRef = useRef<(data: string) => void>(() => {});
   const promptClickStateRef = useRef<PromptClickMode>("unknown");
   const promptInputStartRef = useRef<PromptInputStart | null>(null);
@@ -332,6 +338,7 @@ export function useAppRuntimeRefs({ sequenceMap }: UseAppRuntimeRefsOptions): Ap
     handleNotificationsClickRef,
     handleOpenQuickTerminalRef,
     handleOptionsClickRef,
+    handlePermissionRespondRef,
     handlePrevPaneTabRef,
     handleQuickApproveRef,
     handleQuickDenyRef,

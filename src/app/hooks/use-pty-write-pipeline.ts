@@ -2,6 +2,7 @@ import type { CliRenderer } from "@opentui/core";
 
 import { useCallback, useRef } from "react";
 
+import type { AgentSession } from "../../agents/types.ts";
 import type { TmuxKeyBindings } from "../../tmux/types.ts";
 import type { AppRuntimeRefs } from "./use-app-runtime-refs.ts";
 import type { UiActionsApi } from "./use-ui-actions.ts";
@@ -20,6 +21,20 @@ type GhosttyTerminalWithDirtyFlag = {
 };
 
 const POST_PREFIX_TIMEOUT_MS = 2000;
+
+interface HandlePermissionPromptInputOptions {
+  data: string;
+  paneId: null | string;
+  respondToPermission: ((sessionId: string, toolUseId: string, decision: "allow" | "deny") => void) | null;
+  store: PermissionPromptSessionStore | null;
+}
+
+type PermissionPromptAction = "deny" | "markAnswered";
+
+interface PermissionPromptSessionStore {
+  getSessions(): AgentSession[];
+  markAnswered(sessionId: string): void;
+}
 
 interface TmuxSplitSequences {
   horizontalSplitSequence: null | string;
@@ -50,6 +65,31 @@ export function getTmuxSplitSequences(keyBindings: TmuxKeyBindings | null): Tmux
   };
 }
 
+export function handlePermissionPromptInput({
+  data,
+  paneId,
+  respondToPermission,
+  store,
+}: HandlePermissionPromptInputOptions): PermissionPromptAction | null {
+  if (!paneId || !store) return null;
+
+  const match = store.getSessions().find((session) => session.paneId === paneId && session.status === "unanswered");
+  if (!match) return null;
+
+  if (shouldDenyPermissionPrompt(data)) {
+    if (!respondToPermission) return null;
+    respondToPermission(match.sessionId, match.lastEvent.toolUseId ?? match.sessionId, "deny");
+    return "deny";
+  }
+
+  if (shouldMarkPermissionPromptAnswered(data)) {
+    store.markAnswered(match.sessionId);
+    return "markAnswered";
+  }
+
+  return null;
+}
+
 export function resolveHoneybeamDirection(
   data: string,
   verticalSplitSequence: null | string,
@@ -60,8 +100,12 @@ export function resolveHoneybeamDirection(
   return null;
 }
 
+export function shouldDenyPermissionPrompt(data: string): boolean {
+  return data === "\x03" || isDismissKey(data);
+}
+
 export function shouldMarkPermissionPromptAnswered(data: string): boolean {
-  return data === "\r" || isDismissKey(data);
+  return data === "\r";
 }
 
 export function usePtyWritePipeline({
@@ -79,6 +123,7 @@ export function usePtyWritePipeline({
     activePaneIdRef,
     clientRef,
     dimsRef,
+    handlePermissionRespondRef,
     ptyRef,
     remoteManagerRef,
     sidebarOpenRef,
@@ -111,6 +156,12 @@ export function usePtyWritePipeline({
 
   writeFnRef.current = (data: string) => {
     const activePaneId = activePaneIdRef.current;
+    handlePermissionPromptInput({
+      data,
+      paneId: activePaneId,
+      respondToPermission: handlePermissionRespondRef.current,
+      store: storeRef.current,
+    });
     if (activePaneId && remoteManagerRef.current?.routeInput(activePaneId, data)) {
       return;
     }
@@ -188,19 +239,6 @@ export function usePtyWritePipeline({
 
     if (honeybeamsEnabled && prefixSequence && data === prefixSequence) {
       prefixSentAtRef.current = Date.now();
-    }
-
-    if (shouldMarkPermissionPromptAnswered(data)) {
-      const paneId = activePaneIdRef.current;
-      const store = storeRef.current;
-      if (paneId && store) {
-        const match = store
-          .getSessions()
-          .find((session) => session.paneId === paneId && session.status === "unanswered");
-        if (match) {
-          store.markAnswered(match.sessionId);
-        }
-      }
     }
 
     writeToPty(data);
