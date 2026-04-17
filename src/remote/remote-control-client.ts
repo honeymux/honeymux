@@ -143,7 +143,7 @@ export class RemoteControlClient extends EventEmitter {
     await this.sendCommand("set-option -g window-size smallest");
     await this.sendCommand("set-option status off");
     await this.sendCommand("set-option -g pane-border-status top");
-    await this.sendCommand("refresh-client -C 1000,300");
+    await this.sendCommand("refresh-client -C 300,300");
   }
 
   /** Intentionally stop — don't reconnect. */

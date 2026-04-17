@@ -180,7 +180,7 @@ export class MirrorLayoutManager {
   /**
    * Parse the window dimensions from a tmux layout string (format: "checksum,WxH,...")
    * and resize the remote control client to match, so that select-layout applies
-   * pane dimensions correctly.
+   * pane dimensions correctly instead of scaling to the old 300x300 default.
    */
   private async syncClientSize(layoutStr: string): Promise<void> {
     if (!layoutStr) return;
