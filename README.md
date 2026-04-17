@@ -18,7 +18,7 @@ Honeymux is an outer TUI layer for tmux designed to make terminal work feel more
 
 Built on tmux control mode, [OpenTUI](https://github.com/anomalyco/opentui), [libghostty](https://github.com/ghostty-org/ghostty), and [ghostty-opentui](https://github.com/remorses/ghostty-opentui), Honeymux sits between your terminal emulator and tmux to provide a more interactive, desktop-like terminal experience.
 
-## Install
+## Install or upgrade
 
 ```bash
 curl -fsSL https://get.hmx.dev | bash
