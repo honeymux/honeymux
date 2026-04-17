@@ -154,8 +154,15 @@ export class RemoteServerManager extends EventEmitter {
       // is observed by downstream features (e.g. pane tabs bootstrap) with the
       // remote metadata already in place. Otherwise a bootstrap pass can race
       // in and overwrite the remote border format with a pane tab.
+      //
+      // @hmx-remote-token persists the proxy's one-time token in tmux state
+      // so a later Honeymux restart can re-accept the same long-lived proxy
+      // process via `expectProxy` without respawning the local pane (which
+      // would wipe the pane's visible content). The token is user-private
+      // local state, same trust boundary as the rest of our tmux options.
       await this.setLocalPaneOption(localPaneId, "@hmx-remote-host", serverName);
       await this.setLocalPaneOption(localPaneId, "@hmx-remote-pane", remotePaneId);
+      await this.setLocalPaneOption(localPaneId, "@hmx-remote-token", proxyToken);
       await this.updatePaneBorder(localPaneId, serverName);
 
       // Respawn the local pane with the proxy process
@@ -166,6 +173,7 @@ export class RemoteServerManager extends EventEmitter {
       this.paneMappings.delete(localPaneId);
       await this.clearLocalPaneOption(localPaneId, "@hmx-remote-host").catch(() => {});
       await this.clearLocalPaneOption(localPaneId, "@hmx-remote-pane").catch(() => {});
+      await this.clearLocalPaneOption(localPaneId, "@hmx-remote-token").catch(() => {});
       await this.resetPaneBorder(localPaneId).catch(() => {});
       throw error;
     }
@@ -210,21 +218,28 @@ export class RemoteServerManager extends EventEmitter {
   /**
    * Rebuild paneMappings for a server after Honeymux restart.
    *
-   * Panes converted in a previous run have `@hmx-remote-host` and
-   * `@hmx-remote-pane` set in tmux state (which survives restart), but
-   * Honeymux's in-memory paneMappings and the proxy-server token table do
-   * not, so keystrokes and remote output stop flowing. This queries local
-   * panes whose `@hmx-remote-host` matches the given server, resolves the
-   * corresponding remote pane via the mirror (authoritative after
-   * {@link MirrorLayoutManager.fullSync}), and for each live pair:
+   * Panes converted in a previous run have `@hmx-remote-host`,
+   * `@hmx-remote-pane`, and `@hmx-remote-token` set in tmux state (which
+   * survives restart), but Honeymux's in-memory paneMappings and the
+   * proxy-server token table do not, so keystrokes and remote output
+   * stop flowing until we rebuild them.
    *
-   *  - registers the mapping in `paneMappings`,
-   *  - mints a fresh proxy token,
-   *  - respawns the local pane with a new proxy process using that token.
+   * Preferred path (token-reuse): when `@hmx-remote-token` is present, we
+   * re-register the same token with the proxy server and let the
+   * already-running proxy process in the local pane reconnect. This
+   * preserves whatever content was visible in the pane when Honeymux
+   * exited (no respawn).
+   *
+   * Legacy fallback (mint + respawn): if the token option is absent (pane
+   * was converted by an older Honeymux that did not persist the token),
+   * mint a fresh token, persist it, and respawn the local pane with a new
+   * proxy process. The pane content is wiped in this path, but recovery
+   * still succeeds.
    *
    * Panes whose mirror mapping no longer resolves are treated as orphaned:
-   * their remote-pane metadata is cleared and the border is reset, so they
-   * no longer look remote. Expected to run after fullSync completes.
+   * all remote-pane metadata is cleared and the border is reset so they no
+   * longer look remote. Expected to run after {@link
+   * MirrorLayoutManager.fullSync} completes.
    */
   async recoverPaneMappings(serverName: string): Promise<void> {
     const mirror = this.mirrors.get(serverName);
@@ -233,47 +248,79 @@ export class RemoteServerManager extends EventEmitter {
 
     let output: string;
     try {
-      output = await this.localClient.runCommand("list-panes -a -F ' #{pane_id}\t#{@hmx-remote-host}'");
+      output = await this.localClient.runCommand(
+        "list-panes -a -F ' #{pane_id}\t#{@hmx-remote-host}\t#{@hmx-remote-token}'",
+      );
     } catch (err) {
       log("remote", `recover: list-panes failed: ${err instanceof Error ? err.message : String(err)}`);
       return;
     }
 
-    const candidates: string[] = [];
+    const candidates: Array<{ localPaneId: string; storedToken: string }> = [];
     for (const line of output.split("\n")) {
-      const trimmed = line.trim();
-      if (!trimmed) continue;
-      const [paneId, host] = trimmed.split("\t");
+      if (!line.trim()) continue;
+      // Strip only the leading single-space prefix (the format's `%N`-guard),
+      // and the trailing CR if any. Do NOT trim tabs: a missing trailing
+      // field (e.g. no @hmx-remote-token yet) is encoded as an empty
+      // trailing tab-delimited column.
+      const cleaned = line.replace(/^ /, "").replace(/\r$/, "");
+      const [paneId, host, token = ""] = cleaned.split("\t");
       if (!paneId || host !== serverName) continue;
       if (this.paneMappings.has(paneId)) continue;
-      candidates.push(paneId);
+      candidates.push({ localPaneId: paneId, storedToken: token });
     }
 
-    for (const localPaneId of candidates) {
+    for (const { localPaneId, storedToken } of candidates) {
       const remotePaneId = mirror.getRemotePaneId(localPaneId);
       if (!remotePaneId) {
         log("remote", `recover: no mirror mapping for ${localPaneId}, clearing metadata`);
         await this.clearLocalPaneOption(localPaneId, "@hmx-remote-host").catch(() => {});
         await this.clearLocalPaneOption(localPaneId, "@hmx-remote-pane").catch(() => {});
+        await this.clearLocalPaneOption(localPaneId, "@hmx-remote-token").catch(() => {});
         await this.resetPaneBorder(localPaneId).catch(() => {});
         continue;
       }
 
-      const proxyToken = randomBytes(32).toString("hex");
       this.paneMappings.set(localPaneId, {
         localPaneId,
         remotePaneId,
         serverName,
       });
-      this.proxyServer.expectProxy(localPaneId, proxyToken);
+
+      if (storedToken) {
+        // Token-reuse path: no respawn, preserves the pane's visible content.
+        this.proxyServer.expectProxy(localPaneId, storedToken);
+        try {
+          await this.setLocalPaneOption(localPaneId, "@hmx-remote-pane", remotePaneId);
+          await this.updatePaneBorder(localPaneId, serverName);
+          log(
+            "remote",
+            `recovered (token-reuse): local=${localPaneId} → remote=${remotePaneId} on ${this.serverTag(serverName)}`,
+          );
+          this.emit("pane-converted", localPaneId, serverName);
+        } catch (err) {
+          this.proxyServer.forgetProxy(localPaneId);
+          this.paneMappings.delete(localPaneId);
+          log("remote", `recover failed for ${localPaneId}: ${err instanceof Error ? err.message : String(err)}`);
+        }
+        continue;
+      }
+
+      // Legacy pane (converted before token persistence): mint a fresh
+      // token, persist it, and respawn the local pane so the new proxy can
+      // register. Content in the pane will be wiped.
+      const newToken = randomBytes(32).toString("hex");
+      this.proxyServer.expectProxy(localPaneId, newToken);
 
       try {
-        // Refresh @hmx-remote-pane in case the mirror assigned a different
-        // remote pane id than the one stored from a previous run.
         await this.setLocalPaneOption(localPaneId, "@hmx-remote-pane", remotePaneId);
+        await this.setLocalPaneOption(localPaneId, "@hmx-remote-token", newToken);
         await this.updatePaneBorder(localPaneId, serverName);
-        await this.localClient.respawnPane(localPaneId, buildRemoteProxyProcessArgv(localPaneId, proxyToken));
-        log("remote", `recovered: local=${localPaneId} → remote=${remotePaneId} on ${this.serverTag(serverName)}`);
+        await this.localClient.respawnPane(localPaneId, buildRemoteProxyProcessArgv(localPaneId, newToken));
+        log(
+          "remote",
+          `recovered (legacy-respawn): local=${localPaneId} → remote=${remotePaneId} on ${this.serverTag(serverName)}`,
+        );
         this.emit("pane-converted", localPaneId, serverName);
       } catch (err) {
         this.proxyServer.forgetProxy(localPaneId);
@@ -321,6 +368,7 @@ export class RemoteServerManager extends EventEmitter {
     // Clear metadata
     await this.clearLocalPaneOption(localPaneId, "@hmx-remote-host");
     await this.clearLocalPaneOption(localPaneId, "@hmx-remote-pane");
+    await this.clearLocalPaneOption(localPaneId, "@hmx-remote-token");
 
     // Reset border to default
     await this.resetPaneBorder(localPaneId);
@@ -755,6 +803,7 @@ export class RemoteServerManager extends EventEmitter {
     this.proxyServer.forgetProxy(localPaneId);
     this.clearLocalPaneOption(localPaneId, "@hmx-remote-host").catch(() => {});
     this.clearLocalPaneOption(localPaneId, "@hmx-remote-pane").catch(() => {});
+    this.clearLocalPaneOption(localPaneId, "@hmx-remote-token").catch(() => {});
     this.resetPaneBorder(localPaneId).catch(() => {});
     // kill-pane — if it's the last pane, tmux destroys the session
     // and sends %exit, which triggers Honeymux's normal shutdown

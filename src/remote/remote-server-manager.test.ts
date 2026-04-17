@@ -317,12 +317,14 @@ describe("RemoteServerManager remote hook ingress", () => {
     expect(killPaneById).toHaveBeenCalledWith("%10");
     expect((manager as any).paneMappings.has("%10")).toBe(false);
     expect((manager as any).paneMappings.has("%11")).toBe(true);
-    expect(runCommandArgs).toHaveBeenCalledTimes(3);
+    // 3 option clears (@hmx-remote-host, @hmx-remote-pane, @hmx-remote-token)
+    // + 1 border reset.
+    expect(runCommandArgs).toHaveBeenCalledTimes(4);
   });
 
-  it("rebuilds paneMappings from tmux state and respawns the proxy on reconnect", async () => {
+  it("token-reuse recovery re-registers the stored token without respawning the pane", async () => {
     const respawnPane = mock(async () => {});
-    const runCommand = mock(async (_cmd: string) => " %10\tdev-box\n %11\t\n %12\tother-box\n");
+    const runCommand = mock(async () => " %10\tdev-box\tstoredtoken123\n");
     const runCommandArgs = mock(async () => {});
     const setPaneBorderFormat = mock(async () => {});
     const localClient = {
@@ -354,25 +356,62 @@ describe("RemoteServerManager remote hook ingress", () => {
       remotePaneId: "%77",
       serverName: "dev-box",
     });
-    expect((manager as any).paneMappings.has("%11")).toBe(false);
-    expect((manager as any).paneMappings.has("%12")).toBe(false);
+
+    expect(expectProxy).toHaveBeenCalledTimes(1);
+    expect(expectProxy).toHaveBeenCalledWith("%10", "storedtoken123");
+    expect(respawnPane).not.toHaveBeenCalled();
+
+    expect(converted).toEqual([["%10", "dev-box"]]);
+  });
+
+  it("legacy recovery mints a fresh token and respawns when no stored token is present", async () => {
+    const respawnPane = mock(async () => {});
+    const runCommand = mock(async () => " %10\tdev-box\t\n %11\t\t\n %12\tother-box\tothertoken\n");
+    const runCommandArgs = mock(async () => {});
+    const setPaneBorderFormat = mock(async () => {});
+    const localClient = {
+      respawnPane,
+      runCommand,
+      runCommandArgs,
+      setPaneBorderFormat,
+    } as any;
+
+    const manager = new RemoteServerManager(localClient, [{ host: "dev-box", name: "dev-box" }]);
+    const expectProxy = mock((_paneId: string, _token: string) => {});
+    (manager as any).proxyServer = { expectProxy, forgetProxy: mock(() => {}) };
+
+    (manager as any).clients.set("dev-box", { isConnected: true });
+    (manager as any).mirrors.set("dev-box", {
+      getRemotePaneId: (localId: string) => (localId === "%10" ? "%77" : undefined),
+    });
+
+    await manager.recoverPaneMappings("dev-box");
+
+    expect((manager as any).paneMappings.get("%10")).toEqual({
+      localPaneId: "%10",
+      remotePaneId: "%77",
+      serverName: "dev-box",
+    });
 
     expect(expectProxy).toHaveBeenCalledTimes(1);
     const [expectedPaneId, expectedToken] = expectProxy.mock.calls[0]! as unknown as [string, string];
     expect(expectedPaneId).toBe("%10");
     expect(expectedToken).toEqual(expect.any(String));
+    expect(expectedToken.length).toBeGreaterThan(0);
 
     expect(respawnPane).toHaveBeenCalledTimes(1);
     const [respawnPaneId, respawnArgv] = respawnPane.mock.calls[0]! as unknown as [string, string[]];
     expect(respawnPaneId).toBe("%10");
     expect(respawnArgv).toEqual(buildRemoteProxyProcessArgv("%10", expectedToken));
 
-    expect(converted).toEqual([["%10", "dev-box"]]);
+    // %11 has no host, %12 is a different server — neither should be touched.
+    expect((manager as any).paneMappings.has("%11")).toBe(false);
+    expect((manager as any).paneMappings.has("%12")).toBe(false);
   });
 
   it("clears orphaned remote metadata when the mirror has no mapping for the local pane", async () => {
     const respawnPane = mock(async () => {});
-    const runCommand = mock(async () => " %10\tdev-box\n");
+    const runCommand = mock(async () => " %10\tdev-box\tsometoken\n");
     const runCommandArgs = mock(async () => {});
     const setPaneBorderFormat = mock(async () => {});
     const localClient = {
@@ -401,12 +440,12 @@ describe("RemoteServerManager remote hook ingress", () => {
       .map((call: unknown[]) => call[0] as string[])
       .filter((argv: string[]) => argv[0] === "set-option" && argv[1] === "-pu")
       .map((argv: string[]) => argv[argv.length - 1]);
-    expect(clearedKeys).toEqual(expect.arrayContaining(["@hmx-remote-host", "@hmx-remote-pane"]));
+    expect(clearedKeys).toEqual(expect.arrayContaining(["@hmx-remote-host", "@hmx-remote-pane", "@hmx-remote-token"]));
   });
 
   it("skips panes already present in paneMappings", async () => {
     const respawnPane = mock(async () => {});
-    const runCommand = mock(async () => " %10\tdev-box\n");
+    const runCommand = mock(async () => " %10\tdev-box\tsometoken\n");
     const localClient = {
       respawnPane,
       runCommand,
@@ -430,5 +469,33 @@ describe("RemoteServerManager remote hook ingress", () => {
 
     expect(expectProxy).not.toHaveBeenCalled();
     expect(respawnPane).not.toHaveBeenCalled();
+  });
+
+  it("persists the proxy token in @hmx-remote-token when converting a pane", async () => {
+    const respawnPane = mock(async () => {});
+    const runCommandArgs = mock(async () => {});
+    const localClient = {
+      respawnPane,
+      runCommandArgs,
+      setPaneBorderFormat: mock(async () => {}),
+    } as any;
+
+    const manager = new RemoteServerManager(localClient, [{ host: "dev-box", name: "dev-box" }]);
+
+    (manager as any).clients.set("dev-box", {
+      isConnected: true,
+      sendCommand: mock(async () => ""),
+    });
+    (manager as any).mirrors.set("dev-box", { getRemotePaneId: () => "%77" });
+
+    await manager.convertPane("%10", "dev-box");
+
+    const [, argv] = respawnPane.mock.calls[0]! as unknown as [string, string[]];
+    const proxyToken = argv.at(-1)!;
+
+    const tokenSet = runCommandArgs.mock.calls
+      .map((call: unknown[]) => call[0] as string[])
+      .find((a: string[]) => a[0] === "set-option" && a[4] === "@hmx-remote-token");
+    expect(tokenSet).toEqual(["set-option", "-p", "-t", "%10", "@hmx-remote-token", proxyToken]);
   });
 });
