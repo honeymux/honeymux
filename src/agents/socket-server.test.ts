@@ -5,7 +5,13 @@ import { join } from "node:path";
 
 import type { AgentEvent } from "./types.ts";
 
-import { HookSocketServer, isPidBoundToPane, loadPersistedSessions, parseProcStatParentPid } from "./socket-server.ts";
+import {
+  HookSocketServer,
+  isPidBoundToPane,
+  isPidDescendedFromPane,
+  loadPersistedSessions,
+  parseProcStatParentPid,
+} from "./socket-server.ts";
 
 describe("parseProcStatParentPid", () => {
   it("extracts the parent pid from /proc stat lines with spaces in the command", () => {
@@ -116,6 +122,27 @@ describe("isPidBoundToPane", () => {
         (pid) => parents.get(pid) ?? null,
       ),
     ).toBe(false);
+  });
+});
+
+describe("isPidDescendedFromPane", () => {
+  it("accepts a pid whose ancestry reaches the pane shell", () => {
+    const parents = new Map([
+      [100, 1],
+      [500, 100],
+      [900, 500],
+    ]);
+
+    expect(isPidDescendedFromPane(900, 100, (pid) => parents.get(pid) ?? null)).toBe(true);
+  });
+
+  it("rejects a pid outside the pane process tree", () => {
+    const parents = new Map([
+      [700, 1],
+      [900, 700],
+    ]);
+
+    expect(isPidDescendedFromPane(900, 100, (pid) => parents.get(pid) ?? null)).toBe(false);
   });
 });
 

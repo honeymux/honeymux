@@ -6,7 +6,7 @@ import { join } from "node:path";
 
 import type { AgentEvent, AgentType } from "./types.ts";
 
-import { listPanePidsByTtySync } from "../tmux/control-client.ts";
+import { listPanePidsByIdSync, listPanePidsByTtySync } from "../tmux/control-client.ts";
 import { appendBoundedLines } from "../util/bounded-line-buffer.ts";
 import { EventEmitter } from "../util/event-emitter.ts";
 import { getProcessParentPidSync, getProcessStdinTtySync } from "../util/process-introspection.ts";
@@ -25,6 +25,7 @@ interface HookSocketServerOptions {
 }
 
 let cachedPanePidsByTty = new Map<string, number>();
+let cachedPanePidsById = new Map<string, number>();
 let cachedPanePidsAt = 0;
 
 interface SocketData {
@@ -258,6 +259,17 @@ export function isPidBoundToPane(
   if (!Number.isInteger(panePid) || panePid <= 1) return false;
   if (!tty || readTty(pid) !== tty) return false;
 
+  return isPidDescendedFromPane(pid, panePid, readParentPid);
+}
+
+export function isPidDescendedFromPane(
+  pid: number,
+  panePid: number,
+  readParentPid: (pid: number) => null | number = getProcessParentPid,
+): boolean {
+  if (!Number.isInteger(pid) || pid <= 1) return false;
+  if (!Number.isInteger(panePid) || panePid <= 1) return false;
+
   const seen = new Set<number>();
   let currentPid = pid;
   while (currentPid > 1 && !seen.has(currentPid)) {
@@ -317,10 +329,21 @@ export function loadPersistedSessions(agentType?: AgentType): AgentEvent[] {
   return events;
 }
 
+function getPanePidsById(): Map<string, number> {
+  const now = Date.now();
+  if (now - cachedPanePidsAt < LOCAL_PANE_CACHE_MS) return cachedPanePidsById;
+
+  cachedPanePidsById = listPanePidsByIdSync();
+  cachedPanePidsByTty = listPanePidsByTtySync();
+  cachedPanePidsAt = now;
+  return cachedPanePidsById;
+}
+
 function getPanePidsByTty(): Map<string, number> {
   const now = Date.now();
   if (now - cachedPanePidsAt < LOCAL_PANE_CACHE_MS) return cachedPanePidsByTty;
 
+  cachedPanePidsById = listPanePidsByIdSync();
   cachedPanePidsByTty = listPanePidsByTtySync();
   cachedPanePidsAt = now;
   return cachedPanePidsByTty;
@@ -339,9 +362,14 @@ function getSessionsDir(): string {
 }
 
 function isValidLocalAgentEvent(event: AgentEvent): boolean {
-  if (!event.tty || typeof event.tty !== "string") return false;
   if (typeof event.pid !== "number" || !Number.isInteger(event.pid)) return false;
 
+  if (event.paneId) {
+    const panePid = getPanePidsById().get(event.paneId);
+    if (panePid) return isPidDescendedFromPane(event.pid, panePid);
+  }
+
+  if (!event.tty || typeof event.tty !== "string") return false;
   const panePid = getPanePidsByTty().get(event.tty);
   if (!panePid) return false;
   return isPidBoundToPane(event.pid, event.tty, panePid);

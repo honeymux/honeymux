@@ -31,6 +31,7 @@ export function parseWireAgentEvent(input: unknown): AgentEvent | null {
     cwd,
     hookEvent: getOptionalStringField(event, "hookEvent"),
     notification: getOptionalStringField(event, "notification"),
+    paneId: getOptionalStringField(event, "paneId"),
     pid: getOptionalIntegerField(event, "pid"),
     prompt: getOptionalStringField(event, "prompt"),
     remoteHost: getOptionalStringField(event, "remoteHost"),

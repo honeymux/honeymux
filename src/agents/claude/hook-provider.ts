@@ -42,17 +42,25 @@ export class ClaudeHookProvider extends AgentProvider {
   }
 
   private async handleEvent(event: AgentEvent): Promise<void> {
-    // Resolve TTY to tmux pane (remote TTYs are on another machine)
-    if (event.tty && !event.isRemote) {
-      const mapping = await this.resolveTty(event.tty);
+    if (!event.isRemote) {
+      const mapping = event.paneId
+        ? await this.resolvePaneId(event.paneId)
+        : event.tty
+          ? await this.resolveTty(event.tty)
+          : undefined;
       if (mapping) {
         event.paneId = mapping.paneId;
         event.sessionName = mapping.sessionName;
+        event.tty = mapping.tty;
         event.windowId = mapping.windowId;
       }
     }
 
     this.emitAgentEvent(event);
+  }
+
+  private async resolvePaneId(paneId: string) {
+    return this.ttyResolver.resolvePaneId(paneId);
   }
 
   private async resolveTty(tty: string) {

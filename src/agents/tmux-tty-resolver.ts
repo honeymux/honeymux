@@ -17,11 +17,25 @@ const INVALIDATION_EVENTS = [
 
 export class TmuxTtyResolver {
   private cache = new Map<string, TmuxPaneTtyMapping>();
+  private cacheByPaneId = new Map<string, TmuxPaneTtyMapping>();
   private refreshPromise: Promise<void> | null = null;
   private stale = true;
   private started = false;
 
   constructor(private client: TmuxTtyResolverClient) {}
+
+  async resolvePaneId(paneId: string): Promise<TmuxPaneTtyMapping | undefined> {
+    const cached = this.cacheByPaneId.get(paneId);
+    if (cached && !this.stale) return cached;
+
+    try {
+      await this.refresh();
+    } catch {
+      // Keep the last successful snapshot as a fallback on transient tmux errors.
+    }
+
+    return this.cacheByPaneId.get(paneId);
+  }
 
   async resolveTty(tty: string): Promise<TmuxPaneTtyMapping | undefined> {
     const cached = this.cache.get(tty);
@@ -51,6 +65,7 @@ export class TmuxTtyResolver {
       this.client.off(event, this.handleInvalidation);
     }
     this.cache.clear();
+    this.cacheByPaneId.clear();
     this.refreshPromise = null;
     this.stale = true;
   }
@@ -65,11 +80,14 @@ export class TmuxTtyResolver {
 
     this.refreshPromise = (async () => {
       const mappings = await this.client.listPaneTtyMappings();
-      const next = new Map<string, TmuxPaneTtyMapping>();
+      const nextByPaneId = new Map<string, TmuxPaneTtyMapping>();
+      const nextByTty = new Map<string, TmuxPaneTtyMapping>();
       for (const mapping of mappings) {
-        next.set(mapping.tty, mapping);
+        nextByPaneId.set(mapping.paneId, mapping);
+        nextByTty.set(mapping.tty, mapping);
       }
-      this.cache = next;
+      this.cache = nextByTty;
+      this.cacheByPaneId = nextByPaneId;
       this.stale = false;
     })().finally(() => {
       this.refreshPromise = null;

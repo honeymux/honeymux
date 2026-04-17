@@ -1054,6 +1054,24 @@ export class TmuxControlClient extends EventEmitter {
   }
 }
 
+export function listPanePidsByIdSync(): Map<string, number> {
+  const { exitCode, stdout } = runStandaloneTmuxCommandSync(["list-panes", "-a", "-F", "#{pane_id}\t#{pane_pid}"]);
+  const next = new Map<string, number>();
+  if (exitCode !== 0) return next;
+
+  for (const line of stdout.split("\n")) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    const parts = trimmed.split("\t");
+    const paneId = parts[0];
+    const panePid = parseInt(parts[1] ?? "", 10);
+    if (paneId && Number.isInteger(panePid) && panePid > 1) {
+      next.set(paneId, panePid);
+    }
+  }
+  return next;
+}
+
 export function listPanePidsByTtySync(): Map<string, number> {
   const { exitCode, stdout } = runStandaloneTmuxCommandSync(["list-panes", "-a", "-F", "#{pane_tty}\t#{pane_pid}"]);
   const next = new Map<string, number>();

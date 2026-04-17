@@ -3,7 +3,7 @@ import { describe, expect, it } from "bun:test";
 import { parseWireAgentEvent } from "./wire-event.ts";
 
 describe("parseWireAgentEvent", () => {
-  it("normalizes waitingForInput and strips trust-boundary fields", () => {
+  it("normalizes waitingForInput and preserves paneId for validator checks", () => {
     const event = parseWireAgentEvent({
       agentType: "claude",
       cwd: "/tmp/project",
@@ -22,7 +22,7 @@ describe("parseWireAgentEvent", () => {
     expect(event).not.toBeNull();
     expect(event?.status).toBe("alive");
     expect(event?.isRemote).toBeUndefined();
-    expect(event?.paneId).toBeUndefined();
+    expect(event?.paneId).toBe("%9");
     expect(event?.sessionName).toBeUndefined();
     expect(event?.windowId).toBeUndefined();
   });

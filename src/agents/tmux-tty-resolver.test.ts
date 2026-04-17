@@ -40,6 +40,27 @@ describe("TmuxTtyResolver", () => {
     expect(client.listPaneTtyMappings).toHaveBeenCalledTimes(1);
   });
 
+  test("can resolve by pane id from the same cached snapshot", async () => {
+    const client = new FakeClient();
+    const resolver = new TmuxTtyResolver(client);
+    resolver.start();
+
+    await expect(resolver.resolvePaneId("%7")).resolves.toEqual({
+      paneId: "%7",
+      sessionName: "alpha",
+      tty: "/dev/pts/7",
+      windowId: "@3",
+    });
+    await expect(resolver.resolveTty("/dev/pts/7")).resolves.toEqual({
+      paneId: "%7",
+      sessionName: "alpha",
+      tty: "/dev/pts/7",
+      windowId: "@3",
+    });
+
+    expect(client.listPaneTtyMappings).toHaveBeenCalledTimes(1);
+  });
+
   test("refreshes after a tmux pane/layout invalidation event", async () => {
     const client = new FakeClient();
     const resolver = new TmuxTtyResolver(client);
