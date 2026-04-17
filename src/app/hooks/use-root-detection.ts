@@ -46,7 +46,7 @@ export function useRootDetection({ clientRef, connected, targetSession }: UseRoo
 
         const results = await Promise.all(
           panes.map(async (pane) => {
-            const isRoot = await isActivePaneRoot(pane.pid, pane.tty);
+            const isRoot = await isActivePaneRoot(pane.pid);
             return isRoot ? { height: pane.height, left: pane.left, top: pane.top, width: pane.width } : null;
           }),
         );
