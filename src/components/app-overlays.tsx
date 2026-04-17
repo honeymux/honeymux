@@ -126,6 +126,7 @@ export function AppOverlays({
     agentSessions,
     claudeDialogPending,
     codexDialogPending,
+    dialogHostId,
     dialogSelected,
     geminiDialogPending,
     openCodeDialogPending,
@@ -265,6 +266,7 @@ export function AppOverlays({
             <AgentInstallDialog
               agentName="Claude Code"
               docsUrl="https://code.claude.com/docs/en/hooks"
+              host={dialogHostId}
               noBackdrop={notificationsReviewOpen}
               onInstall={onClaudeInstall}
               onNever={onClaudeNever}
@@ -277,6 +279,7 @@ export function AppOverlays({
             <AgentInstallDialog
               agentName="OpenCode"
               docsUrl="https://opencode.ai/docs/plugins/"
+              host={dialogHostId}
               installLabel="plugin"
               noBackdrop={notificationsReviewOpen}
               onInstall={onOpenCodeInstall}
@@ -290,6 +293,7 @@ export function AppOverlays({
             <AgentInstallDialog
               agentName="Gemini CLI"
               docsUrl="https://geminicli.com/docs/hooks/"
+              host={dialogHostId}
               noBackdrop={notificationsReviewOpen}
               onInstall={onGeminiInstall}
               onNever={onGeminiNever}
@@ -302,6 +306,7 @@ export function AppOverlays({
             <AgentInstallDialog
               agentName="Codex CLI"
               docsUrl="https://developers.openai.com/codex/hooks"
+              host={dialogHostId}
               noBackdrop={notificationsReviewOpen}
               onInstall={onCodexInstall}
               onNever={onCodexNever}

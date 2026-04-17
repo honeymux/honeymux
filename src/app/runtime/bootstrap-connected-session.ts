@@ -136,22 +136,29 @@ export function bootstrapConnectedSession({
 
       // Register hook providers for agents with hooks already installed.
       // Detection of agents that need hooks is handled by useAgentBinaryDetection.
-      if (areClaudeHooksInstalled()) {
+      const [claudeInstalled, openCodeInstalled, geminiInstalled, codexInstalled] = await Promise.all([
+        areClaudeHooksInstalled(),
+        isOpenCodePluginInstalled(),
+        areGeminiHooksInstalled(),
+        areCodexHooksInstalled(),
+      ]);
+
+      if (claudeInstalled) {
         const hookProvider = new ClaudeHookProvider(client);
         registry.register(hookProvider);
       }
 
-      if (isOpenCodePluginInstalled()) {
+      if (openCodeInstalled) {
         const openCodeProvider = new OpenCodePluginProvider(client);
         registry.register(openCodeProvider);
       }
 
-      if (areGeminiHooksInstalled()) {
+      if (geminiInstalled) {
         const geminiProvider = new GeminiHookProvider(client);
         registry.register(geminiProvider);
       }
 
-      if (areCodexHooksInstalled()) {
+      if (codexInstalled) {
         const codexProvider = new CodexHookProvider(client);
         registry.register(codexProvider);
       }

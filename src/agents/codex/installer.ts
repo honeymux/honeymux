@@ -1,17 +1,14 @@
-import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
+import type { InstallHost } from "../install-host.ts";
+
 import { formatArgv } from "../../util/argv.ts";
+import { type HostConsent, readHostConsent, writeHostConsent } from "../consent-store.ts";
+import { localInstallHost } from "../install-host.ts";
 // Embed hook script at build time so it survives `bun build --compile`.
 import HOOK_CONTENT from "./hooks.py" with { type: "text" };
 
-const CODEX_DIR = `${process.env.HOME}/.codex`;
-const HOOKS_DIR = `${CODEX_DIR}/hooks`;
-const HOOKS_FILE = `${CODEX_DIR}/hooks.json`;
-const CONFIG_FILE = `${CODEX_DIR}/config.toml`;
 const HOOK_SCRIPT_NAME = "honeymux.py";
-const CONSENT_DIR = `${process.env.HOME}/.local/state/honeymux`;
-const CONSENT_FILE = `${CONSENT_DIR}/codex-hooks-consent.json`;
 
 type CodexSettings = {
   hooks?: {
@@ -30,12 +27,16 @@ type HookMatcherGroup = {
 
 type ResolveExecutable = (name: string) => null | string | undefined;
 
-export function areCodexHooksInstalled(): boolean {
-  const scriptPath = join(HOOKS_DIR, HOOK_SCRIPT_NAME);
-  if (!existsSync(scriptPath)) return false;
+// Consent lives on the local filesystem regardless of install target.
+const CONSENT_FILE = `${process.env.HOME}/.local/state/honeymux/codex-hooks-consent.json`;
+
+export async function areCodexHooksInstalled(host: InstallHost = localInstallHost): Promise<boolean> {
+  const scriptPath = join(await getHooksDir(host), HOOK_SCRIPT_NAME);
+  const script = await host.readFile(scriptPath);
+  if (script === null) return false;
 
   try {
-    return syncCodexHookInstall(scriptPath);
+    return await syncCodexHookInstall(host, scriptPath);
   } catch {
     return false;
   }
@@ -50,28 +51,23 @@ export function buildCodexHookCommand(
   return formatArgv([interpreter, scriptPath]);
 }
 
-export async function installCodexHooks(): Promise<boolean> {
+export async function installCodexHooks(host: InstallHost = localInstallHost): Promise<boolean> {
   try {
-    mkdirSync(HOOKS_DIR, { recursive: true });
+    const hooksDir = await getHooksDir(host);
+    await host.mkdir(hooksDir, { recursive: true });
 
-    const destPath = join(HOOKS_DIR, HOOK_SCRIPT_NAME);
-    if (!syncCodexHookInstall(destPath)) return false;
+    const destPath = join(hooksDir, HOOK_SCRIPT_NAME);
+    if (!(await syncCodexHookInstall(host, destPath))) return false;
 
-    await saveCodexConsent(true);
+    await saveCodexConsent(true, host.hostId);
     return true;
   } catch {
     return false;
   }
 }
 
-export function isCodexIgnored(): boolean {
-  try {
-    const content = readFileSync(CONSENT_FILE, "utf-8");
-    const data = JSON.parse(content);
-    return data.ignored === true;
-  } catch {
-    return false;
-  }
+export function isCodexIgnored(hostId: string = "local"): boolean {
+  return readHostConsent(CONSENT_FILE, hostId).ignored === true;
 }
 
 export function resolveCodexHookPython(
@@ -80,22 +76,14 @@ export function resolveCodexHookPython(
   return resolveExecutable("python3") ?? resolveExecutable("python") ?? null;
 }
 
-export async function saveCodexConsent(consented: boolean): Promise<void> {
-  try {
-    mkdirSync(CONSENT_DIR, { recursive: true });
-    await Bun.write(CONSENT_FILE, JSON.stringify({ consented, savedAt: Date.now() }));
-  } catch {
-    // best-effort
-  }
+export async function saveCodexConsent(consented: boolean, hostId: string = "local"): Promise<void> {
+  const consent: HostConsent = { consented, savedAt: Date.now() };
+  writeHostConsent(CONSENT_FILE, hostId, consent);
 }
 
-export async function saveCodexIgnored(): Promise<void> {
-  try {
-    mkdirSync(CONSENT_DIR, { recursive: true });
-    await Bun.write(CONSENT_FILE, JSON.stringify({ consented: false, ignored: true, savedAt: Date.now() }));
-  } catch {
-    // best-effort
-  }
+export async function saveCodexIgnored(hostId: string = "local"): Promise<void> {
+  const consent: HostConsent = { consented: false, ignored: true, savedAt: Date.now() };
+  writeHostConsent(CONSENT_FILE, hostId, consent);
 }
 
 export function upsertCodexHookSettings(settings: CodexSettings, command: string): CodexSettings {
@@ -119,6 +107,12 @@ export function upsertCodexHookSettings(settings: CodexSettings, command: string
   });
 
   return next;
+}
+
+async function buildHostResolver(host: InstallHost): Promise<ResolveExecutable> {
+  const python3 = await host.resolveExecutable("python3");
+  const python = await host.resolveExecutable("python");
+  return (name) => (name === "python3" ? python3 : name === "python" ? python : null);
 }
 
 function containsOurHook(obj: unknown): boolean {
@@ -166,38 +160,52 @@ function ensureCodexHooksFeature(configText: string): string {
   return `${lines.join("\n")}\n`;
 }
 
-function loadCodexSettings(): CodexSettings {
+async function getConfigFile(host: InstallHost): Promise<string> {
+  return `${await host.homeDir()}/.codex/config.toml`;
+}
+
+async function getHooksDir(host: InstallHost): Promise<string> {
+  return `${await host.homeDir()}/.codex/hooks`;
+}
+
+async function getHooksFile(host: InstallHost): Promise<string> {
+  return `${await host.homeDir()}/.codex/hooks.json`;
+}
+
+function safeParseJson(text: string): CodexSettings {
   try {
-    const content = readFileSync(HOOKS_FILE, "utf-8");
-    return JSON.parse(content);
+    return JSON.parse(text);
   } catch {
     return {};
   }
 }
 
-function syncCodexHookInstall(scriptPath: string): boolean {
-  const command = buildCodexHookCommand(scriptPath);
+async function syncCodexHookInstall(host: InstallHost, scriptPath: string): Promise<boolean> {
+  const resolver = await buildHostResolver(host);
+  const command = buildCodexHookCommand(scriptPath, resolver);
   if (!command) return false;
 
-  mkdirSync(HOOKS_DIR, { recursive: true });
+  await host.mkdir(await getHooksDir(host), { recursive: true });
 
-  const currentScript = existsSync(scriptPath) ? readFileSync(scriptPath, "utf-8") : null;
+  const currentScript = await host.readFile(scriptPath);
   if (currentScript !== HOOK_CONTENT) {
-    writeFileSync(scriptPath, HOOK_CONTENT);
-    chmodSync(scriptPath, 0o755);
+    await host.writeFile(scriptPath, HOOK_CONTENT, { mode: 0o755 });
   }
 
-  const currentHooksText = existsSync(HOOKS_FILE) ? readFileSync(HOOKS_FILE, "utf-8") : null;
-  const settings = upsertCodexHookSettings(loadCodexSettings(), command);
-  const nextHooksText = JSON.stringify(settings, null, 2);
+  const hooksFile = await getHooksFile(host);
+  const currentHooksText = await host.readFile(hooksFile);
+  const currentSettings: CodexSettings = currentHooksText ? safeParseJson(currentHooksText) : {};
+  const nextSettings = upsertCodexHookSettings(currentSettings, command);
+  const nextHooksText = JSON.stringify(nextSettings, null, 2);
   if (currentHooksText !== nextHooksText) {
-    writeFileSync(HOOKS_FILE, nextHooksText);
+    await host.writeFile(hooksFile, nextHooksText);
   }
 
-  const currentConfigText = existsSync(CONFIG_FILE) ? readFileSync(CONFIG_FILE, "utf-8") : "";
+  const configFile = await getConfigFile(host);
+  const currentConfigText = (await host.readFile(configFile)) ?? "";
   const nextConfigText = ensureCodexHooksFeature(currentConfigText);
   if (currentConfigText !== nextConfigText) {
-    writeFileSync(CONFIG_FILE, nextConfigText);
+    await host.writeFile(configFile, nextConfigText);
   }
 
   return true;

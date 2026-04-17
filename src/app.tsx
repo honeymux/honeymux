@@ -27,6 +27,7 @@ import { usePaneTabsIntegration } from "./app/hooks/use-pane-tabs-integration.ts
 import { usePromptClickState } from "./app/hooks/use-prompt-click-state.ts";
 import { usePtyLifecycle } from "./app/hooks/use-pty-lifecycle.ts";
 import { shouldMarkPermissionPromptAnswered, usePtyWritePipeline } from "./app/hooks/use-pty-write-pipeline.ts";
+import { useRemoteAgentBinaryDetection } from "./app/hooks/use-remote-agent-binary-detection.ts";
 import { useRemoteManager } from "./app/hooks/use-remote-manager.ts";
 import { useRootDetection } from "./app/hooks/use-root-detection.ts";
 import { isScrollbackTooTall, useScreenshotWorkflow } from "./app/hooks/use-screenshot-workflow.ts";
@@ -263,6 +264,15 @@ export function App({ sessionName }: AppProps) {
     connected,
     setClaudeDialogPending,
     setCodexDialogPending,
+    setGeminiDialogPending,
+    setOpenCodeDialogPending,
+  });
+  const remoteAgentDetection = useRemoteAgentBinaryDetection({
+    connected,
+    remoteManagerRef: appRuntimeRefs.remoteManagerRef,
+    setClaudeDialogPending,
+    setCodexDialogPending,
+    setDialogHostId: agentDialogState.setDialogHostId,
     setGeminiDialogPending,
     setOpenCodeDialogPending,
   });
@@ -520,6 +530,7 @@ export function App({ sessionName }: AppProps) {
     historyWorkflow,
     paneTabsApi,
     refs: appRuntimeRefs,
+    remoteAgentDetection,
     tmuxSessionState,
     uiActions: uiActionState,
   });

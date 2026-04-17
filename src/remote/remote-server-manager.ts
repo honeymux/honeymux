@@ -174,6 +174,21 @@ export class RemoteServerManager extends EventEmitter {
     this.emit("pane-converted", localPaneId, serverName);
   }
 
+  /** Return the RemoteControlClient for a given server if it is currently connected. */
+  getConnectedClient(serverName: string): RemoteControlClient | undefined {
+    const client = this.clients.get(serverName);
+    return client?.isConnected ? client : undefined;
+  }
+
+  /** Names of servers with an active SSH connection. */
+  getConnectedServerNames(): string[] {
+    const names: string[] = [];
+    for (const [name, client] of this.clients) {
+      if (client.isConnected) names.push(name);
+    }
+    return names;
+  }
+
   getRemoteConversionAvailability(localPaneId: string, serverName: string): "ready" | "unavailable" | "waiting" {
     const client = this.clients.get(serverName);
     const mirror = this.mirrors.get(serverName);

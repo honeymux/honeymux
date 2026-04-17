@@ -1,6 +1,43 @@
 import { describe, expect, it } from "bun:test";
 
-import { buildClaudeHookCommand, resolveClaudeHookPython, upsertClaudeHookSettings } from "./installer.ts";
+import type { InstallHost } from "../install-host.ts";
+
+import {
+  areClaudeHooksInstalled,
+  buildClaudeHookCommand,
+  installClaudeHooks,
+  resolveClaudeHookPython,
+  upsertClaudeHookSettings,
+} from "./installer.ts";
+
+function makeFakeHost(options: { hostId?: string } = {}): {
+  dirs: Set<string>;
+  files: Map<string, string>;
+  host: InstallHost;
+} {
+  const files = new Map<string, string>();
+  const dirs = new Set<string>();
+  const host: InstallHost = {
+    async homeDir() {
+      return "/home/test";
+    },
+    hostId: options.hostId ?? "test",
+    async mkdir(path) {
+      dirs.add(path);
+    },
+    async readFile(path) {
+      return files.has(path) ? files.get(path)! : null;
+    },
+    async resolveExecutable(name) {
+      if (name === "python3") return "/usr/bin/python3";
+      return null;
+    },
+    async writeFile(path, content) {
+      files.set(path, content);
+    },
+  };
+  return { dirs, files, host };
+}
 
 describe("resolveClaudeHookPython", () => {
   it("prefers python3 when available", () => {
@@ -25,6 +62,34 @@ describe("buildClaudeHookCommand", () => {
     expect(
       buildClaudeHookCommand("/Users/test user/.claude/hooks/honeymux.py", () => "/opt/homebrew/bin/python3"),
     ).toBe("/opt/homebrew/bin/python3 '/Users/test user/.claude/hooks/honeymux.py'");
+  });
+});
+
+describe("installClaudeHooks (via InstallHost)", () => {
+  it("writes the hook script and merges settings.json against the InstallHost", async () => {
+    const { files, host } = makeFakeHost();
+    const ok = await installClaudeHooks(host);
+    expect(ok).toBe(true);
+
+    const scriptPath = "/home/test/.claude/hooks/honeymux.py";
+    const settingsPath = "/home/test/.claude/settings.json";
+    expect(files.get(scriptPath)).toBeString();
+    const settings = JSON.parse(files.get(settingsPath)!);
+    expect(Array.isArray(settings.hooks.SessionStart)).toBe(true);
+    const sessionStartCommand = settings.hooks.SessionStart.at(-1).hooks[0].command as string;
+    expect(sessionStartCommand).toContain("/usr/bin/python3");
+    expect(sessionStartCommand).toContain(scriptPath);
+  });
+
+  it("reports not-installed when the script is missing", async () => {
+    const { host } = makeFakeHost();
+    expect(await areClaudeHooksInstalled(host)).toBe(false);
+  });
+
+  it("reports installed after installClaudeHooks runs", async () => {
+    const { host } = makeFakeHost();
+    await installClaudeHooks(host);
+    expect(await areClaudeHooksInstalled(host)).toBe(true);
   });
 });
 

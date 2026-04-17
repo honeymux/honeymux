@@ -17,6 +17,11 @@ import { areClaudeHooksInstalled, isClaudeIgnored } from "../../agents/claude/in
 import { areCodexHooksInstalled, isCodexIgnored } from "../../agents/codex/installer.ts";
 import { areGeminiHooksInstalled, isGeminiIgnored } from "../../agents/gemini/installer.ts";
 import { isOpenCodeIgnored, isOpenCodePluginInstalled } from "../../agents/opencode/installer.ts";
+
+const isInstalledClaude = () => areClaudeHooksInstalled();
+const isInstalledCodex = () => areCodexHooksInstalled();
+const isInstalledGemini = () => areGeminiHooksInstalled();
+const isInstalledOpenCode = () => isOpenCodePluginInstalled();
 import { type AgentType, detectRunningAgentTypes } from "./agent-binary-detection-core.ts";
 
 export type { AgentType } from "./agent-binary-detection-core.ts";
@@ -25,7 +30,7 @@ export interface AgentBinaryInfo {
   displayName: string;
   installLabel: "hooks" | "plugin";
   isIgnored: () => boolean;
-  isInstalled: () => boolean;
+  isInstalled: () => Promise<boolean>;
   type: AgentType;
 }
 
@@ -33,29 +38,29 @@ const AGENTS: AgentBinaryInfo[] = [
   {
     displayName: "Claude Code",
     installLabel: "hooks",
-    isIgnored: isClaudeIgnored,
-    isInstalled: areClaudeHooksInstalled,
+    isIgnored: () => isClaudeIgnored(),
+    isInstalled: isInstalledClaude,
     type: "claude",
   },
   {
     displayName: "OpenCode",
     installLabel: "plugin",
-    isIgnored: isOpenCodeIgnored,
-    isInstalled: isOpenCodePluginInstalled,
+    isIgnored: () => isOpenCodeIgnored(),
+    isInstalled: isInstalledOpenCode,
     type: "opencode",
   },
   {
     displayName: "Gemini CLI",
     installLabel: "hooks",
-    isIgnored: isGeminiIgnored,
-    isInstalled: areGeminiHooksInstalled,
+    isIgnored: () => isGeminiIgnored(),
+    isInstalled: isInstalledGemini,
     type: "gemini",
   },
   {
     displayName: "Codex CLI",
     installLabel: "hooks",
-    isIgnored: isCodexIgnored,
-    isInstalled: areCodexHooksInstalled,
+    isIgnored: () => isCodexIgnored(),
+    isInstalled: isInstalledCodex,
     type: "codex",
   },
 ];
@@ -151,8 +156,9 @@ export function useAgentBinaryDetection({
           const info = AGENTS.find((a) => a.type === agentType);
           if (!info) continue;
 
-          // Already installed or ignored → skip
-          if (info.isInstalled() || info.isIgnored()) continue;
+          if (info.isIgnored()) continue;
+          if (await info.isInstalled()) continue;
+          if (cancelled) return;
 
           // Already prompted this session → stays in deferred
           if (promptedRef.current.has(agentType)) continue;

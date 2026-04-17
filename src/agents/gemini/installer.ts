@@ -1,16 +1,14 @@
-import { chmodSync, existsSync, mkdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
+import type { InstallHost } from "../install-host.ts";
+
+import { formatArgv } from "../../util/argv.ts";
+import { type HostConsent, readHostConsent, writeHostConsent } from "../consent-store.ts";
+import { localInstallHost } from "../install-host.ts";
 // Embed hook script at build time so it survives `bun build --compile`.
 import HOOK_CONTENT from "./hooks.py" with { type: "text" };
 
-const GEMINI_DIR = `${process.env.HOME}/.gemini`;
-const HOOKS_DIR = `${GEMINI_DIR}/hooks`;
-const SETTINGS_FILE = `${GEMINI_DIR}/settings.json`;
 const HOOK_SCRIPT_NAME = "honeymux.py";
-const CONSENT_DIR = `${process.env.HOME}/.local/state/honeymux`;
-const CONSENT_FILE = `${CONSENT_DIR}/gemini-hooks-consent.json`;
-
 const HOOK_EVENTS = ["SessionStart", "BeforeAgent", "Notification", "SessionEnd"];
 
 type GeminiSettings = {
@@ -26,123 +24,141 @@ type HookMatcherGroup = {
   hooks: HookHandler[];
 };
 
-export function areGeminiHooksInstalled(): boolean {
-  // The script must actually exist on disk, not just be referenced in settings
-  const scriptPath = join(HOOKS_DIR, HOOK_SCRIPT_NAME);
-  if (!existsSync(scriptPath)) return false;
-  // Auto-update: sync hook script if bundled content differs from installed
+type ResolveExecutable = (name: string) => null | string | undefined;
+
+// Consent lives on the local filesystem regardless of install target.
+const CONSENT_FILE = `${process.env.HOME}/.local/state/honeymux/gemini-hooks-consent.json`;
+
+export async function areGeminiHooksInstalled(host: InstallHost = localInstallHost): Promise<boolean> {
+  const scriptPath = join(await getHooksDir(host), HOOK_SCRIPT_NAME);
+  const script = await host.readFile(scriptPath);
+  if (script === null) return false;
+
   try {
-    const dstContent = readFileSync(scriptPath, "utf-8");
-    if (dstContent !== HOOK_CONTENT) {
-      Bun.write(scriptPath, HOOK_CONTENT);
-      // Also ensure all hook events are registered (new events may have been added)
-      try {
-        const settingsContent = readFileSync(SETTINGS_FILE, "utf-8");
-        const settings = JSON.parse(settingsContent);
-        if (settings.hooks) {
-          let changed = false;
-          for (const event of HOOK_EVENTS) {
-            if (!Array.isArray(settings.hooks[event]) || !containsOurHook(settings.hooks[event])) {
-              if (!Array.isArray(settings.hooks[event])) settings.hooks[event] = [];
-              settings.hooks[event].push({ hooks: [{ command: `python3 ${scriptPath}`, type: "command" }] });
-              changed = true;
-            }
-          }
-          if (changed) Bun.write(SETTINGS_FILE, JSON.stringify(settings, null, 2));
-        }
-      } catch {
-        // best-effort settings sync
-      }
-    }
+    return await syncGeminiHookInstall(host, scriptPath);
   } catch {
-    // best-effort sync
+    return false;
   }
-  return true;
 }
 
-export async function installGeminiHooks(): Promise<boolean> {
+export function buildGeminiHookCommand(
+  scriptPath: string,
+  resolveExecutable: ResolveExecutable = (name) => Bun.which(name),
+): null | string {
+  const interpreter = resolveGeminiHookPython(resolveExecutable);
+  if (!interpreter) return null;
+  return formatArgv([interpreter, scriptPath]);
+}
+
+export async function installGeminiHooks(host: InstallHost = localInstallHost): Promise<boolean> {
   try {
-    // Ensure hooks directory exists
-    mkdirSync(HOOKS_DIR, { recursive: true });
+    const hooksDir = await getHooksDir(host);
+    await host.mkdir(hooksDir, { recursive: true });
 
-    // Copy hook script
-    const destPath = join(HOOKS_DIR, HOOK_SCRIPT_NAME);
-    await Bun.write(destPath, HOOK_CONTENT);
-    chmodSync(destPath, 0o755);
+    const destPath = join(hooksDir, HOOK_SCRIPT_NAME);
+    if (!(await syncGeminiHookInstall(host, destPath))) return false;
 
-    // Read existing settings
-    let settings: GeminiSettings = {};
-    try {
-      const content = await Bun.file(SETTINGS_FILE).text();
-      settings = JSON.parse(content);
-    } catch {
-      // no existing settings — start fresh
-    }
-
-    if (!settings.hooks) settings.hooks = {};
-
-    for (const event of HOOK_EVENTS) {
-      if (!Array.isArray(settings.hooks[event])) {
-        settings.hooks[event] = [];
-      }
-
-      // Remove any existing honeymux matcher groups
-      settings.hooks[event] = settings.hooks[event].filter((group: any) => !containsOurHook(group));
-
-      const hookHandler: HookHandler = {
-        command: `python3 ${destPath}`,
-        type: "command",
-      };
-
-      // Gemini hooks are all synchronous by default; no async field needed.
-      // But for non-blocking events we don't need the response, so they
-      // just exit quickly.
-
-      settings.hooks[event].push({
-        hooks: [hookHandler],
-      });
-    }
-
-    await Bun.write(SETTINGS_FILE, JSON.stringify(settings, null, 2));
-
-    await saveGeminiConsent(true);
+    await saveGeminiConsent(true, host.hostId);
     return true;
   } catch {
     return false;
   }
 }
 
-export function isGeminiIgnored(): boolean {
-  try {
-    const content = readFileSync(CONSENT_FILE, "utf-8");
-    const data = JSON.parse(content);
-    return data.ignored === true;
-  } catch {
-    return false;
-  }
+export function isGeminiIgnored(hostId: string = "local"): boolean {
+  return readHostConsent(CONSENT_FILE, hostId).ignored === true;
 }
 
-export async function saveGeminiConsent(consented: boolean): Promise<void> {
-  try {
-    mkdirSync(CONSENT_DIR, { recursive: true });
-    await Bun.write(CONSENT_FILE, JSON.stringify({ consented, savedAt: Date.now() }));
-  } catch {
-    // best-effort
-  }
+export function resolveGeminiHookPython(
+  resolveExecutable: ResolveExecutable = (name) => Bun.which(name),
+): null | string {
+  return resolveExecutable("python3") ?? resolveExecutable("python") ?? null;
 }
 
-export async function saveGeminiIgnored(): Promise<void> {
-  try {
-    mkdirSync(CONSENT_DIR, { recursive: true });
-    await Bun.write(CONSENT_FILE, JSON.stringify({ consented: false, ignored: true, savedAt: Date.now() }));
-  } catch {
-    // best-effort
-  }
+export async function saveGeminiConsent(consented: boolean, hostId: string = "local"): Promise<void> {
+  const consent: HostConsent = { consented, savedAt: Date.now() };
+  writeHostConsent(CONSENT_FILE, hostId, consent);
 }
 
-function containsOurHook(obj: any): boolean {
+export async function saveGeminiIgnored(hostId: string = "local"): Promise<void> {
+  const consent: HostConsent = { consented: false, ignored: true, savedAt: Date.now() };
+  writeHostConsent(CONSENT_FILE, hostId, consent);
+}
+
+export function upsertGeminiHookSettings(settings: GeminiSettings, command: string): GeminiSettings {
+  const next: GeminiSettings = {
+    ...settings,
+    hooks: { ...(settings.hooks ?? {}) },
+  };
+
+  for (const event of HOOK_EVENTS) {
+    const existing = Array.isArray(next.hooks?.[event]) ? next.hooks[event] : [];
+    const filtered = existing.filter((group: unknown) => !containsOurHook(group));
+    next.hooks![event] = [
+      ...filtered,
+      {
+        hooks: [
+          {
+            command,
+            type: "command",
+          },
+        ],
+      },
+    ];
+  }
+
+  return next;
+}
+
+async function buildHostResolver(host: InstallHost): Promise<ResolveExecutable> {
+  const python3 = await host.resolveExecutable("python3");
+  const python = await host.resolveExecutable("python");
+  return (name) => (name === "python3" ? python3 : name === "python" ? python : null);
+}
+
+function containsOurHook(obj: unknown): boolean {
   if (typeof obj === "string") return obj.includes(HOOK_SCRIPT_NAME);
   if (Array.isArray(obj)) return obj.some(containsOurHook);
   if (obj && typeof obj === "object") return Object.values(obj).some(containsOurHook);
   return false;
+}
+
+async function getHooksDir(host: InstallHost): Promise<string> {
+  return `${await host.homeDir()}/.gemini/hooks`;
+}
+
+async function getSettingsFile(host: InstallHost): Promise<string> {
+  return `${await host.homeDir()}/.gemini/settings.json`;
+}
+
+function safeParseJson(text: string): GeminiSettings {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return {};
+  }
+}
+
+async function syncGeminiHookInstall(host: InstallHost, scriptPath: string): Promise<boolean> {
+  const resolver = await buildHostResolver(host);
+  const command = buildGeminiHookCommand(scriptPath, resolver);
+  if (!command) return false;
+
+  await host.mkdir(await getHooksDir(host), { recursive: true });
+
+  const currentScript = await host.readFile(scriptPath);
+  if (currentScript !== HOOK_CONTENT) {
+    await host.writeFile(scriptPath, HOOK_CONTENT, { mode: 0o755 });
+  }
+
+  const settingsFile = await getSettingsFile(host);
+  const currentSettingsText = await host.readFile(settingsFile);
+  const currentSettings: GeminiSettings = currentSettingsText ? safeParseJson(currentSettingsText) : {};
+  const nextSettings = upsertGeminiHookSettings(currentSettings, command);
+  const nextSettingsText = JSON.stringify(nextSettings, null, 2);
+  if (currentSettingsText !== nextSettingsText) {
+    await host.writeFile(settingsFile, nextSettingsText);
+  }
+
+  return true;
 }

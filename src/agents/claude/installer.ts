@@ -1,18 +1,17 @@
-import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
+import type { InstallHost } from "../install-host.ts";
+
 import { formatArgv } from "../../util/argv.ts";
+import { type HostConsent, readHostConsent, writeHostConsent } from "../consent-store.ts";
+import { localInstallHost } from "../install-host.ts";
 // Embed hook script at build time so it survives `bun build --compile`.
 import HOOK_CONTENT from "./hooks.py" with { type: "text" };
 
-const CLAUDE_DIR = `${process.env.HOME}/.claude`;
-const HOOKS_DIR = `${CLAUDE_DIR}/hooks`;
-const SETTINGS_FILE = `${CLAUDE_DIR}/settings.json`;
 const HOOK_SCRIPT_NAME = "honeymux.py";
-const CONSENT_DIR = `${process.env.HOME}/.local/state/honeymux`;
-const CONSENT_FILE = `${CONSENT_DIR}/claude-hooks-consent.json`;
-
 const HOOK_EVENTS = ["SessionStart", "PermissionRequest", "SessionEnd"];
+// PermissionRequest is synchronous (script blocks for approval); all others async
+const SYNC_EVENTS = new Set(["PermissionRequest"]);
 
 type ClaudeSettings = {
   hooks?: Record<string, HookMatcherGroup[]>;
@@ -30,15 +29,16 @@ type HookMatcherGroup = {
 
 type ResolveExecutable = (name: string) => null | string | undefined;
 
-// PermissionRequest is synchronous (script blocks for approval); all others async
-const SYNC_EVENTS = new Set(["PermissionRequest"]);
+// Consent lives on the local filesystem regardless of install target.
+const CONSENT_FILE = `${process.env.HOME}/.local/state/honeymux/claude-hooks-consent.json`;
 
-export function areClaudeHooksInstalled(): boolean {
-  const scriptPath = join(HOOKS_DIR, HOOK_SCRIPT_NAME);
-  if (!existsSync(scriptPath)) return false;
+export async function areClaudeHooksInstalled(host: InstallHost = localInstallHost): Promise<boolean> {
+  const scriptPath = join(await getHooksDir(host), HOOK_SCRIPT_NAME);
+  const script = await host.readFile(scriptPath);
+  if (script === null) return false;
 
   try {
-    return syncClaudeHookInstall(scriptPath);
+    return await syncClaudeHookInstall(host, scriptPath);
   } catch {
     return false;
   }
@@ -53,28 +53,23 @@ export function buildClaudeHookCommand(
   return formatArgv([interpreter, scriptPath]);
 }
 
-export async function installClaudeHooks(): Promise<boolean> {
+export async function installClaudeHooks(host: InstallHost = localInstallHost): Promise<boolean> {
   try {
-    mkdirSync(HOOKS_DIR, { recursive: true });
+    const hooksDir = await getHooksDir(host);
+    await host.mkdir(hooksDir, { recursive: true });
 
-    const destPath = join(HOOKS_DIR, HOOK_SCRIPT_NAME);
-    if (!syncClaudeHookInstall(destPath)) return false;
+    const destPath = join(hooksDir, HOOK_SCRIPT_NAME);
+    if (!(await syncClaudeHookInstall(host, destPath))) return false;
 
-    await saveClaudeConsent(true);
+    await saveClaudeConsent(true, host.hostId);
     return true;
   } catch {
     return false;
   }
 }
 
-export function isClaudeIgnored(): boolean {
-  try {
-    const content = readFileSync(CONSENT_FILE, "utf-8");
-    const data = JSON.parse(content);
-    return data.ignored === true;
-  } catch {
-    return false;
-  }
+export function isClaudeIgnored(hostId: string = "local"): boolean {
+  return readHostConsent(CONSENT_FILE, hostId).ignored === true;
 }
 
 export function resolveClaudeHookPython(
@@ -83,22 +78,14 @@ export function resolveClaudeHookPython(
   return resolveExecutable("python3") ?? resolveExecutable("python") ?? null;
 }
 
-export async function saveClaudeConsent(consented: boolean): Promise<void> {
-  try {
-    mkdirSync(CONSENT_DIR, { recursive: true });
-    await Bun.write(CONSENT_FILE, JSON.stringify({ consented, savedAt: Date.now() }));
-  } catch {
-    // best-effort
-  }
+export async function saveClaudeConsent(consented: boolean, hostId: string = "local"): Promise<void> {
+  const consent: HostConsent = { consented, savedAt: Date.now() };
+  writeHostConsent(CONSENT_FILE, hostId, consent);
 }
 
-export async function saveClaudeIgnored(): Promise<void> {
-  try {
-    mkdirSync(CONSENT_DIR, { recursive: true });
-    await Bun.write(CONSENT_FILE, JSON.stringify({ consented: false, ignored: true, savedAt: Date.now() }));
-  } catch {
-    // best-effort
-  }
+export async function saveClaudeIgnored(hostId: string = "local"): Promise<void> {
+  const consent: HostConsent = { consented: false, ignored: true, savedAt: Date.now() };
+  writeHostConsent(CONSENT_FILE, hostId, consent);
 }
 
 export function upsertClaudeHookSettings(settings: ClaudeSettings, command: string): ClaudeSettings {
@@ -130,39 +117,54 @@ export function upsertClaudeHookSettings(settings: ClaudeSettings, command: stri
   return next;
 }
 
-function containsOurHook(obj: any): boolean {
+async function buildHostResolver(host: InstallHost): Promise<ResolveExecutable> {
+  const python3 = await host.resolveExecutable("python3");
+  const python = await host.resolveExecutable("python");
+  return (name) => (name === "python3" ? python3 : name === "python" ? python : null);
+}
+
+function containsOurHook(obj: unknown): boolean {
   if (typeof obj === "string") return obj.includes(HOOK_SCRIPT_NAME);
   if (Array.isArray(obj)) return obj.some(containsOurHook);
   if (obj && typeof obj === "object") return Object.values(obj).some(containsOurHook);
   return false;
 }
 
-function loadClaudeSettings(): ClaudeSettings {
+async function getHooksDir(host: InstallHost): Promise<string> {
+  return `${await host.homeDir()}/.claude/hooks`;
+}
+
+async function getSettingsFile(host: InstallHost): Promise<string> {
+  return `${await host.homeDir()}/.claude/settings.json`;
+}
+
+function safeParseJson(text: string): ClaudeSettings {
   try {
-    const content = readFileSync(SETTINGS_FILE, "utf-8");
-    return JSON.parse(content);
+    return JSON.parse(text);
   } catch {
     return {};
   }
 }
 
-function syncClaudeHookInstall(scriptPath: string): boolean {
-  const command = buildClaudeHookCommand(scriptPath);
+async function syncClaudeHookInstall(host: InstallHost, scriptPath: string): Promise<boolean> {
+  const resolver = await buildHostResolver(host);
+  const command = buildClaudeHookCommand(scriptPath, resolver);
   if (!command) return false;
 
-  mkdirSync(HOOKS_DIR, { recursive: true });
+  await host.mkdir(await getHooksDir(host), { recursive: true });
 
-  const currentScript = existsSync(scriptPath) ? readFileSync(scriptPath, "utf-8") : null;
+  const currentScript = await host.readFile(scriptPath);
   if (currentScript !== HOOK_CONTENT) {
-    writeFileSync(scriptPath, HOOK_CONTENT);
-    chmodSync(scriptPath, 0o755);
+    await host.writeFile(scriptPath, HOOK_CONTENT, { mode: 0o755 });
   }
 
-  const currentSettingsText = existsSync(SETTINGS_FILE) ? readFileSync(SETTINGS_FILE, "utf-8") : null;
-  const settings = upsertClaudeHookSettings(loadClaudeSettings(), command);
-  const nextSettingsText = JSON.stringify(settings, null, 2);
+  const settingsFile = await getSettingsFile(host);
+  const currentSettingsText = await host.readFile(settingsFile);
+  const currentSettings: ClaudeSettings = currentSettingsText ? safeParseJson(currentSettingsText) : {};
+  const nextSettings = upsertClaudeHookSettings(currentSettings, command);
+  const nextSettingsText = JSON.stringify(nextSettings, null, 2);
   if (currentSettingsText !== nextSettingsText) {
-    writeFileSync(SETTINGS_FILE, nextSettingsText);
+    await host.writeFile(settingsFile, nextSettingsText);
   }
 
   return true;

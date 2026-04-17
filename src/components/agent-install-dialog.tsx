@@ -5,6 +5,8 @@ import { theme } from "../themes/theme.ts";
 interface AgentInstallDialogProps {
   agentName: string;
   docsUrl: string;
+  /** When set, labels the dialog as targeting a remote host (e.g. an SSH server name). */
+  host?: string;
   installLabel?: "hooks" | "plugin";
   noBackdrop?: boolean;
   onInstall: () => void;
@@ -16,6 +18,7 @@ interface AgentInstallDialogProps {
 export function AgentInstallDialog({
   agentName,
   docsUrl,
+  host,
   installLabel = "hooks",
   noBackdrop = false,
   onInstall,
@@ -26,7 +29,7 @@ export function AgentInstallDialog({
   const name = agentName;
   const hasNever = !!onNever;
   const boxWidth = hasNever ? 58 : 52;
-  const boxHeight = 12;
+  const boxHeight = host ? 13 : 12;
 
   return (
     <>
@@ -65,8 +68,15 @@ export function AgentInstallDialog({
         <text content="" />
         <text content="ʕ·ᴥ·ʔ" fg={theme.statusWarning} />
         <text content="" />
-        <text content={`${name} detected.`} fg={theme.text} />
-        <text content={`Install ${installLabel} for real-time monitoring?`} fg={theme.text} />
+        <text content={host ? `${name} detected on ${host}.` : `${name} detected.`} fg={theme.text} />
+        <text
+          content={
+            host
+              ? `Install ${installLabel} on ${host} for real-time monitoring?`
+              : `Install ${installLabel} for real-time monitoring?`
+          }
+          fg={theme.text}
+        />
         <text content="" />
         <text content={docsUrl} fg={theme.textDim} />
         <text content="" />

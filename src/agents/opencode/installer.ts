@@ -1,70 +1,64 @@
-import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
+import type { InstallHost } from "../install-host.ts";
+
+import { type HostConsent, readHostConsent, writeHostConsent } from "../consent-store.ts";
+import { localInstallHost } from "../install-host.ts";
 // Embed plugin script at build time so it survives `bun build --compile`.
 import PLUGIN_CONTENT from "./plugin.source" with { type: "text" };
 
-const OPENCODE_CONFIG_DIR = `${process.env.HOME}/.config/opencode`;
-const OPENCODE_PLUGINS_DIR = `${OPENCODE_CONFIG_DIR}/plugins`;
 const PLUGIN_SCRIPT_NAME = "honeymux.ts";
-const CONSENT_DIR = `${process.env.HOME}/.local/state/honeymux`;
-const CONSENT_FILE = `${CONSENT_DIR}/opencode-plugin-consent.json`;
 
-export async function installOpenCodePlugin(): Promise<boolean> {
+// Consent lives on the local filesystem regardless of install target.
+const CONSENT_FILE = `${process.env.HOME}/.local/state/honeymux/opencode-plugin-consent.json`;
+
+export async function installOpenCodePlugin(host: InstallHost = localInstallHost): Promise<boolean> {
   try {
-    // Ensure plugins directory exists
-    mkdirSync(OPENCODE_PLUGINS_DIR, { recursive: true });
+    const pluginsDir = await getPluginsDir(host);
+    await host.mkdir(pluginsDir, { recursive: true });
 
-    // Copy plugin script
-    const destPath = join(OPENCODE_PLUGINS_DIR, PLUGIN_SCRIPT_NAME);
-    await Bun.write(destPath, PLUGIN_CONTENT);
+    const destPath = join(pluginsDir, PLUGIN_SCRIPT_NAME);
+    const current = await host.readFile(destPath);
+    if (current !== PLUGIN_CONTENT) {
+      await host.writeFile(destPath, PLUGIN_CONTENT);
+    }
 
-    await saveOpenCodeConsent(true);
+    await saveOpenCodeConsent(true, host.hostId);
     return true;
   } catch {
     return false;
   }
 }
 
-export function isOpenCodeIgnored(): boolean {
-  try {
-    const content = readFileSync(CONSENT_FILE, "utf-8");
-    const data = JSON.parse(content);
-    return data.ignored === true;
-  } catch {
-    return false;
-  }
+export function isOpenCodeIgnored(hostId: string = "local"): boolean {
+  return readHostConsent(CONSENT_FILE, hostId).ignored === true;
 }
 
-export function isOpenCodePluginInstalled(): boolean {
-  const destPath = join(OPENCODE_PLUGINS_DIR, PLUGIN_SCRIPT_NAME);
-  if (!existsSync(destPath)) return false;
+export async function isOpenCodePluginInstalled(host: InstallHost = localInstallHost): Promise<boolean> {
+  const destPath = join(await getPluginsDir(host), PLUGIN_SCRIPT_NAME);
+  const current = await host.readFile(destPath);
+  if (current === null) return false;
   // Auto-update: sync plugin content if bundled version differs from installed
-  try {
-    const dstContent = readFileSync(destPath, "utf-8");
-    if (dstContent !== PLUGIN_CONTENT) {
-      Bun.write(destPath, PLUGIN_CONTENT);
+  if (current !== PLUGIN_CONTENT) {
+    try {
+      await host.writeFile(destPath, PLUGIN_CONTENT);
+    } catch {
+      // best-effort sync
     }
-  } catch {
-    // best-effort sync
   }
   return true;
 }
 
-export async function saveOpenCodeConsent(consented: boolean): Promise<void> {
-  try {
-    mkdirSync(CONSENT_DIR, { recursive: true });
-    await Bun.write(CONSENT_FILE, JSON.stringify({ consented, savedAt: Date.now() }));
-  } catch {
-    // best-effort
-  }
+export async function saveOpenCodeConsent(consented: boolean, hostId: string = "local"): Promise<void> {
+  const consent: HostConsent = { consented, savedAt: Date.now() };
+  writeHostConsent(CONSENT_FILE, hostId, consent);
 }
 
-export async function saveOpenCodeIgnored(): Promise<void> {
-  try {
-    mkdirSync(CONSENT_DIR, { recursive: true });
-    await Bun.write(CONSENT_FILE, JSON.stringify({ consented: false, ignored: true, savedAt: Date.now() }));
-  } catch {
-    // best-effort
-  }
+export async function saveOpenCodeIgnored(hostId: string = "local"): Promise<void> {
+  const consent: HostConsent = { consented: false, ignored: true, savedAt: Date.now() };
+  writeHostConsent(CONSENT_FILE, hostId, consent);
+}
+
+async function getPluginsDir(host: InstallHost): Promise<string> {
+  return `${await host.homeDir()}/.config/opencode/plugins`;
 }

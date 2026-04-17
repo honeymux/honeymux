@@ -172,8 +172,11 @@ export class RemoteControlClient extends EventEmitter {
     this.parser?.parseLine(line);
   }
 
-  async runRemoteShellCommand(argv: string[]): Promise<{ exitCode: number; stderr: string; stdout: string }> {
-    return this.runRemoteProcess(buildRemoteShellCommand(argv));
+  async runRemoteShellCommand(
+    argv: string[],
+    options: { stdin?: string } = {},
+  ): Promise<{ exitCode: number; stderr: string; stdout: string }> {
+    return this.runRemoteProcess(buildRemoteShellCommand(argv), options);
   }
 
   /** Send a tmux command and await the response. */
@@ -336,12 +339,25 @@ export class RemoteControlClient extends EventEmitter {
     return `hmx-remote-hook-${digest}.sock`;
   }
 
-  private async runRemoteProcess(remoteCommand: string): Promise<{ exitCode: number; stderr: string; stdout: string }> {
+  private async runRemoteProcess(
+    remoteCommand: string,
+    options: { stdin?: string } = {},
+  ): Promise<{ exitCode: number; stderr: string; stdout: string }> {
+    const hasStdin = options.stdin !== undefined;
     const proc = Bun.spawn(["ssh", ...this.buildSshArgs(), remoteCommand], {
       env: cleanEnv(),
       stderr: "pipe",
+      stdin: hasStdin ? "pipe" : "ignore",
       stdout: "pipe",
     });
+    if (hasStdin && proc.stdin) {
+      const writer = proc.stdin as unknown as { end(): void; write(data: string): void };
+      try {
+        writer.write(options.stdin!);
+      } finally {
+        writer.end();
+      }
+    }
     const [stdout, stderr, exitCode] = await Promise.all([
       new Response(proc.stdout).text(),
       new Response(proc.stderr).text(),

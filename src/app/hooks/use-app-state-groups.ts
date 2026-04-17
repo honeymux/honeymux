@@ -16,6 +16,8 @@ export interface AgentDialogState {
   agentsDialogOpenRef: MutableRefObject<boolean>;
   claudeDialogPending: boolean;
   codexDialogPending: boolean;
+  /** Remote server name when the current agent-install dialog targets a remote host; undefined = local. */
+  dialogHostId: string | undefined;
   dialogSelected: "install" | "never" | "skip";
   geminiDialogPending: boolean;
   hookSnifferEvents: HookSnifferEntry[];
@@ -28,6 +30,7 @@ export interface AgentDialogState {
   setAgentsDialogOpen: Dispatch<SetStateAction<boolean>>;
   setClaudeDialogPending: Dispatch<SetStateAction<boolean>>;
   setCodexDialogPending: Dispatch<SetStateAction<boolean>>;
+  setDialogHostId: Dispatch<SetStateAction<string | undefined>>;
   setDialogSelected: Dispatch<SetStateAction<"install" | "never" | "skip">>;
   setGeminiDialogPending: Dispatch<SetStateAction<boolean>>;
   setHookSnifferEvents: Dispatch<SetStateAction<HookSnifferEntry[]>>;
@@ -110,6 +113,7 @@ export function useAgentDialogState(): AgentDialogState {
   const [geminiDialogPending, setGeminiDialogPending] = useState(false);
   const [codexDialogPending, setCodexDialogPending] = useState(false);
   const [dialogSelected, setDialogSelected] = useState<"install" | "never" | "skip">("install");
+  const [dialogHostId, setDialogHostId] = useState<string | undefined>(undefined);
   const overlayOpenRef = useRef(false);
   const [quickTerminalOpen, setQuickTerminalOpen] = useState(false);
   // NOTE: quickTerminalOpenRef is managed exclusively by the open/close handlers
@@ -124,6 +128,7 @@ export function useAgentDialogState(): AgentDialogState {
     agentsDialogOpenRef,
     claudeDialogPending,
     codexDialogPending,
+    dialogHostId,
     dialogSelected,
     geminiDialogPending,
     hookSnifferEvents,
@@ -136,6 +141,7 @@ export function useAgentDialogState(): AgentDialogState {
     setAgentsDialogOpen,
     setClaudeDialogPending,
     setCodexDialogPending,
+    setDialogHostId,
     setDialogSelected,
     setGeminiDialogPending,
     setHookSnifferEvents,
