@@ -10,6 +10,7 @@ import type { KeyAction } from "../../util/keybindings.ts";
 import type { PaneTabDragFloatState } from "../pane-tabs/interactions.ts";
 import type { AppRuntimeRefs } from "./use-app-runtime-refs.ts";
 import type { DimPaneRect } from "./use-dim-inactive-panes.ts";
+import type { RecoveringPaneRect } from "./use-recovering-pane-rects.ts";
 import type { RootPaneRect } from "./use-root-detection.ts";
 
 import { MainRootOverlays } from "../../components/main-root-overlays.tsx";
@@ -70,6 +71,7 @@ interface UseAppOverlayModelOptions {
   optionsDialogTab: Parameters<typeof isQuickTerminalSizePreviewFocused>[1];
   paneTabDragFloat: PaneTabDragFloatState | null;
   privilegedPaneDetectionEnabled: boolean;
+  recoveringPaneRects: RecoveringPaneRect[];
   refs: Pick<AppRuntimeRefs, "terminalRef">;
   rootPanes: RootPaneRect[];
   sidebarOpen: boolean;
@@ -148,6 +150,7 @@ export function useAppOverlayModel({
   optionsDialogTab,
   paneTabDragFloat,
   privilegedPaneDetectionEnabled,
+  recoveringPaneRects,
   refs,
   rootPanes,
   sidebarOpen,
@@ -202,6 +205,7 @@ export function useAppOverlayModel({
         paneTabDragFloat={paneTabDragFloat}
         privilegedPaneDetectionEnabled={privilegedPaneDetectionEnabled}
         privilegedPaneDetectionOpacity={config.privilegedPaneDetectionOpacity ?? 15}
+        recoveringPaneRects={recoveringPaneRects}
         rootPanes={rootPanes}
         showWatermark={watermarkState.showInRootOverlay}
         sidebarOpen={sidebarOpen}

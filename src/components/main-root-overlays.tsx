@@ -1,4 +1,5 @@
 import type { DimPaneRect } from "../app/hooks/use-dim-inactive-panes.ts";
+import type { RecoveringPaneRect } from "../app/hooks/use-recovering-pane-rects.ts";
 import type { RootPaneRect } from "../app/hooks/use-root-detection.ts";
 import type { PaneTabDragFloatState } from "../app/pane-tabs/interactions.ts";
 import type { UIMode, WatermarkShape } from "../util/config.ts";
@@ -6,6 +7,7 @@ import type { UIMode, WatermarkShape } from "../util/config.ts";
 import { theme } from "../themes/theme.ts";
 import { stringWidth, stripNonPrintingControlChars } from "../util/text.ts";
 import { DimInactivePanesOverlay } from "./dim-inactive-panes-overlay.tsx";
+import { RecoveringPanesOverlay } from "./recovering-panes-overlay.tsx";
 import { RootWarningOverlay } from "./root-warning-overlay.tsx";
 import { WatermarkOverlay } from "./watermark-overlay.tsx";
 
@@ -18,6 +20,7 @@ interface MainRootOverlaysProps {
   paneTabDragFloat: PaneTabDragFloatState | null;
   privilegedPaneDetectionEnabled: boolean;
   privilegedPaneDetectionOpacity: number;
+  recoveringPaneRects: RecoveringPaneRect[];
   rootPanes: RootPaneRect[];
   showWatermark: boolean;
   sidebarOpen: boolean;
@@ -47,6 +50,7 @@ export function MainRootOverlays({
   paneTabDragFloat,
   privilegedPaneDetectionEnabled,
   privilegedPaneDetectionOpacity,
+  recoveringPaneRects,
   rootPanes,
   showWatermark,
   sidebarOpen,
@@ -85,6 +89,14 @@ export function MainRootOverlays({
           contentCols={termCols}
           opacity={privilegedPaneDetectionOpacity}
           rootPanes={rootPanes}
+          sidebarOffset={sidebarOffset}
+          uiMode={uiMode}
+        />
+      )}
+      {recoveringPaneRects.length > 0 && (
+        <RecoveringPanesOverlay
+          contentCols={termCols}
+          recoveringPanes={recoveringPaneRects}
           sidebarOffset={sidebarOffset}
           uiMode={uiMode}
         />

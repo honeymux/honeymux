@@ -27,6 +27,7 @@ import { usePaneTabsIntegration } from "./app/hooks/use-pane-tabs-integration.ts
 import { usePromptClickState } from "./app/hooks/use-prompt-click-state.ts";
 import { usePtyLifecycle } from "./app/hooks/use-pty-lifecycle.ts";
 import { shouldMarkPermissionPromptAnswered, usePtyWritePipeline } from "./app/hooks/use-pty-write-pipeline.ts";
+import { useRecoveringPaneRects } from "./app/hooks/use-recovering-pane-rects.ts";
 import { useRemoteAgentBinaryDetection } from "./app/hooks/use-remote-agent-binary-detection.ts";
 import { useRemoteManager } from "./app/hooks/use-remote-manager.ts";
 import { useRootDetection } from "./app/hooks/use-root-detection.ts";
@@ -589,6 +590,13 @@ export function App({ sessionName }: AppProps) {
     refs: appRuntimeRefs,
     remoteConfigs: config.remote,
   });
+  const recoveringPaneRects = useRecoveringPaneRects({
+    clientRef,
+    connected,
+    remoteManagerRef,
+    remoteManagerVersion,
+    targetSession: currentSessionName,
+  });
   const paneBorderRemoteServers = useMemo(() => {
     return (
       config.remote?.map((server) => ({
@@ -770,6 +778,7 @@ export function App({ sessionName }: AppProps) {
     optionsDialogTab,
     paneTabDragFloat: paneTabsApi.paneTabDragFloat,
     privilegedPaneDetectionEnabled: configPrivilegedPaneDetection !== false,
+    recoveringPaneRects,
     refs: appRuntimeRefs,
     rootPanes,
     sidebarOpen,
