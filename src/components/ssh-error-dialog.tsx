@@ -45,6 +45,7 @@ export function SshErrorDialog({ error, errorAt, noBackdrop = false, onDismiss, 
         borderStyle="rounded"
         flexDirection="column"
         height={boxHeight}
+        id="honeyshots:ssh-error-dialog"
         justifyContent="center"
         left="50%"
         marginLeft={-Math.floor(boxWidth / 2)}

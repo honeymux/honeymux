@@ -38,6 +38,7 @@ export function InfoItemDialog({ message, noBackdrop = false, onDismiss }: InfoI
         borderStyle="rounded"
         flexDirection="column"
         height={boxHeight}
+        id="honeyshots:info-item-dialog"
         justifyContent="center"
         left="50%"
         marginLeft={-Math.floor(boxWidth / 2)}

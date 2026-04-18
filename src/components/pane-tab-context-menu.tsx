@@ -171,6 +171,7 @@ export function PaneTabContextMenu({
   return (
     <DropdownFrame
       height={menuItems.length + 2}
+      id="honeyshots:pane-tab-context-menu"
       left={menuLeft}
       onClickOutside={close}
       top={menuTop}

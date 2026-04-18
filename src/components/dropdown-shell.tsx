@@ -27,6 +27,7 @@ export function DropdownFrame({
   backgroundColor = theme.bgSurface,
   children,
   height,
+  id,
   left,
   onClickOutside,
   opaqueTopRow = false,
@@ -38,6 +39,7 @@ export function DropdownFrame({
   backgroundColor?: string;
   children: React.ReactNode;
   height: number;
+  id?: string;
   left?: number;
   onClickOutside: () => void;
   opaqueTopRow?: boolean;
@@ -58,6 +60,7 @@ export function DropdownFrame({
         borderStyle="rounded"
         flexDirection="column"
         height={height}
+        id={id}
         left={left}
         position="absolute"
         right={resolvedRight}

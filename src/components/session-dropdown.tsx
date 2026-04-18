@@ -357,7 +357,12 @@ export function SessionDropdown({
   const dropdownHeight = sortedSessions.length + separatorRow + newSessionRow + 2;
 
   return (
-    <DropdownFrame height={dropdownHeight} onClickOutside={onClose} width={dropdownWidth}>
+    <DropdownFrame
+      height={dropdownHeight}
+      id="honeyshots:session-dropdown"
+      onClickOutside={onClose}
+      width={dropdownWidth}
+    >
       {sortedSessions.map((session, i) => {
         const isActive = session.name === currentSession;
         const isFocused = i === focusedIndex;

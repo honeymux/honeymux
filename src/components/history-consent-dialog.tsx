@@ -37,6 +37,7 @@ export function HistoryConsentDialog({ onAllow, onDeny, selected = "allow" }: Hi
         borderStyle="rounded"
         flexDirection="column"
         height={boxHeight}
+        id="honeyshots:history-consent-dialog"
         justifyContent="center"
         left="50%"
         marginLeft={-Math.floor(boxWidth / 2)}

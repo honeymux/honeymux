@@ -92,6 +92,15 @@ export function MuxotronCollapsedView({
 
   return (
     <>
+      <box
+        height={3}
+        id="honeyshots:muxotron"
+        left={il}
+        position="absolute"
+        selectable={false}
+        top={0}
+        width={inner + 2}
+      />
       <text content={topLineStr} fg={borderColor} left={il} position="absolute" selectable={false} top={0} />
       {topTextOverlays.map((overlay, idx) => (
         <text

@@ -283,7 +283,7 @@ export function ColorPicker({
   const schemeBg = schemeFocused ? theme.bgFocused : theme.bgSurface;
 
   return (
-    <DropdownFrame height={dropdownHeight} onClickOutside={onClose} width={effectiveWidth}>
+    <DropdownFrame height={dropdownHeight} id="honeyshots:color-picker" onClickOutside={onClose} width={effectiveWidth}>
       {/* Scheme selector */}
       <box flexDirection="row" height={1} width={itemWidth}>
         <text bg={theme.bgSurface} content=" " selectable={false} />

@@ -307,7 +307,12 @@ export function ProfileDropdown({
   const dropdownHeight = profileRows + separatorRow + saveRow + 2; // +2 for borders
 
   return (
-    <DropdownFrame height={dropdownHeight} onClickOutside={onClose} width={dropdownWidth}>
+    <DropdownFrame
+      height={dropdownHeight}
+      id="honeyshots:profile-dropdown"
+      onClickOutside={onClose}
+      width={dropdownWidth}
+    >
       {profiles.length === 0 ? (
         <text
           bg={focusedIndex === 0 ? theme.bgFocused : theme.bgSurface}

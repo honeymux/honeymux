@@ -80,6 +80,7 @@ export function MuxotronExpandedView({
   return (
     <box
       height={totalHeight}
+      id="honeyshots:muxotron-expanded"
       left={expandedIl}
       onMouseScroll={onMouseScroll}
       position="absolute"

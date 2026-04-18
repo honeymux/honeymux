@@ -78,6 +78,7 @@ export function PaneTabOverflowDropdown({ dropdownInputRef, paneTabsApi, width }
   return (
     <DropdownFrame
       height={Math.min(overflowTabs.length, 20) + 2}
+      id="honeyshots:pane-tab-overflow"
       left={menuLeft}
       onClickOutside={closePaneTabOverflow}
       top={menuTop}

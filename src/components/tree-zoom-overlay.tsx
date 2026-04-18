@@ -110,6 +110,7 @@ export function TreeZoomOverlay({
       <box
         flexDirection="column"
         height={contentHeight}
+        id="honeyshots:tree-zoom"
         left={0}
         position="absolute"
         top={topOffset}

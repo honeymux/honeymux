@@ -248,6 +248,7 @@ function MainMenu({
     <DropdownFrame
       backgroundColor={theme.bgChrome}
       height={items.length + 2}
+      id="honeyshots:pane-border-menu"
       left={Math.max(0, menu.screenX - dropdownWidth)}
       onClickOutside={onClose}
       top={menu.screenY}
@@ -311,6 +312,7 @@ function ServerSelectMenu({ dropdownInputRef, menu, onBack, onClose, onSelect, s
     <DropdownFrame
       backgroundColor={theme.bgChrome}
       height={items.length + 2}
+      id="honeyshots:pane-border-server-menu"
       left={Math.max(0, menu.screenX - dropdownWidth)}
       onClickOutside={onClose}
       top={menu.screenY}

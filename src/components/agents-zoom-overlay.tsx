@@ -56,6 +56,7 @@ export function AgentsZoomOverlay({
       <box
         flexDirection="column"
         height={contentHeight}
+        id="honeyshots:agents-zoom"
         left={0}
         position="absolute"
         top={topOffset}

@@ -53,6 +53,7 @@ export function DisablePaneTabsDialog({
         borderStyle="rounded"
         flexDirection="column"
         height={boxHeight}
+        id="honeyshots:disable-pane-tabs-dialog"
         justifyContent="center"
         left="50%"
         marginLeft={-Math.floor(boxWidth / 2)}

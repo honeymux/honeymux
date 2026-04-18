@@ -88,6 +88,7 @@ export function NotificationsReviewFrame({
       {/* Border frame */}
       <box
         height={borderHeight}
+        id="honeyshots:notifications-review"
         left="50%"
         marginLeft={centerLeft + perimX}
         marginTop={centerTop + perimY}
