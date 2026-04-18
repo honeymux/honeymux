@@ -166,6 +166,7 @@ export function AgentsDialog({
         borderStyle="rounded"
         flexDirection="column"
         height={dialogHeight}
+        id="honeyshots:agents"
         left={dialogLeft}
         position="absolute"
         selectable={false}

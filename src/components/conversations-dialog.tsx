@@ -335,6 +335,7 @@ export function ConversationsDialog({
         borderStyle="rounded"
         flexDirection="column"
         height={dialogHeight}
+        id="honeyshots:conversations"
         left={dialogLeft}
         onMouse={(event: MouseEvent) => {
           if (!event.scroll || results.length === 0) return;

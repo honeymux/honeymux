@@ -407,6 +407,7 @@ export function OptionsDialog({ chrome, workflow }: OptionsDialogProps) {
         borderStyle="rounded"
         flexDirection="column"
         height={boxHeight}
+        id="honeyshots:options"
         justifyContent="center"
         left={Math.floor((termWidth - dialogWidth) / 2)}
         position="absolute"

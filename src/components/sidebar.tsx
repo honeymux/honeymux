@@ -190,6 +190,7 @@ export function SideBar({
         backgroundColor={theme.bgChrome}
         flexDirection="column"
         height={sidebarHeight}
+        id="honeyshots:sidebar"
         left={0}
         position="absolute"
         top={topOffset}

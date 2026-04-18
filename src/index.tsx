@@ -1,6 +1,7 @@
 #!/usr/bin/env bun
 import { createCliRenderer } from "@opentui/core";
 import { createRoot } from "@opentui/react";
+import { installAdapter as installHoneyshotsAdapter } from "honeyshots/opentui";
 import { readSync, writeSync } from "node:fs";
 
 // Embed version at build time so it survives `bun build --compile`.
@@ -395,6 +396,8 @@ process.on("uncaughtException", (error) => {
 process.on("unhandledRejection", (reason) => {
   void handleFatalError("unhandled rejection", reason);
 });
+
+installHoneyshotsAdapter(renderer);
 
 const root = createRoot(renderer);
 root.render(<App sessionName={sessionName} />);

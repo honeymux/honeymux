@@ -388,7 +388,14 @@ export function TabBar({
 
   return (
     <>
-      <box flexDirection="column" height={3} onMouseDown={handleTabMouseDown} selectable={false} width="100%">
+      <box
+        flexDirection="column"
+        height={3}
+        id="honeyshots:tab-bar"
+        onMouseDown={handleTabMouseDown}
+        selectable={false}
+        width="100%"
+      >
         <text content={top} fg={fg} selectable={false} />
         {midSegments ? (
           <box flexDirection="row" height={1} selectable={false} width="100%">

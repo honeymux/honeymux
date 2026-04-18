@@ -747,6 +747,7 @@ export function MainMenuDialog({
         borderStyle="rounded"
         flexDirection="column"
         height={DIALOG_HEIGHT}
+        id="honeyshots:main-menu"
         left={dialogLeft}
         position="absolute"
         top={dialogTopScreen}

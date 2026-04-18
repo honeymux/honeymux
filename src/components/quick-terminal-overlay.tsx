@@ -370,6 +370,7 @@ export function QuickTerminalOverlay({
         borderStyle="rounded"
         flexDirection="column"
         height={overlayHeight}
+        id="honeyshots:quick-terminal"
         left={overlayLeft}
         position="absolute"
         top={overlayTop}

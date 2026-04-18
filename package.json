@@ -5,6 +5,7 @@
   "scripts": {
     "build": "bun build --compile --target bun src/index.tsx --outfile dist/hmx",
     "dev": "bun --watch run src/index.tsx",
+    "docs:screenshots": "bun run scripts/docs-screenshots.ts",
     "format": "prettier --write src/",
     "format:check": "prettier --check src/",
     "lint": "eslint .",
@@ -32,6 +33,7 @@
     "@opentui/core": "0.1.97",
     "@opentui/react": "0.1.97",
     "ghostty-opentui": "1.4.10",
+    "honeyshots": "file:../honeyshots",
     "react": "^19.2.4",
     "wcwidth": "^1.0.1"
   }

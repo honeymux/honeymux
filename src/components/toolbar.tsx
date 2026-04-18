@@ -190,6 +190,7 @@ export function ToolBar({
         backgroundColor={theme.bgChrome}
         flexDirection="column"
         height={toolbarHeight}
+        id="honeyshots:toolbar"
         position="absolute"
         right={0}
         top={toolbarTop}

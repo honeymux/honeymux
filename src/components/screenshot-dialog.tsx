@@ -121,6 +121,7 @@ export function ScreenshotDialog({
         borderStyle="rounded"
         flexDirection="column"
         height={boxHeight}
+        id="honeyshots:screenshot-dialog"
         justifyContent="center"
         left={dialogLeft}
         position="absolute"
