@@ -240,6 +240,7 @@ async function writeHarnessConfig(homeDir: string, themeName: DocsTheme, uiMode:
 
   const config = {
     ...defaultConfig(),
+    paneTabsEnabled: true,
     savedAt: Date.now(),
     screenshotFlash: false,
     shellPrompt: "honeymux" as const,
@@ -368,6 +369,36 @@ async function primeBaseScreen(
   await seedWorkspacePane(ctx, width, height, themeName);
   await harness.waitForText("Honeymux docs demo");
   await harness.waitForIdle(300);
+  await splitWorkspaceHorizontally(harness, ctx);
+  await addSecondPaneTabToUpperPane(harness);
+}
+
+async function splitWorkspaceHorizontally(harness: TuiHarness, ctx: SceneContext): Promise<void> {
+  const target = `${ctx.sessionName}:workspace`;
+  // split-window without -h gives us a horizontal divider (upper/lower
+  // panes). The new pane is selected automatically; switch focus back
+  // to the original upper pane so honeymux treats it as active.
+  await runCommand(tmuxArgv(ctx.serverName, ["split-window", "-v", "-t", target]), { env: ctx.env });
+  await runCommand(
+    tmuxArgv(ctx.serverName, ["send-keys", "-t", target, "-l", "printf 'Second pane\\n'"]),
+    { env: ctx.env },
+  );
+  await runCommand(tmuxArgv(ctx.serverName, ["send-keys", "-t", target, "Enter"]), { env: ctx.env });
+  await runCommand(tmuxArgv(ctx.serverName, ["select-pane", "-U", "-t", target]), { env: ctx.env });
+  await harness.waitForText("Second pane");
+  await harness.waitForIdle(250);
+}
+
+async function addSecondPaneTabToUpperPane(harness: TuiHarness): Promise<void> {
+  // Ctrl+G opens the main menu; "N" triggers newPaneTab which adds a
+  // tab to the currently-active pane (the upper one, after split).
+  harness.send("\x07");
+  await harness.waitForText("Functions");
+  await harness.waitForIdle(150);
+  harness.send("n");
+  await harness.waitForIdle(400);
+  harness.send("\x1b");
+  await harness.waitForIdle(300);
 }
 
 async function runAgentsDemo(ctx: SceneContext): Promise<void> {
@@ -404,7 +435,7 @@ async function captureScene(sceneName: SceneName, options: CliOptions, repoRoot:
     rootDir: tempRoot,
     runtimeDir,
     serverName: `hmx-docs-${sceneName}-${process.pid}`,
-    sessionName: "docs-demo",
+    sessionName: "My Project",
   };
 
   let preserveTemp = options.keepTemp;
