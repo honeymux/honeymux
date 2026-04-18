@@ -391,14 +391,17 @@ async function splitWorkspaceHorizontally(harness: TuiHarness, ctx: SceneContext
 
 async function addSecondPaneTabToUpperPane(harness: TuiHarness): Promise<void> {
   // Ctrl+G opens the main menu; "N" triggers newPaneTab which adds a
-  // tab to the currently-active pane (the upper one, after split).
+  // tab to the currently-active pane (the upper one, after split). The
+  // menu auto-closes when the action dispatches, so no explicit Esc is
+  // needed. Pane-tab creation spawns a detached tmux window, which can
+  // take a moment; wait for the " bash | bash " tab bar to settle
+  // before the caller spawns any subsequent flows.
   harness.send("\x07");
   await harness.waitForText("Functions");
   await harness.waitForIdle(150);
   harness.send("n");
-  await harness.waitForIdle(400);
-  harness.send("\x1b");
-  await harness.waitForIdle(300);
+  await sleep(800);
+  await harness.waitForIdle(400, 10_000);
 }
 
 async function runAgentsDemo(ctx: SceneContext): Promise<void> {
