@@ -371,9 +371,18 @@ async function primeBaseScreen(
 }
 
 async function runAgentsDemo(ctx: SceneContext): Promise<void> {
+  // Optional: if scripts/demo-team.ts exists, seed some demo agents into
+  // honeymux so the dialog shows realistic rows. Otherwise fall back to
+  // capturing the empty-state dialog.
+  const demoScript = "scripts/demo-team.ts";
+  if (!existsSync(join(process.cwd(), demoScript))) return;
   const socketPath = join(ctx.runtimeDir, "hmx-claude.sock");
-  await waitForPath(socketPath);
-  await runCommand([process.execPath, "run", "scripts/demo-team.ts"], {
+  try {
+    await waitForPath(socketPath, 3_000);
+  } catch {
+    return;
+  }
+  await runCommand([process.execPath, "run", demoScript], {
     cwd: process.cwd(),
     env: {
       ...ctx.env,
@@ -434,8 +443,7 @@ async function captureScene(sceneName: SceneName, options: CliOptions, repoRoot:
       await openMainMenu(harness, false);
       harness.send("a");
       await harness.waitForRegion("agents");
-      await harness.waitForText("hook-test");
-      await sleep(200);
+      await harness.waitForIdle(350);
     }
 
     applyTheme(options.theme);
