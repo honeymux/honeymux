@@ -434,13 +434,14 @@ async function switchDialogTab(
   // Dialogs open on the first tab (index 0); press Tab to advance.
   // Use an explicit sleep rather than waitForIdle — the frame can settle
   // visually before the input router finishes processing the prior key,
-  // causing consecutive Tabs to be coalesced.
+  // causing consecutive Tabs to be coalesced. Some tabs (options/agents)
+  // run continuous preview animations, so never strictly go idle.
   await sleep(300);
   for (let i = 0; i < target; i++) {
     harness.send("\t");
     await sleep(250);
   }
-  await harness.waitForIdle(200);
+  await sleep(300);
 }
 
 async function addSecondPaneTabToUpperPane(harness: TuiHarness): Promise<void> {
@@ -528,7 +529,6 @@ async function captureScene(sceneName: SceneName, options: CliOptions, repoRoot:
       await harness.waitForText("General");
       await harness.waitForIdle(350);
       await switchDialogTab(harness, options.tab, OPTIONS_TAB_ORDER, "options");
-      await harness.waitForIdle(400);
     } else if (sceneName === "agents") {
       await runAgentsDemo(ctx);
       await openMainMenu(harness, false);
