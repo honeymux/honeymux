@@ -421,16 +421,19 @@ async function captureScene(sceneName: SceneName, options: CliOptions, repoRoot:
 
     if (sceneName === "main-menu") {
       await openMainMenu(harness);
+      await harness.waitForRegion("main-menu");
+      await harness.waitForIdle(200);
     } else if (sceneName === "options") {
       await openMainMenu(harness);
       harness.send("o");
+      await harness.waitForRegion("options");
       await harness.waitForText("General");
-      await harness.waitForText("Built-in shell prompt");
       await harness.waitForIdle(350);
     } else if (sceneName === "agents") {
       await runAgentsDemo(ctx);
       await openMainMenu(harness, false);
       harness.send("a");
+      await harness.waitForRegion("agents");
       await harness.waitForText("hook-test");
       await sleep(200);
     }
