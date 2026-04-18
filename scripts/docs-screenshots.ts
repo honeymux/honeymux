@@ -21,6 +21,7 @@ type DocsTheme = Exclude<ThemeName, "auto">;
 type SceneName = "agents" | "main" | "main-menu" | "options";
 
 interface CliOptions {
+  bgColor?: string;
   border?: number;
   devicePixelRatio: number;
   height: number;
@@ -29,13 +30,22 @@ interface CliOptions {
   region?: string;
   scenes: SceneName[];
   sidebarView?: SideBarView;
+  tab?: string;
   theme: DocsTheme;
   toolbarOpen: boolean;
   uiMode: UIMode;
   width: number;
 }
 
+const HEX_COLOR_RE = /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
+
 type SideBarView = "agents" | "hook-sniffer" | "server";
+
+/** Tab order inside the main menu dialog. Pressing Tab cycles in this order. */
+const MAIN_MENU_TAB_ORDER = ["functions", "navigation", "agents", "about"] as const;
+
+/** Tab order inside the options dialog. Pressing Tab cycles in this order. */
+const OPTIONS_TAB_ORDER = ["general", "appearance", "input", "agents", "remote", "misc"] as const;
 
 interface SceneContext {
   env: Record<string, string>;
@@ -82,7 +92,11 @@ function printUsage(): void {
       `  --ui-mode <name>      UI mode (${VALID_UI_MODES.join(", ")})`,
       `  --scenes <list>       Comma-separated scenes (${VALID_SCENES.join(", ")})`,
       '  --region <name>       Named region to crop to (e.g. "sidebar", "toolbar", "main-menu")',
+      `  --tab <name>          Switch to a specific tab before capture`,
+      `                          main-menu: ${MAIN_MENU_TAB_ORDER.join(", ")}`,
+      `                          options:   ${OPTIONS_TAB_ORDER.join(", ")}`,
       "  --border <px>         Add a border of the terminal bg color around the image",
+      '  --bg-color <#hex>     Override the terminal background color (e.g. "#000000")',
       `  --sidebar-view <name> Open sidebar view (${VALID_SIDEBAR_VIEWS.join(", ")})`,
       "  --toolbar             Open the toolbar before capture",
       "  --device-pixel-ratio  Renderer DPR (default: 2)",
@@ -199,6 +213,21 @@ function parseArgs(argv: string[]): CliOptions {
     }
     if (arg === "--border") {
       options.border = parseNonNegativeInt(arg, argv[++i]);
+      continue;
+    }
+    if (arg === "--bg-color") {
+      const v = argv[++i];
+      if (!v) throw new Error("--bg-color requires a value");
+      if (!HEX_COLOR_RE.test(v)) {
+        throw new Error(`--bg-color must be a 3- or 6-digit hex color (e.g. "#000000"), got ${JSON.stringify(v)}`);
+      }
+      options.bgColor = v;
+      continue;
+    }
+    if (arg === "--tab") {
+      const v = argv[++i];
+      if (!v) throw new Error("--tab requires a value");
+      options.tab = v;
       continue;
     }
     throw new Error(`Unknown argument: ${arg}`);
@@ -389,6 +418,31 @@ async function splitWorkspaceHorizontally(harness: TuiHarness, ctx: SceneContext
   await harness.waitForIdle(250);
 }
 
+async function switchDialogTab(
+  harness: TuiHarness,
+  tab: string | undefined,
+  order: readonly string[],
+  dialog: "main-menu" | "options",
+): Promise<void> {
+  if (!tab) return;
+  const target = order.indexOf(tab);
+  if (target === -1) {
+    throw new Error(
+      `Unknown ${dialog} tab ${JSON.stringify(tab)}. Valid tabs: ${order.join(", ")}`,
+    );
+  }
+  // Dialogs open on the first tab (index 0); press Tab to advance.
+  // Use an explicit sleep rather than waitForIdle — the frame can settle
+  // visually before the input router finishes processing the prior key,
+  // causing consecutive Tabs to be coalesced.
+  await sleep(300);
+  for (let i = 0; i < target; i++) {
+    harness.send("\t");
+    await sleep(250);
+  }
+  await harness.waitForIdle(200);
+}
+
 async function addSecondPaneTabToUpperPane(harness: TuiHarness): Promise<void> {
   // Ctrl+G opens the main menu; "N" triggers newPaneTab which adds a
   // tab to the currently-active pane (the upper one, after split). The
@@ -466,12 +520,15 @@ async function captureScene(sceneName: SceneName, options: CliOptions, repoRoot:
       await openMainMenu(harness);
       await harness.waitForRegion("main-menu");
       await harness.waitForIdle(200);
+      await switchDialogTab(harness, options.tab, MAIN_MENU_TAB_ORDER, "main-menu");
     } else if (sceneName === "options") {
       await openMainMenu(harness);
       harness.send("o");
       await harness.waitForRegion("options");
       await harness.waitForText("General");
       await harness.waitForIdle(350);
+      await switchDialogTab(harness, options.tab, OPTIONS_TAB_ORDER, "options");
+      await harness.waitForIdle(400);
     } else if (sceneName === "agents") {
       await runAgentsDemo(ctx);
       await openMainMenu(harness, false);
@@ -484,13 +541,15 @@ async function captureScene(sceneName: SceneName, options: CliOptions, repoRoot:
     const shootOptions: ShootOptions = {
       devicePixelRatio: options.devicePixelRatio,
       theme: {
-        background: theme.bg,
+        background: options.bgColor ?? theme.bg,
         text: theme.text,
       },
     };
+    if (options.bgColor) {
+      shootOptions.bgColor = options.bgColor;
+    }
     if (options.border) {
       shootOptions.border = options.border;
-      shootOptions.frameColor = theme.bg;
     }
 
     mkdirSync(options.outDir, { recursive: true });
