@@ -118,7 +118,7 @@ export const paletteColors: RGB[] = new Array(16).fill([128, 128, 128]) as RGB[]
  * tmux sessions.  Colors cycle round-robin, skipping any already in use.
  */
 export const SESSION_PALETTE: string[] = [
-  "#fab387", // orange (default — matches badge fallback)
+  "#ee7f32", // orange (default — matches badge fallback)
   "#f38ba8", // rose
   "#a6e3a1", // green
   "#89b4fa", // blue
