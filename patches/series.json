@@ -1,12 +1,12 @@
 {
   "@opentui/core": {
-    "sourceRepo": "~/src/opentui",
-    "sourceSubdir": "packages/core",
     "buildCmd": "bun run build",
     "nativeLib": {
-      "srcDir": "src/zig/lib/{zigTarget}",
-      "destDir": "@opentui/core-{platform}-{arch}"
+      "destDir": "@opentui/core-{platform}-{arch}",
+      "srcDir": "src/zig/lib/{zigTarget}"
     },
+    "sourceRepo": "~/src/opentui",
+    "sourceSubdir": "packages/core",
     "version": "0.1.97",
     "patches": [
       {
@@ -37,9 +37,9 @@
     ]
   },
   "@opentui/react": {
+    "buildCmd": "bun run build",
     "sourceRepo": "~/src/opentui",
     "sourceSubdir": "packages/react",
-    "buildCmd": "bun run build",
     "version": "0.1.97",
     "patches": [
       {
@@ -51,14 +51,19 @@
         "file": "0002-batch-render-requests-during-react-commits.patch",
         "description": "Batch render requests during React commits",
         "branch": "batch-render-requests-during-react-commits"
+      },
+      {
+        "file": "0003-fix-id-prop-removal-undefined.patch",
+        "description": "Preserve renderable id when React id prop is removed (orphans children otherwise)",
+        "branch": "fix-id-prop-removal-undefined"
       }
     ]
   },
   "ghostty-opentui": {
-    "sourceRepo": "~/src/ghostty-opentui",
     "diffPaths": [
       "src/"
     ],
+    "sourceRepo": "~/src/ghostty-opentui",
     "version": "1.4.10",
     "patches": [
       {
