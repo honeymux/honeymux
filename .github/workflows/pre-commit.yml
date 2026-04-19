@@ -1,0 +1,16 @@
+name: pre-commit
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  pre-commit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6.0.2
+      - uses: actions/setup-python@v6.2.0
+      - uses: pre-commit/action@v3.0.1
+        with:
+          extra_args: --all-files --config .github/.pre-commit-config.yaml
