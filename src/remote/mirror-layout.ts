@@ -209,9 +209,21 @@ export class MirrorLayoutManager {
         await this.remoteClient.sendCommand(`split-window -t ${remoteWindowId} -d`).catch(() => {});
       }
     } else if (diff < 0) {
-      // Too many panes on remote — kill extras, but never kill active (converted) panes
-      const toKill = remotePanes.slice(localPanes.length);
-      for (const pane of toKill.reverse()) {
+      // Too many panes on remote — kill any remote pane that isn't mapped to
+      // a current local pane. Positional slicing is unsafe: tmux's
+      // `split-window` inserts the new pane adjacent to the split source,
+      // which can push existing panes (including the active mirror) to a
+      // later index. Slicing the trailing N panes can therefore pick the
+      // active mirror and skip the real orphan.
+      const liveRemoteIds = new Set<string>();
+      for (const localPane of localPanes) {
+        const remoteId = this.paneMap.get(localPane.id);
+        if (remoteId) liveRemoteIds.add(remoteId);
+      }
+      for (const pane of remotePanes) {
+        if (liveRemoteIds.has(pane.id)) continue;
+        // Defense in depth: never kill an active converted pane, even if its
+        // mapping is somehow missing from paneMap.
         if (this.isRemotePaneActive(pane.id)) continue;
         await this.remoteClient.sendCommand(`kill-pane -t ${pane.id}`).catch(() => {});
       }
