@@ -86,6 +86,40 @@ describe("control client parsers", () => {
     ]);
   });
 
+  test("parseFullTreeOutputs drops malformed rows and admits only valid ones", () => {
+    // Previously `line.trim().split("\t")` collapsed trailing empties, so a
+    // transient staging window with an unset window_active flag produced a
+    // row with `name: undefined`, crashing consumers that assumed the typed
+    // shape (e.g. `window.name.startsWith(...)`).
+    const tree = parseFullTreeOutputs(
+      "$1\talpha\t1\t#f00",
+      [
+        "alpha\t@1\t0\tmain\t1", //                         valid
+        "alpha\t@2\t1\t\t0", //                             valid, empty name
+        "alpha\t@3\t2\tname\t", //                          previously fatal: trailing-empty active
+        "\t@4\t0\tname\t1", //                              invalid: empty session
+        "alpha\t\t0\tname\t1", //                           invalid: empty id
+        "alpha\t@5\tnot-a-number\tname\t1", //              invalid: non-numeric index
+        "alpha\t@6\t3", //                                  invalid: too few fields
+        "garbage-no-tabs",
+      ].join("\n"),
+      [
+        "alpha\t@1\t%3\t0\t1\tvim\t123\t/tmp\t\ttitle", //  valid
+        "alpha\t@1\t%4\t1\t0", //                           valid, defaults applied
+        "\t@1\t%5\t0\t1", //                                invalid: empty session
+        "alpha\t\t%6\t0\t1", //                             invalid: empty windowId
+        "alpha\t@1\t\t0\t1", //                             invalid: empty paneId
+      ].join("\n"),
+    );
+
+    expect(tree.windows).toEqual([
+      { active: true, id: "@1", index: 0, name: "main", sessionName: "alpha" },
+      { active: false, id: "@2", index: 1, name: "", sessionName: "alpha" },
+      { active: false, id: "@3", index: 2, name: "name", sessionName: "alpha" },
+    ]);
+    expect(tree.panes.map((p) => p.id)).toEqual(["%3", "%4"]);
+  });
+
   test("parses session summary counts", () => {
     expect(parseSessionSummaryOutputs("$1\n$2\n", "@1\n@2\n@3\n", "0\n1\n")).toEqual({
       panes: 2,

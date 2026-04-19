@@ -147,38 +147,50 @@ export function parseFullTreeOutputs(
 } {
   const sessions = parseListSessionsOutput(sessionsOut);
 
-  const windows = windowsOut
-    .split("\n")
-    .filter(Boolean)
-    .map((line) => {
-      const parts = line.trim().split("\t");
-      return {
-        active: parts[4] === "1",
-        id: parts[1]!,
-        index: parseInt(parts[2]!, 10),
-        name: parts[3]!,
-        sessionName: parts[0]!,
-      };
+  // Structural fields (session name, ids, index) must be non-empty: consumers
+  // filter by them and an empty string silently never matches anything real.
+  // Only window name is allowed empty — tmux permits unnamed windows.
+  const windows: TmuxTreeWindow[] = [];
+  for (const line of windowsOut.split("\n")) {
+    if (!line) continue;
+    const parts = line.split("\t");
+    if (parts.length < 5) continue;
+    const sessionName = parts[0];
+    const id = parts[1];
+    const index = Number.parseInt(parts[2] ?? "", 10);
+    if (!sessionName || !id || !Number.isFinite(index)) continue;
+    windows.push({
+      active: parts[4] === "1",
+      id,
+      index,
+      name: parts[3] ?? "",
+      sessionName,
     });
+  }
 
-  const panes = panesOut
-    .split("\n")
-    .filter(Boolean)
-    .map((line) => {
-      const parts = line.trim().split("\t");
-      return {
-        active: parts[4] === "1",
-        command: parts[5] || "shell",
-        cwd: parts[7] || undefined,
-        id: parts[2]!,
-        index: parseInt(parts[3]!, 10),
-        pid: parseInt(parts[6]!, 10) || 0,
-        remoteHost: parts[8] || undefined,
-        sessionName: parts[0]!,
-        title: parts.slice(9).join("\t") || undefined,
-        windowId: parts[1]!,
-      };
+  const panes: TmuxTreePane[] = [];
+  for (const line of panesOut.split("\n")) {
+    if (!line) continue;
+    const parts = line.split("\t");
+    if (parts.length < 5) continue;
+    const sessionName = parts[0];
+    const windowId = parts[1];
+    const id = parts[2];
+    const index = Number.parseInt(parts[3] ?? "", 10);
+    if (!sessionName || !windowId || !id || !Number.isFinite(index)) continue;
+    panes.push({
+      active: parts[4] === "1",
+      command: parts[5] || "shell",
+      cwd: parts[7] || undefined,
+      id,
+      index,
+      pid: Number.parseInt(parts[6] ?? "", 10) || 0,
+      remoteHost: parts[8] || undefined,
+      sessionName,
+      title: parts.slice(9).join("\t") || undefined,
+      windowId,
     });
+  }
 
   return { panes, sessions, windows };
 }
