@@ -675,6 +675,7 @@ export function dispatchDialogInput(data: string, deps: DialogInputDispatchDeps)
   if (optionsDialogOpen) {
     dispatchOptionsDialogInput(data, {
       dropdownInputRef,
+      onReturnToMainMenu: () => setMainMenuDialogOpen(true),
       optionsWorkflow,
       sequenceMapRef,
     });

@@ -57,6 +57,7 @@ export interface OptionsDialogSessionApi {
   configTmuxPrefixKeyAliasCapturing: boolean;
   configUIMode: UIMode;
   loadFromConfig: (config: HoneymuxConfig) => void;
+  openedFromMainMenuRef: MutableRefObject<boolean>;
   optionsDialogOpen: boolean;
   optionsDialogRow: number;
   optionsDialogTab: OptionsTab;
@@ -228,6 +229,7 @@ export function useOptionsDialogSession(
   });
   const [configRemoteTesting, setConfigRemoteTestingState] = useState<RemoteTestingState>(null);
   const [configMultiSelectEditing, setConfigMultiSelectEditingState] = useState(false);
+  const openedFromMainMenuRef = useRef(false);
 
   const setConfigScreenshotDir = useCallback((value: string) => {
     screenshotDirEditRef.current.dir = value;
@@ -363,6 +365,7 @@ export function useOptionsDialogSession(
     configTmuxPrefixKeyAliasCapturing,
     configUIMode,
     loadFromConfig,
+    openedFromMainMenuRef,
     optionsDialogOpen,
     optionsDialogRow,
     optionsDialogTab,

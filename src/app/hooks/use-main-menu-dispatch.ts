@@ -149,7 +149,7 @@ export function useMainMenuDispatch({
         runtimeRefs.handleNotificationsClickRef.current?.();
         break;
       case "options":
-        runtimeRefs.handleOptionsClickRef.current?.();
+        runtimeRefs.handleOptionsClickRef.current?.({ fromMainMenu: true });
         break;
       case "prevPaneTab":
         paneTabsApi.handlePrevPaneTab();

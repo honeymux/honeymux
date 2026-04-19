@@ -124,6 +124,7 @@ function createDeps(overrides?: any): any {
       configTmuxPrefixKeyAliasCapturing: false,
       configUIMode: "adaptive",
       handleOptionsConfirm: mock(async () => {}),
+      openedFromMainMenuRef: { current: false },
       optionsDialogOpen: false,
       optionsDialogRow: 0,
       optionsDialogTab: "general",

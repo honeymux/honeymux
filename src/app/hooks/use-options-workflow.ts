@@ -12,7 +12,7 @@ import { type OptionsDialogSessionApi, useOptionsDialogSession } from "../option
 
 export interface OptionsWorkflowApi extends OptionsWorkflowSessionApi {
   config: HoneymuxConfig;
-  handleOptionsClick: () => Promise<void>;
+  handleOptionsClick: (opts?: { fromMainMenu?: boolean }) => Promise<void>;
   handleOptionsConfirm: (
     ignoreMouseInput?: boolean,
     tmuxPrefixKeyAlias?: null | string,
@@ -109,10 +109,14 @@ export function useOptionsWorkflow({ setDropdownOpen }: UseOptionsWorkflowOption
     [config.themeCustom, dialogSession],
   );
 
-  const handleOptionsClick = useCallback(async () => {
-    setDropdownOpen(false);
-    loadFromConfig(config);
-  }, [config, loadFromConfig, setDropdownOpen]);
+  const handleOptionsClick = useCallback(
+    async (opts?: { fromMainMenu?: boolean }) => {
+      setDropdownOpen(false);
+      dialogSession.openedFromMainMenuRef.current = opts?.fromMainMenu ?? false;
+      loadFromConfig(config);
+    },
+    [config, dialogSession.openedFromMainMenuRef, loadFromConfig, setDropdownOpen],
+  );
 
   const handleOptionsConfirm = useCallback(
     async (

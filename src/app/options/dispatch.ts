@@ -3,6 +3,7 @@ import type { MutableRefObject } from "react";
 import type { KeyAction } from "../../util/keybindings.ts";
 import type { OptionsWorkflowApi } from "../hooks/use-options-workflow.ts";
 
+import { isDismissKey } from "../../util/keybindings.ts";
 import { applyOptionsDialogState, buildOptionsDialogState, confirmOptionsDialog } from "./bridge.ts";
 import { routeOptionsDialogInput } from "./controller.ts";
 import { maybeStartRemoteTest } from "./remote-test.ts";
@@ -11,6 +12,7 @@ let suppressNextOptionsModifierRelease = false;
 
 export interface OptionsDialogDispatchDeps {
   dropdownInputRef: MutableRefObject<((data: string) => boolean) | null>;
+  onReturnToMainMenu: () => void;
   optionsWorkflow: OptionsWorkflowApi;
   sequenceMapRef: MutableRefObject<Map<string, KeyAction>>;
 }
@@ -30,7 +32,10 @@ export function dispatchOptionsDialogInput(data: string, deps: OptionsDialogDisp
 
   if (result.kind === "confirm") {
     suppressNextOptionsModifierRelease = false;
+    const returnToMainMenu = isDismissKey(data) && deps.optionsWorkflow.openedFromMainMenuRef.current;
+    deps.optionsWorkflow.openedFromMainMenuRef.current = false;
     void confirmOptionsDialog(deps.optionsWorkflow, result.draft);
+    if (returnToMainMenu) deps.onReturnToMainMenu();
     return;
   }
 

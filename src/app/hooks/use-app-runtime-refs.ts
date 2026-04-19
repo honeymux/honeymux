@@ -51,7 +51,7 @@ export interface AppRuntimeRefs {
   handleNextPaneTabRef: MutableRefObject<() => void>;
   handleNotificationsClickRef: MutableRefObject<() => void>;
   handleOpenQuickTerminalRef: MutableRefObject<() => void>;
-  handleOptionsClickRef: MutableRefObject<() => void>;
+  handleOptionsClickRef: MutableRefObject<(opts?: { fromMainMenu?: boolean }) => void>;
   handlePermissionRespondRef: MutableRefObject<
     ((sessionId: string, toolUseId: string, decision: "allow" | "deny") => void) | null
   >;
@@ -193,7 +193,7 @@ export function useAppRuntimeRefs({ sequenceMap }: UseAppRuntimeRefsOptions): Ap
   const spawnPtyBridgeRef = useRef<((targetSession: string) => unknown) | null>(null);
   const terminalRef = useRef<GhosttyTerminalRenderable | null>(null);
   const inputRouterSetup = useRef(false);
-  const handleOptionsClickRef = useRef<() => void>(() => {});
+  const handleOptionsClickRef = useRef<(opts?: { fromMainMenu?: boolean }) => void>(() => {});
   const handleToolbarToggleRef = useRef<() => void>(() => {});
   const toolbarOpenRef = useRef(false);
   const handleSessionClickRef = useRef<() => void>(() => {});

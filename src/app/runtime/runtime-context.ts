@@ -86,7 +86,7 @@ export interface SetupTmuxRuntimeInputContext {
   handleOpenAgentsDialog: () => void;
   handleOpenConversationsRef: MutableRefObject<() => void>;
   handleOpenQuickTerminalRef: MutableRefObject<() => void>;
-  handleOptionsClickRef: MutableRefObject<() => void>;
+  handleOptionsClickRef: MutableRefObject<(opts?: { fromMainMenu?: boolean }) => void>;
   handlePrevPaneTabRef: MutableRefObject<() => void>;
   handleQuickApproveRef: MutableRefObject<() => void>;
   handleQuickDenyRef: MutableRefObject<() => void>;
