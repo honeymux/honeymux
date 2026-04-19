@@ -129,7 +129,6 @@ export function defaultConfig(): HoneymuxConfig {
       base07: "#ffffff",
       base08: "#555555",
       base09: "#999999",
-      // eslint-disable-next-line perfectionist/sort-objects -- perfectionist misorders base09 vs base0A under its locale-aware sort
       base0A: "#cccccc",
       base0B: "#666666",
       base0C: "#777777",

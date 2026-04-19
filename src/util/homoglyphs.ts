@@ -7,7 +7,6 @@ const h = String.fromCodePoint;
 
 /** Maps ASCII char to [1st homoglyph, 2nd homoglyph] */
 export const HOMOGLYPHS: Record<string, [string, string]> = {
-  A: [h(0x0391), h(0x13aa)],
   _: [h(0x203e), h(0x2581)],
   "-": [h(0x2010), h(0x2212)],
   ",": [h(0x201a), h(0x060c)],
@@ -50,6 +49,7 @@ export const HOMOGLYPHS: Record<string, [string, string]> = {
   "7": [h(0x1d7d5), h(0x2077)],
   "8": [h(0x1d7d6), h(0x2078)],
   "9": [h(0x1d7d7), h(0x2079)],
+  A: [h(0x0391), h(0x13aa)],
   B: [h(0x0392), h(0x13f4)],
   C: [h(0x03f9), h(0x2ca4)],
   D: [h(0x13a0), h(0x216e)],

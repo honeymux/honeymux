@@ -29,7 +29,6 @@ import spacemacs from "./spacemacs.yaml" with { type: "text" };
 import tokyoNightDark from "./tokyo-night-dark.yaml" with { type: "text" };
 
 export interface Base16Palette {
-  base0A: string;
   base00: string;
   base01: string;
   base02: string;
@@ -40,6 +39,7 @@ export interface Base16Palette {
   base07: string;
   base08: string;
   base09: string;
+  base0A: string;
   base0B: string;
   base0C: string;
   base0D: string;
