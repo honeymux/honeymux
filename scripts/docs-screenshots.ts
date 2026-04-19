@@ -8,9 +8,10 @@
  * cropping, PTY management, and region tracking all live in honeyshots.
  */
 
-import { existsSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { TuiHarness, type ShootOptions } from "honeyshots";
 
 import { defaultConfig, type UIMode } from "../src/util/config.ts";
@@ -55,6 +56,8 @@ interface SceneContext {
   serverName: string;
   sessionName: string;
 }
+
+const FIXTURE_HOME_DIR = join(dirname(fileURLToPath(import.meta.url)), "docs-screenshot-fixtures", "home");
 
 const DEFAULT_WIDTH = 132;
 const DEFAULT_HEIGHT = 43;
@@ -283,6 +286,18 @@ async function writeHarnessConfig(homeDir: string, themeName: DocsTheme, uiMode:
   await Bun.write(join(claudeHooksDir, "honeymux.py"), "# harness marker\n");
 }
 
+async function seedHarnessHome(homeDir: string): Promise<void> {
+  // Copy the checked-in fixture dotfiles (.bashrc, .tmux.conf, ...) into the
+  // sandboxed HOME so bash and tmux produce a consistent look in screenshots
+  // regardless of what the operator has installed on their own machine.
+  const entries = readdirSync(FIXTURE_HOME_DIR, { withFileTypes: true });
+  for (const entry of entries) {
+    if (!entry.isFile()) continue;
+    const src = Bun.file(join(FIXTURE_HOME_DIR, entry.name));
+    await Bun.write(join(homeDir, entry.name), src);
+  }
+}
+
 async function writeHarnessUiState(
   homeDir: string,
   toolbarOpen: boolean,
@@ -408,13 +423,7 @@ async function splitWorkspaceHorizontally(harness: TuiHarness, ctx: SceneContext
   // panes). The new pane is selected automatically; switch focus back
   // to the original upper pane so honeymux treats it as active.
   await runCommand(tmuxArgv(ctx.serverName, ["split-window", "-v", "-t", target]), { env: ctx.env });
-  await runCommand(
-    tmuxArgv(ctx.serverName, ["send-keys", "-t", target, "-l", "printf 'Second pane\\n'"]),
-    { env: ctx.env },
-  );
-  await runCommand(tmuxArgv(ctx.serverName, ["send-keys", "-t", target, "Enter"]), { env: ctx.env });
   await runCommand(tmuxArgv(ctx.serverName, ["select-pane", "-U", "-t", target]), { env: ctx.env });
-  await harness.waitForText("Second pane");
   await harness.waitForIdle(250);
 }
 
@@ -505,6 +514,7 @@ async function captureScene(sceneName: SceneName, options: CliOptions, repoRoot:
 
     await writeHarnessConfig(homeDir, options.theme, options.uiMode);
     await writeHarnessUiState(homeDir, toolbarOpen, sidebarView);
+    await seedHarnessHome(homeDir);
     await prepareDemoTmux(ctx);
 
     harness = new TuiHarness({
