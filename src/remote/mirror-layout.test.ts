@@ -11,9 +11,14 @@ import { MirrorLayoutManager } from "./mirror-layout.ts";
  * to model tmux's "insert next to active" behavior can manually reorder the
  * panes after splitting.
  */
-function createFakeServer(initial: { panesByWindow: Map<string, string[]> }) {
+function createFakeServer(initial: {
+  localWindowIdsByWindow?: Map<string, string>;
+  panesByWindow: Map<string, string[]>;
+}) {
   const state = {
+    localWindowIdsByWindow: new Map(initial.localWindowIdsByWindow),
     nextPaneNum: 0,
+    nextWindowNum: 0,
     panesByWindow: new Map(initial.panesByWindow),
   };
 
@@ -22,6 +27,10 @@ function createFakeServer(initial: { panesByWindow: Map<string, string[]> }) {
       const num = parseInt(p.replace("%", ""), 10);
       if (num >= state.nextPaneNum) state.nextPaneNum = num + 1;
     }
+  }
+  for (const windowId of state.panesByWindow.keys()) {
+    const num = parseInt(windowId.replace("@", ""), 10);
+    if (num >= state.nextWindowNum) state.nextWindowNum = num + 1;
   }
 
   function findWindowOfPane(paneId: string): string | undefined {
@@ -34,7 +43,15 @@ function createFakeServer(initial: { panesByWindow: Map<string, string[]> }) {
   async function sendCommand(cmd: string): Promise<string> {
     if (cmd.startsWith("list-windows")) {
       let i = 0;
-      return [...state.panesByWindow.keys()].map((w) => `${w} ${i++} fakelayout`).join("\n");
+      return [...state.panesByWindow.keys()]
+        .map((windowId) => {
+          const localWindowId = state.localWindowIdsByWindow.get(windowId) ?? "";
+          if (cmd.includes(LOCAL_WINDOW_ID_FORMAT)) {
+            return `${windowId}\t${i++}\tfakelayout\t${localWindowId}`;
+          }
+          return `${windowId}\t${i++}\tfakelayout`;
+        })
+        .join("\n");
     }
     if (cmd.startsWith("list-panes")) {
       const m = cmd.match(/-t (\S+)/);
@@ -64,7 +81,31 @@ function createFakeServer(initial: { panesByWindow: Map<string, string[]> }) {
       }
       return "";
     }
-    if (cmd.startsWith("select-layout") || cmd.startsWith("refresh-client") || cmd.startsWith("new-window")) {
+    if (cmd.startsWith("kill-window")) {
+      const m = cmd.match(/-t (\S+)/);
+      if (!m) return "";
+      const target = m[1]!.replace(/^'/, "").replace(/'$/, "");
+      state.localWindowIdsByWindow.delete(target);
+      state.panesByWindow.delete(target);
+      return "";
+    }
+    if (cmd.startsWith("new-window")) {
+      const newWindowId = `@${state.nextWindowNum++}`;
+      const newPaneId = `%${state.nextPaneNum++}`;
+      state.panesByWindow.set(newWindowId, [newPaneId]);
+      return cmd.includes("-P") ? newWindowId : "";
+    }
+    if (cmd.startsWith("set-option")) {
+      const targetMatch = cmd.match(/-t ('[^']+'|\S+)/);
+      if (!targetMatch) return "";
+      const target = targetMatch[1]!.replace(/^'/, "").replace(/'$/, "");
+      const localWindowId = cmd.match(/(@\d+)'?$/)?.[1];
+      if (localWindowId) {
+        state.localWindowIdsByWindow.set(target, localWindowId);
+      }
+      return "";
+    }
+    if (cmd.startsWith("refresh-client") || cmd.startsWith("select-layout")) {
       return "";
     }
     return "";
@@ -72,6 +113,8 @@ function createFakeServer(initial: { panesByWindow: Map<string, string[]> }) {
 
   return { sendCommand, state };
 }
+
+const LOCAL_WINDOW_ID_FORMAT = "#{@hmx-local-window-id}";
 
 function makeMirror(
   localServer: ReturnType<typeof createFakeServer>,
@@ -83,6 +126,32 @@ function makeMirror(
 }
 
 describe("MirrorLayoutManager", () => {
+  test("full sync mirrors windows discovered outside the initially attached session", async () => {
+    const localServer = createFakeServer({
+      panesByWindow: new Map([
+        ["@1", ["%10"]],
+        ["@2", ["%20", "%21", "%22"]],
+      ]),
+    });
+    const remoteServer = createFakeServer({ panesByWindow: new Map([["@100", ["%200"]]]) });
+    const mirror = makeMirror(localServer, remoteServer);
+
+    await mirror.fullSync();
+
+    const firstSessionRemotePane = mirror.getRemotePaneId("%10");
+    const secondSessionRemotePane = mirror.getRemotePaneId("%20");
+
+    expect(mirror.getRemotePaneId("%10")).toBe("%200");
+    expect(mirror.getRemotePaneId("%20")).toBeDefined();
+    expect(mirror.getRemotePaneId("%21")).toBeDefined();
+    expect(mirror.getRemotePaneId("%22")).toBeDefined();
+
+    await mirror.fullSync();
+
+    expect(mirror.getRemotePaneId("%10")).toBe(firstSessionRemotePane);
+    expect(mirror.getRemotePaneId("%20")).toBe(secondSessionRemotePane);
+  });
+
   test("simple split-then-close removes the orphan remote pane", async () => {
     const localServer = createFakeServer({ panesByWindow: new Map([["@1", ["%10"]]]) });
     const remoteServer = createFakeServer({ panesByWindow: new Map([["@100", ["%200"]]]) });

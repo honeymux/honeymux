@@ -3,8 +3,15 @@ import { describe, expect, it, mock } from "bun:test";
 import type { AgentEvent } from "../agents/types.ts";
 import type { RemoteAgentIngress, RemotePermissionRoute } from "./agent-transport.ts";
 
+import { EventEmitter } from "../util/event-emitter.ts";
 import { buildRemoteProxyProcessArgv } from "./proxy-command.ts";
 import { RemoteServerManager } from "./remote-server-manager.ts";
+
+class LocalEventClient extends EventEmitter {
+  emitEvent(event: string, ...args: any[]): void {
+    this.emit(event, ...args);
+  }
+}
 
 function makeStubIngress(): {
   ingress: RemoteAgentIngress;
@@ -407,6 +414,33 @@ describe("RemoteServerManager remote hook ingress", () => {
     // %11 has no host, %12 is a different server — neither should be touched.
     expect((manager as any).paneMappings.has("%11")).toBe(false);
     expect((manager as any).paneMappings.has("%12")).toBe(false);
+  });
+
+  it("marks later-session panes ready after session-window-changed re-sync", async () => {
+    const localClient = new LocalEventClient();
+    const manager = new RemoteServerManager(localClient as any, [{ host: "dev-box", name: "dev-box" }]);
+    const remotePaneIds = new Map<string, string>();
+    const fullSync = mock(async () => {
+      remotePaneIds.set("%20", "%120");
+    });
+
+    (manager as any).clients.set("dev-box", {
+      isConnected: true,
+    });
+    (manager as any).mirrors.set("dev-box", {
+      fullSync,
+      getRemotePaneId: (paneId: string) => remotePaneIds.get(paneId),
+    });
+
+    (manager as any).wireLocalEvents();
+
+    expect(manager.getRemoteConversionAvailability("%20", "dev-box")).toBe("waiting");
+
+    localClient.emitEvent("session-window-changed");
+    await Promise.resolve();
+
+    expect(fullSync).toHaveBeenCalledTimes(1);
+    expect(manager.getRemoteConversionAvailability("%20", "dev-box")).toBe("ready");
   });
 
   it("clears orphaned remote metadata when the mirror has no mapping for the local pane", async () => {

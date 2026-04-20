@@ -911,6 +911,24 @@ export class RemoteServerManager extends EventEmitter {
 
   /** Wire local control client events to mirror managers. */
   private wireLocalEvents(): void {
+    this.localClient.on("session-window-changed", () => {
+      for (const [serverName, mirror] of this.mirrors) {
+        const client = this.clients.get(serverName);
+        if (!client?.isConnected) continue;
+        // Detached/new sessions do not reliably emit window-add to the
+        // currently attached control client, so a session switch needs a full
+        // mirror rescan to make newly created panes convertible.
+        mirror
+          .fullSync()
+          .then(() => {
+            this.emitMirrorStateChange();
+          })
+          .catch((err) => {
+            this.emit("warning", `Mirror session sync failed: ${err.message}`);
+          });
+      }
+    });
+
     this.localClient.on("layout-change", (windowId: string, layoutStr: string) => {
       for (const mirror of this.mirrors.values()) {
         mirror
