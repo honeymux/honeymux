@@ -12,10 +12,15 @@ import {
 type PaneInfo = { active: boolean; height: number; id: string; width: number };
 
 class FakePaneEffectsClient {
+  exactResponses = new Map<string, string>();
   listPanesByWindow = new Map<string, PaneInfo[]>();
   listPanesInWindow = mock(async (windowId: string) => this.listPanesByWindow.get(windowId) ?? []);
-  runCommand = mock(async (_command: string) => "");
+  runCommand = mock(async (command: string) => this.exactResponses.get(command) ?? "");
   setPaneBorderFormat = mock(async (_paneId: string, _format: string) => {});
+
+  respond(command: string, response: string): void {
+    this.exactResponses.set(command, response);
+  }
 }
 
 describe("pane tab pane effects", () => {
@@ -104,7 +109,23 @@ describe("pane tab pane effects", () => {
 
     await clearSiblingPaneFormats(client as never, "@1", new Set(["%1", "%3"]));
 
-    expect(client.runCommand).toHaveBeenCalledTimes(1);
     expect(client.runCommand).toHaveBeenCalledWith("set-option -up -t %2 pane-border-format");
+    expect(client.runCommand).not.toHaveBeenCalledWith("set-option -up -t %1 pane-border-format");
+    expect(client.runCommand).not.toHaveBeenCalledWith("set-option -up -t %3 pane-border-format");
+  });
+
+  test("clearSiblingPaneFormats preserves remote panes that own their own border format", async () => {
+    const client = new FakePaneEffectsClient();
+    client.listPanesByWindow.set("@1", [
+      { active: true, height: 24, id: "%1", width: 80 },
+      { active: false, height: 24, id: "%2", width: 80 },
+      { active: false, height: 24, id: "%3", width: 80 },
+    ]);
+    client.respond("list-panes -t '@1' -F ' #{pane_id}\t#{@hmx-remote-host}'", " %1\t\n %2\tremote-box\n %3\t\n");
+
+    await clearSiblingPaneFormats(client as never, "@1", new Set(["%1"]));
+
+    expect(client.runCommand).not.toHaveBeenCalledWith("set-option -up -t %2 pane-border-format");
+    expect(client.runCommand).toHaveBeenCalledWith("set-option -up -t %3 pane-border-format");
   });
 });

@@ -243,12 +243,14 @@ describe("pane tab runtime actions", () => {
     expect(client.swapPane).not.toHaveBeenCalled();
   });
 
-  test("refreshValidatedWindows clears hidden panes and updates slot sizes", async () => {
+  test("refreshValidatedWindows preserves remote panes while clearing ordinary hidden panes", async () => {
     const client = new FakeRuntimeActionsClient();
     client.listPanesByWindow.set("@1", [
       { active: true, height: 30, id: "%1", width: 100 },
       { active: false, height: 24, id: "%2", width: 80 },
+      { active: false, height: 24, id: "%3", width: 80 },
     ]);
+    client.respond("list-panes -t '@1' -F ' #{pane_id}\t#{@hmx-remote-host}'", " %1\t\n %2\tremote-box\n %3\t\n");
 
     const groups = new Map<string, PaneTabGroup>([
       [
@@ -272,7 +274,8 @@ describe("pane tab runtime actions", () => {
 
     expect(changed).toBe(true);
     expect(groups.get("slot-1")).toMatchObject({ slotHeight: 30, slotWidth: 100 });
-    expect(client.runCommand).toHaveBeenCalledWith("set-option -up -t %2 pane-border-format");
+    expect(client.runCommand).not.toHaveBeenCalledWith("set-option -up -t %2 pane-border-format");
+    expect(client.runCommand).toHaveBeenCalledWith("set-option -up -t %3 pane-border-format");
     expect(client.setPaneBorderFormat).toHaveBeenCalledWith("%1", expect.stringContaining("┤ bash ├"));
   });
 });
