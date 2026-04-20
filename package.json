@@ -1,6 +1,6 @@
 {
   "name": "honeymux",
-  "version": "0.101.1",
+  "version": "0.101.2",
   "module": "src/index.tsx",
   "scripts": {
     "build": "bun build --compile --target bun src/index.tsx --outfile dist/hmx",
