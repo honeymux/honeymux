@@ -225,8 +225,8 @@ describe("RemoteServerManager remote hook ingress", () => {
       getRemotePaneId: () => undefined,
     });
 
-    expect(manager.getRemoteConversionAvailability("%10", "dev-box")).toBe("waiting");
-    expect(manager.hasConvertibleRemoteServer("%10")).toBe(false);
+    expect(manager.getRemoteConversionAvailability("%10", "dev-box")).toBe("ready");
+    expect(manager.hasConvertibleRemoteServer("%10")).toBe(true);
 
     (manager as any).mirrors.set("dev-box", {
       getRemotePaneId: () => "%77",
@@ -234,6 +234,35 @@ describe("RemoteServerManager remote hook ingress", () => {
 
     expect(manager.getRemoteConversionAvailability("%10", "dev-box")).toBe("ready");
     expect(manager.hasConvertibleRemoteServer("%10")).toBe(true);
+  });
+
+  it("forces a mirror sync during conversion when the pane mapping is missing", async () => {
+    const respawnPane = mock(async () => {});
+    const localClient = {
+      respawnPane,
+      runCommandArgs: mock(async () => {}),
+      setPaneBorderFormat: mock(async () => {}),
+    } as any;
+
+    const manager = new RemoteServerManager(localClient, [{ host: "dev-box", name: "dev-box" }]);
+    let remotePaneId: string | undefined;
+    const fullSync = mock(async () => {
+      remotePaneId = "%77";
+    });
+
+    (manager as any).clients.set("dev-box", {
+      isConnected: true,
+      sendCommand: mock(async () => ""),
+    });
+    (manager as any).mirrors.set("dev-box", {
+      fullSync,
+      getRemotePaneId: () => remotePaneId,
+    });
+
+    await manager.convertPane("%10", "dev-box");
+
+    expect(fullSync).toHaveBeenCalledTimes(1);
+    expect(respawnPane).toHaveBeenCalledTimes(1);
   });
 
   it("installs proxy expectations before the remote pane respawns", async () => {
@@ -416,31 +445,24 @@ describe("RemoteServerManager remote hook ingress", () => {
     expect((manager as any).paneMappings.has("%12")).toBe(false);
   });
 
-  it("marks later-session panes ready after session-window-changed re-sync", async () => {
+  it("re-syncs connected mirrors when the active session changes", async () => {
     const localClient = new LocalEventClient();
     const manager = new RemoteServerManager(localClient as any, [{ host: "dev-box", name: "dev-box" }]);
-    const remotePaneIds = new Map<string, string>();
-    const fullSync = mock(async () => {
-      remotePaneIds.set("%20", "%120");
-    });
+    const fullSync = mock(async () => {});
 
     (manager as any).clients.set("dev-box", {
       isConnected: true,
     });
     (manager as any).mirrors.set("dev-box", {
       fullSync,
-      getRemotePaneId: (paneId: string) => remotePaneIds.get(paneId),
     });
 
     (manager as any).wireLocalEvents();
-
-    expect(manager.getRemoteConversionAvailability("%20", "dev-box")).toBe("waiting");
 
     localClient.emitEvent("session-window-changed");
     await Promise.resolve();
 
     expect(fullSync).toHaveBeenCalledTimes(1);
-    expect(manager.getRemoteConversionAvailability("%20", "dev-box")).toBe("ready");
   });
 
   it("clears orphaned remote metadata when the mirror has no mapping for the local pane", async () => {

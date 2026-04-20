@@ -124,8 +124,17 @@ export class RemoteServerManager extends EventEmitter {
       throw new Error(err);
     }
 
-    // Find the corresponding remote pane
-    const remotePaneId = mirror.getRemotePaneId(localPaneId);
+    let remotePaneId = mirror.getRemotePaneId(localPaneId);
+    if (!remotePaneId) {
+      log(
+        "remote",
+        `convertPane: missing mirror mapping for ${localPaneId} on ${this.serverTag(serverName)}, forcing sync`,
+      );
+      await mirror.fullSync();
+      this.emitMirrorStateChange();
+      remotePaneId = mirror.getRemotePaneId(localPaneId);
+    }
+
     if (!remotePaneId) {
       const err = `No mirror pane found for ${localPaneId} on ${serverName}`;
       log("remote", `convertPane failed: ${err}`);
@@ -197,17 +206,19 @@ export class RemoteServerManager extends EventEmitter {
     return names;
   }
 
-  getRemoteConversionAvailability(localPaneId: string, serverName: string): "ready" | "unavailable" | "waiting" {
+  getRemoteConversionAvailability(_localPaneId: string, serverName: string): "ready" | "unavailable" | "waiting" {
     const client = this.clients.get(serverName);
     const mirror = this.mirrors.get(serverName);
     if (!client || !mirror || !client.isConnected) {
       return "unavailable";
     }
-    return mirror.getRemotePaneId(localPaneId) ? "ready" : "waiting";
+    return "ready";
   }
 
   hasConvertibleRemoteServer(localPaneId: string): boolean {
-    return this.configs.some((config) => this.getRemoteConversionAvailability(localPaneId, config.name) === "ready");
+    return this.configs.some(
+      (config) => this.getRemoteConversionAvailability(localPaneId, config.name) !== "unavailable",
+    );
   }
 
   /** Check if a pane is remote. */

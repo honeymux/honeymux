@@ -845,8 +845,8 @@ export function App({ sessionName }: AppProps) {
         onConvertToRemote={(paneId, serverName) => {
           void (async () => {
             const manager = remoteManagerRef.current;
-            if (!manager || manager.getRemoteConversionAvailability(paneId, serverName) !== "ready") {
-              log("remote", `convertPane skipped: mirror not ready for ${paneId} on ${serverName}`);
+            if (!manager || manager.getRemoteConversionAvailability(paneId, serverName) === "unavailable") {
+              log("remote", `convertPane skipped: server unavailable for ${paneId} on ${serverName}`);
               return;
             }
             // Evict the pane from any pane-tab group BEFORE conversion so the
