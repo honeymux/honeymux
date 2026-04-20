@@ -6,6 +6,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { FatalReport } from "./util/fatal-report.ts";
 import type { KeybindingConfig } from "./util/keybindings.ts";
 
+import { useHarnessHooks } from "./app/harness/use-harness-hooks.ts";
+import { useHarnessRenamePaneTabsRef } from "./app/harness/use-harness-rename-pane-tabs-ref.ts";
 import { buildAppRuntimeContext } from "./app/hooks/build-app-runtime-context.ts";
 import { useAgentActions } from "./app/hooks/use-agent-actions.ts";
 import { useAgentBinaryDetection } from "./app/hooks/use-agent-binary-detection.ts";
@@ -338,6 +340,25 @@ export function App({ sessionName }: AppProps) {
   } = notificationsReviewState;
   handleNotificationsClickRef.current = handleNotificationsClick;
   appRuntimeRefs.addInfoRef.current = addInfo;
+
+  // Harness hook surface: mirror the agent-sessions setter into a ref so the
+  // env-gated harness helpers can push synthetic sessions for doc screenshots.
+  // In production (HMX_HARNESS unset) the ref is assigned but never read.
+  const setAgentSessionsRef = useRef(agentDialogState.setAgentSessions);
+  setAgentSessionsRef.current = agentDialogState.setAgentSessions;
+
+  const renameAllPaneTabsRef = useHarnessRenamePaneTabsRef({ activeWindowIdRef, paneTabsApi });
+
+  useHarnessHooks({
+    addInfoRef: appRuntimeRefs.addInfoRef,
+    handleActivateMenuRef: appRuntimeRefs.handleActivateMenuRef,
+    handleAgentLatchRef: appRuntimeRefs.handleAgentLatchRef,
+    handleNotificationsClickRef: appRuntimeRefs.handleNotificationsClickRef,
+    renameAllPaneTabsRef,
+    setAgentSessionsRef,
+    toggleReviewLatchRef: appRuntimeRefs.toggleReviewLatchRef,
+    treeAgentSelectRef: appRuntimeRefs.treeAgentSelectRef,
+  });
 
   usePromptClickState({
     clientRef,

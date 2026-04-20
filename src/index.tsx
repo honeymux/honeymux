@@ -211,6 +211,13 @@ const probe = await probeTerminal({
 
 // Distribute probe results to modules that expose them as singletons.
 setTerminalName(probe.name);
+// The screenshot harness can't answer XTVERSION from inside its embedded
+// ghostty-opentui VT buffer, so it publishes its identity via
+// HMX_HARNESS_TERM_NAME instead. Applied post-probe so a real XTVERSION
+// response is overridden only when the harness is explicitly active.
+if (process.env["HMX_HARNESS_TERM_NAME"]) {
+  setTerminalName(process.env["HMX_HARNESS_TERM_NAME"]);
+}
 if (probe.kittyKeyboard) probe.caps.set("KittyKbd", "");
 setTermCaps(probe.caps);
 setTerminalIsUtf8(probe.isUtf8);

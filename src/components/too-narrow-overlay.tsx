@@ -26,7 +26,16 @@ export function TooNarrowOverlay({ height, reason = "narrow", width }: TooNarrow
   const boxTop = Math.floor((height - boxH) / 2);
 
   return (
-    <box backgroundColor="#000000" height={height} left={0} position="absolute" top={0} width={width} zIndex={25}>
+    <box
+      backgroundColor="#000000"
+      height={height}
+      id="honeyshots:too-narrow-overlay"
+      left={0}
+      position="absolute"
+      top={0}
+      width={width}
+      zIndex={25}
+    >
       <HoneycombBackground height={height} width={width} />
       {/* Center message box */}
       <box

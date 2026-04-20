@@ -220,6 +220,7 @@ export function ScreenshotDoneDialog({ buttonCol, filePath, onCopy, onDismiss }:
         borderStyle="rounded"
         flexDirection="column"
         height={boxHeight}
+        id="honeyshots:screenshot-done-dialog"
         justifyContent="center"
         left="50%"
         marginLeft={-Math.floor(boxWidth / 2)}
@@ -296,6 +297,7 @@ export function ScreenshotLargeDialog({ height, onDismiss, width }: ScreenshotLa
         borderStyle="rounded"
         flexDirection="column"
         height={boxHeight}
+        id="honeyshots:screenshot-large-dialog"
         justifyContent="center"
         left={dialogLeft}
         position="absolute"

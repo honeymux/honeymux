@@ -1,5 +1,7 @@
 import type { ReactNode } from "react";
 
+import { Fragment } from "react";
+
 import { type MouseEvent, TextAttributes } from "@opentui/core";
 
 import type { AgentType, HoneymuxState } from "../../agents/types.ts";
@@ -203,49 +205,25 @@ export function MuxotronExpandedView({
         />
       )}
       {showInteractiveTerminal && (
-        <>
-          {Array.from({ length: terminalContentRows }, (_, row) => (
-            <box key={`agent-row-${row}`}>
-              <text
-                bg={realBg}
-                content={sideBarAt(contentTop + row)}
-                fg={borderColor}
-                left={bx}
-                position="absolute"
-                selectable={false}
-                top={contentTop + row}
-              />
-              <text
-                bg={realBg}
-                content={sideBarAt(contentTop + row)}
-                fg={borderColor}
-                left={bx + expandedInner + 1}
-                position="absolute"
-                selectable={false}
-                top={contentTop + row}
-              />
-            </box>
-          ))}
-          <box
-            height={terminalContentRows}
-            left={bx + 1}
-            onMouse={
-              onInteractiveScrollSequence
-                ? (event: MouseEvent) => {
-                    const sequence = buildInteractiveScrollSequence(event, interactiveFrame);
-                    if (!sequence) return;
-                    event.stopPropagation();
-                    onInteractiveScrollSequence(sequence);
-                  }
-                : undefined
-            }
-            position="absolute"
-            top={contentTop}
-            width={expandedInner}
-          >
-            {agentTerminalNode}
-          </box>
-        </>
+        <box
+          height={terminalContentRows}
+          left={bx + 1}
+          onMouse={
+            onInteractiveScrollSequence
+              ? (event: MouseEvent) => {
+                  const sequence = buildInteractiveScrollSequence(event, interactiveFrame);
+                  if (!sequence) return;
+                  event.stopPropagation();
+                  onInteractiveScrollSequence(sequence);
+                }
+              : undefined
+          }
+          position="absolute"
+          top={contentTop}
+          width={expandedInner}
+        >
+          {agentTerminalNode}
+        </box>
       )}
       {!showInteractiveTerminal &&
         wrappedLines.map((line, row) => (
@@ -281,6 +259,37 @@ export function MuxotronExpandedView({
           </box>
         ))}
       {bottomNode}
+      {/* Vertical frame edges for the interactive terminal area, rendered as
+          the last children of the muxotron box. The GhosttyTerminalRenderable
+          inside the terminal box writes into a cache buffer that (especially
+          in the honeyshots harness) can overpaint the muxotron's side-border
+          columns; emitting these last forces a terminal-data repaint so the
+          frame survives regardless of child draw order. */}
+      {showInteractiveTerminal &&
+        Array.from({ length: terminalContentRows }, (_, row) => (
+          <Fragment key={`frame-edge-${row}`}>
+            <text
+              bg={realBg}
+              content={sideBarAt(contentTop + row)}
+              fg={borderColor}
+              left={bx}
+              position="absolute"
+              selectable={false}
+              top={contentTop + row}
+              zIndex={50}
+            />
+            <text
+              bg={realBg}
+              content={sideBarAt(contentTop + row)}
+              fg={borderColor}
+              left={bx + expandedInner + 1}
+              position="absolute"
+              selectable={false}
+              top={contentTop + row}
+              zIndex={50}
+            />
+          </Fragment>
+        ))}
     </box>
   );
 }
