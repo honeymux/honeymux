@@ -291,6 +291,11 @@ export function setupInputLayer(ctx: SetupTmuxRuntimeContext): () => void {
       refreshMouseFlag().catch(() => {});
     }
 
+    const writeUserInputToPane = (data: string): void => {
+      if (!inputReady.current) return;
+      writeFnRef.current(data);
+    };
+
     const clickToMoveRef = {
       current: (ptyX: number, ptyY: number): boolean => {
         if (mouseAnyFlagRef.current) return false;
@@ -348,7 +353,7 @@ export function setupInputLayer(ctx: SetupTmuxRuntimeContext): () => void {
         if (delta === 0) return false;
 
         const arrow = delta > 0 ? "\x1b[C" : "\x1b[D";
-        pty.write(arrow.repeat(Math.abs(delta)));
+        writeUserInputToPane(arrow.repeat(Math.abs(delta)));
         return true;
       },
     };
@@ -378,10 +383,7 @@ export function setupInputLayer(ctx: SetupTmuxRuntimeContext): () => void {
         onDropdownInput: (data: string) => {
           dropdownInputRef.current?.(data);
         },
-        writePaste: (data: string) => {
-          if (!inputReady.current) return;
-          writeFnRef.current(data);
-        },
+        writePaste: writeUserInputToPane,
       },
     );
     cleanupFns.push(teardownMouseForward);

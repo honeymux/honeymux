@@ -399,6 +399,17 @@ export class RemoteServerManager extends EventEmitter {
     const client = this.clients.get(mapping.serverName);
     if (!client || !client.isConnected) return false;
 
+    if (data === "\x1b") {
+      // Remote-backed panes can still leave the local proxy pane's tmux in a
+      // stray copy mode (for example after local mouse-wheel scroll). Cancel
+      // that local mode opportunistically before forwarding Escape remotely.
+      // This is a blind best-effort cancel on every plain Escape; we do not
+      // currently cache `#{pane_in_mode}`. If this ever shows up as noisy or
+      // expensive, the better optimization is to track pane mode in memory via
+      // a tmux format subscription instead of adding a per-Escape query here.
+      this.localClient.runCommandArgs(["send-keys", "-X", "-t", paneId, "cancel"]).catch(() => {});
+    }
+
     // Send raw bytes via send-keys -H (hex mode)
     const hex = Buffer.from(data).toString("hex").match(/.{2}/g)!.join(" ");
     client.sendCommand(`send-keys -H -t ${mapping.remotePaneId} ${hex}`).catch(() => {});

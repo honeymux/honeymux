@@ -236,6 +236,49 @@ describe("RemoteServerManager remote hook ingress", () => {
     expect(manager.hasConvertibleRemoteServer("%10")).toBe(true);
   });
 
+  it("routes remote pane input through send-keys -H", () => {
+    const runCommandArgs = mock(async () => {});
+    const sendCommand = mock(async () => "");
+    const manager = new RemoteServerManager({ runCommandArgs } as any, [{ host: "dev-box", name: "dev-box" }]);
+
+    (manager as any).clients.set("dev-box", {
+      isConnected: true,
+      sendCommand,
+    });
+    (manager as any).paneMappings.set("%10", {
+      localPaneId: "%10",
+      remotePaneId: "%77",
+      serverName: "dev-box",
+    });
+
+    expect(manager.routeInput("%10", "ab")).toBe(true);
+
+    expect(sendCommand).toHaveBeenCalledWith("send-keys -H -t %77 61 62");
+    expect(runCommandArgs).not.toHaveBeenCalled();
+  });
+
+  it("cancels stray local copy mode before forwarding Escape to a remote pane", async () => {
+    const runCommandArgs = mock(async () => {});
+    const sendCommand = mock(async () => "");
+    const manager = new RemoteServerManager({ runCommandArgs } as any, [{ host: "dev-box", name: "dev-box" }]);
+
+    (manager as any).clients.set("dev-box", {
+      isConnected: true,
+      sendCommand,
+    });
+    (manager as any).paneMappings.set("%10", {
+      localPaneId: "%10",
+      remotePaneId: "%77",
+      serverName: "dev-box",
+    });
+
+    expect(manager.routeInput("%10", "\x1b")).toBe(true);
+    await Promise.resolve();
+
+    expect(runCommandArgs).toHaveBeenCalledWith(["send-keys", "-X", "-t", "%10", "cancel"]);
+    expect(sendCommand).toHaveBeenCalledWith("send-keys -H -t %77 1b");
+  });
+
   it("forces a mirror sync during conversion when the pane mapping is missing", async () => {
     const respawnPane = mock(async () => {});
     const localClient = {

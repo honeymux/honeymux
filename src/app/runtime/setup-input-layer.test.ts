@@ -44,16 +44,20 @@ function createContext(overrides?: Partial<SetupTmuxRuntimeContext>): {
   detachMock: ReturnType<typeof mock>;
   onDialogInputMock: ReturnType<typeof mock>;
   onDropdownInputMock: ReturnType<typeof mock>;
+  ptyWriteMock: ReturnType<typeof mock>;
   redrawMock: ReturnType<typeof mock>;
   setHistoryReadyMock: ReturnType<typeof mock>;
   showHintMock: ReturnType<typeof mock>;
+  writeFnMock: ReturnType<typeof mock>;
 } {
   const detachMock = mock(async () => {});
   const setHistoryReadyMock = mock((_value: unknown) => {});
   const onDialogInputMock = mock((_data: string) => {});
   const onDropdownInputMock = mock((_data: string) => false);
+  const ptyWriteMock = mock((_data: string) => {});
   const showHintMock = mock((_text: string) => {});
   const redrawMock = mock(() => {});
+  const writeFnMock = mock((_data: string) => {});
 
   const ctx = {
     agentRuntime: {
@@ -122,7 +126,7 @@ function createContext(overrides?: Partial<SetupTmuxRuntimeContext>): {
       tmuxPrefixKeyAliasRef: { current: null },
       tmuxPrefixSequenceRef: { current: null },
       toggleReviewLatchRef: { current: null },
-      writeFnRef: { current: (_data: string) => {} },
+      writeFnRef: { current: writeFnMock },
       zoomActionRef: { current: null },
       zoomStickyRef: { current: { zoomAgentsView: false, zoomServerView: false } },
     },
@@ -178,7 +182,7 @@ function createContext(overrides?: Partial<SetupTmuxRuntimeContext>): {
       inputRouterSetup: { current: false },
       promptClickStateRef: { current: "unknown" as const },
       promptInputStartRef: { current: null },
-      ptyRef: { current: { write: mock((_data: string) => {}) } as any },
+      ptyRef: { current: { write: ptyWriteMock } as any },
       renderer: { id: "renderer" },
       spawnPtyBridge: (_target: string) => null,
       switchingRef: { current: new Set<string>() },
@@ -205,9 +209,11 @@ function createContext(overrides?: Partial<SetupTmuxRuntimeContext>): {
     detachMock,
     onDialogInputMock,
     onDropdownInputMock,
+    ptyWriteMock,
     redrawMock,
     setHistoryReadyMock,
     showHintMock,
+    writeFnMock,
   };
 }
 
@@ -276,5 +282,19 @@ describe("setupInputLayer", () => {
 
     expect(historyLoadAsyncMock).not.toHaveBeenCalled();
     expect(ctx.sessionState.historyLoadStartedRef.current).toBe(false);
+  });
+
+  test("routes forwarded raw mouse input through the local PTY", () => {
+    const { ctx, ptyWriteMock, writeFnMock } = createContext();
+
+    setupInputLayer(ctx);
+
+    const writeMouseToPane = setupMouseForwardMock.mock.calls[0]?.[0] as ((data: string) => void) | undefined;
+    expect(writeMouseToPane).toBeTypeOf("function");
+
+    writeMouseToPane?.("\x1b[<64;20;5M");
+
+    expect(ptyWriteMock).toHaveBeenCalledWith("\x1b[<64;20;5M");
+    expect(writeFnMock).not.toHaveBeenCalled();
   });
 });
