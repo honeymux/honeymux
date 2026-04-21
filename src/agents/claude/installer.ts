@@ -30,9 +30,6 @@ type HookMatcherGroup = {
 
 type ResolveExecutable = (name: string) => null | string | undefined;
 
-// Consent lives on the local filesystem regardless of install target.
-const CONSENT_FILE = `${process.env.HOME}/.local/state/honeymux/claude-hooks-consent.json`;
-
 export async function areClaudeHooksInstalled(host: InstallHost = localInstallHost): Promise<boolean> {
   const scriptPath = join(await getHooksDir(host), HOOK_SCRIPT_NAME);
   const script = await host.readFile(scriptPath);
@@ -66,7 +63,7 @@ export async function installClaudeHooks(host: InstallHost = localInstallHost): 
 }
 
 export function isClaudeIgnored(hostId: string = "local"): boolean {
-  return readHostConsent(CONSENT_FILE, hostId).ignored === true;
+  return readHostConsent(getConsentFile(), hostId).ignored === true;
 }
 
 /**
@@ -75,7 +72,7 @@ export function isClaudeIgnored(hostId: string = "local"): boolean {
  * bundled version. No-op when consent is missing or the script is absent.
  */
 export async function refreshClaudeHooksIfConsented(host: InstallHost = localInstallHost): Promise<void> {
-  if (readHostConsent(CONSENT_FILE, host.hostId).consented !== true) return;
+  if (readHostConsent(getConsentFile(), host.hostId).consented !== true) return;
   const scriptPath = join(await getHooksDir(host), HOOK_SCRIPT_NAME);
   if ((await host.readFile(scriptPath)) === null) return;
   try {
@@ -93,12 +90,12 @@ export function resolveClaudeHookPython(
 
 export async function saveClaudeConsent(consented: boolean, hostId: string = "local"): Promise<void> {
   const consent: HostConsent = { consented, savedAt: Date.now() };
-  writeHostConsent(CONSENT_FILE, hostId, consent);
+  writeHostConsent(getConsentFile(), hostId, consent);
 }
 
 export async function saveClaudeIgnored(hostId: string = "local"): Promise<void> {
   const consent: HostConsent = { consented: false, ignored: true, savedAt: Date.now() };
-  writeHostConsent(CONSENT_FILE, hostId, consent);
+  writeHostConsent(getConsentFile(), hostId, consent);
 }
 
 export function upsertClaudeHookSettings(settings: ClaudeSettings, command: string): ClaudeSettings {
@@ -141,6 +138,12 @@ function containsOurHook(obj: unknown): boolean {
   if (Array.isArray(obj)) return obj.some(containsOurHook);
   if (obj && typeof obj === "object") return Object.values(obj).some(containsOurHook);
   return false;
+}
+
+// Consent lives on the local filesystem regardless of install target.
+// Read lazily so tests can redirect HOME without module-load ordering tricks.
+function getConsentFile(): string {
+  return `${process.env.HOME}/.local/state/honeymux/claude-hooks-consent.json`;
 }
 
 async function getHooksDir(host: InstallHost): Promise<string> {

@@ -1,4 +1,7 @@
-import { describe, expect, it } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it } from "bun:test";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 import type { InstallHost } from "../install-host.ts";
 
@@ -11,6 +14,25 @@ import {
   saveClaudeConsent,
   upsertClaudeHookSettings,
 } from "./installer.ts";
+
+// Redirect HOME per test so saveClaudeConsent/installClaudeHooks never touch
+// the real ~/.local/state/honeymux/claude-hooks-consent.json.
+const originalHome = process.env.HOME;
+let tempHome: string | undefined;
+
+beforeEach(() => {
+  tempHome = mkdtempSync(join(tmpdir(), "hmx-claude-installer-test-"));
+  process.env.HOME = tempHome;
+});
+
+afterEach(() => {
+  if (originalHome === undefined) delete process.env.HOME;
+  else process.env.HOME = originalHome;
+  if (tempHome) {
+    rmSync(tempHome, { force: true, recursive: true });
+    tempHome = undefined;
+  }
+});
 
 function makeFakeHost(options: { hostId?: string } = {}): {
   dirs: Set<string>;
