@@ -6,7 +6,7 @@ import type { AgentSession } from "../../agents/types.ts";
 import type { HoneymuxConfig, UIMode } from "../../util/config.ts";
 import type { KeyAction, KeybindingConfig } from "../../util/keybindings.ts";
 import type { AppRuntimeRefs } from "./use-app-runtime-refs.ts";
-import type { UiChromeState } from "./use-app-state-groups.ts";
+import type { SidebarView, UiChromeState } from "./use-app-state-groups.ts";
 
 import { groupSessionsForDisplay } from "../../components/agent-tree-groups.ts";
 import { isMarqueeMode, saveConfig } from "../../util/config.ts";
@@ -76,7 +76,15 @@ interface UseMuxotronFocusAndAgentSelectionOptions {
   setConfig: (value: HoneymuxConfig) => void;
   uiChromeState: Pick<
     UiChromeState,
-    "muxotronFocusActive" | "muxotronFocusActiveRef" | "setMuxotronFocusActive" | "setZoomAction" | "zoomAction"
+    | "muxotronFocusActive"
+    | "muxotronFocusActiveRef"
+    | "setMuxotronFocusActive"
+    | "setSidebarOpen"
+    | "setSidebarView"
+    | "setZoomAction"
+    | "sidebarOpen"
+    | "sidebarView"
+    | "zoomAction"
   >;
 }
 
@@ -209,7 +217,11 @@ export function useMuxotronFocusAndAgentSelection({
     muxotronFocusActive,
     muxotronFocusActiveRef: uiMuxotronFocusActiveRef,
     setMuxotronFocusActive,
+    setSidebarOpen,
+    setSidebarView,
     setZoomAction,
+    sidebarOpen,
+    sidebarView,
     zoomAction,
   } = uiChromeState;
 
@@ -222,6 +234,30 @@ export function useMuxotronFocusAndAgentSelection({
   agentPreviewRef.current = !!treeSelectedSession && !reviewLatched;
 
   const [capturedPaneLines, setCapturedPaneLines] = useState<null | string[]>(null);
+
+  const sidebarOpenRef = useRef(sidebarOpen);
+  sidebarOpenRef.current = sidebarOpen;
+  const sidebarViewRef = useRef(sidebarView);
+  sidebarViewRef.current = sidebarView;
+  const priorSidebarStateRef = useRef<{ open: boolean; view: SidebarView } | null>(null);
+
+  useEffect(() => {
+    if (treeSelectedSession) {
+      if (priorSidebarStateRef.current == null) {
+        priorSidebarStateRef.current = {
+          open: sidebarOpenRef.current,
+          view: sidebarViewRef.current,
+        };
+      }
+      setSidebarOpen(true);
+      setSidebarView("agents");
+    } else if (priorSidebarStateRef.current) {
+      const prior = priorSidebarStateRef.current;
+      priorSidebarStateRef.current = null;
+      setSidebarOpen(prior.open);
+      setSidebarView(prior.view);
+    }
+  }, [treeSelectedSession, setSidebarOpen, setSidebarView]);
 
   const zoomAgentsViewBinding = keybindingConfig.zoomAgentsView;
   const zoomServerViewBinding = keybindingConfig.zoomServerView;
