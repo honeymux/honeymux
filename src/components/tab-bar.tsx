@@ -669,6 +669,7 @@ export function TabBar({
           onExpandedWidthChange={onExpandedWidthChange}
           onGoto={onGoto}
           onInteractiveScrollSequence={onInteractiveScrollSequence}
+          onMuxotronClick={onMuxotronClick}
           onNextAgent={onNextAgent}
           onNotificationsClick={onNotificationsClick}
           onPrevAgent={onPrevAgent}

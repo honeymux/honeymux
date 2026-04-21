@@ -256,6 +256,14 @@ export function buildAppPaneProps({
     onLayoutSetFavorite: layoutProfiles.handleSetFavorite,
   };
 
+  // Unanswered perm request in a non-active pane — drives the muxotron's
+  // alert visuals (branded border, expanded marquee) and also makes clicking
+  // the muxotron act like "goto" so the user lands on the waiting agent
+  // instead of opening the agents dialog.
+  const hasUnansweredElsewhere = agentDialogState.agentSessions.some(
+    (s) => s.status === "unanswered" && !s.dismissed && s.paneId !== activePaneId,
+  );
+
   const agent: TmuxPaneAgentProps = {
     activePaneId,
     agentAlertAnimConfusables: optionsWorkflow.optionsDialogOpen
@@ -299,12 +307,7 @@ export function buildAppPaneProps({
     muxotronEnabled: optionsWorkflow.optionsDialogOpen
       ? optionsWorkflow.configMuxotronEnabled
       : (optionsWorkflow.config.muxotronEnabled ?? true),
-    muxotronExpanded:
-      (effectiveUIMode === "adaptive" &&
-        agentDialogState.agentSessions.some(
-          (s) => s.status === "unanswered" && !s.dismissed && s.paneId !== activePaneId,
-        )) ||
-      !!selectedSession,
+    muxotronExpanded: (effectiveUIMode === "adaptive" && hasUnansweredElsewhere) || !!selectedSession,
     muxotronFocusActive,
     onAgentsDialogClose: handleAgentsDialogClose,
     onAgentsDialogSelect: agentActions.handleAgentsDialogSelect,
@@ -314,7 +317,9 @@ export function buildAppPaneProps({
     onGoToPane: agentActions.handleGoToPane,
     onGoto: () => refs.handleGotoAgentRef.current(),
     onInteractiveScrollSequence,
-    onMuxotronClick: agentActions.handleOpenAgentsDialog,
+    onMuxotronClick: hasUnansweredElsewhere
+      ? () => refs.handleGotoAgentRef.current()
+      : agentActions.handleOpenAgentsDialog,
     onNextAgent: selectedSession ? () => refs.handleAgentNextRef.current() : undefined,
     onNotificationsClick: () => refs.handleNotificationsClickRef.current(),
     onPermissionRespond: agentActions.handlePermissionRespond,

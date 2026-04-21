@@ -30,6 +30,7 @@ interface MuxotronExpandedViewProps {
   isDashed: boolean;
   labelColor: string;
   onInteractiveScrollSequence?: (sequence: string) => void;
+  onMouseDown?: (event: MouseEvent) => void;
   onMouseScroll?: (event: MouseEvent) => void;
   realBg: string;
   sideBar: string;
@@ -62,6 +63,7 @@ export function MuxotronExpandedView({
   isDashed,
   labelColor,
   onInteractiveScrollSequence,
+  onMouseDown,
   onMouseScroll,
   realBg,
   sideBar,
@@ -87,6 +89,7 @@ export function MuxotronExpandedView({
       height={totalHeight}
       id="honeyshots:muxotron-expanded"
       left={expandedIl}
+      onMouseDown={onMouseDown}
       onMouseScroll={onMouseScroll}
       position="absolute"
       selectable={false}

@@ -81,6 +81,9 @@ export interface MuxotronProps {
   onExpandedWidthChange?: (width: number) => void;
   onGoto?: () => void;
   onInteractiveScrollSequence?: (sequence: string) => void;
+  /** Called when the expanded muxotron body is clicked (collapsed clicks
+   *  are routed by the tab bar's zone detection). */
+  onMuxotronClick?: () => void;
   /** Navigate to next agent in the sidebar tree (tree-selection mode only). */
   onNextAgent?: () => void;
   onNotificationsClick?: () => void;
@@ -126,6 +129,7 @@ export function Muxotron({
   onExpandedWidthChange,
   onGoto,
   onInteractiveScrollSequence,
+  onMuxotronClick,
   onNextAgent,
   onNotificationsClick,
   onPrevAgent,
@@ -737,6 +741,14 @@ export function Muxotron({
         isDashed={isDashed}
         labelColor={labelColor}
         onInteractiveScrollSequence={interactiveActive ? onInteractiveScrollSequence : undefined}
+        onMouseDown={
+          onMuxotronClick && !interactiveActive
+            ? (e: MouseEvent) => {
+                e.stopPropagation();
+                onMuxotronClick();
+              }
+            : undefined
+        }
         onMouseScroll={
           !interactiveActive && allWrappedLines.length > clampedExtraLines
             ? (e: MouseEvent) => {
