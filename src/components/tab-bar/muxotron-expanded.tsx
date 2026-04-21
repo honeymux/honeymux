@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 
 import { type MouseEvent, TextAttributes } from "@opentui/core";
 
-import type { HoneymuxState } from "../../agents/types.ts";
+import type { AgentType, HoneymuxState } from "../../agents/types.ts";
 import type { MuxotronBorderOverlay } from "./muxotron-model.ts";
 
 import { theme } from "../../themes/theme.ts";
@@ -47,6 +47,7 @@ interface MuxotronExpandedViewProps {
   top?: number;
   totalHeight: number;
   truncatedInfo: string;
+  unansweredAgentType?: AgentType;
   wrappedLines: string[];
   zIndex: number;
 }
@@ -81,6 +82,7 @@ export function MuxotronExpandedView({
   top = 0,
   totalHeight,
   truncatedInfo,
+  unansweredAgentType,
   wrappedLines,
   zIndex,
 }: MuxotronExpandedViewProps) {
@@ -155,6 +157,7 @@ export function MuxotronExpandedView({
         left={bx + 1 + hmPad}
         sineWaveLastOutputTickAt={sineWaveLastOutputTickAt}
         top={mascotRow}
+        unansweredAgentType={unansweredAgentType}
       />
       {truncatedInfo && (
         <text

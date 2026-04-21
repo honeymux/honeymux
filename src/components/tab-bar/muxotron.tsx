@@ -26,6 +26,7 @@ import {
   buildMuxotronToolInfo,
   formatMuxotronCount,
   getFirstUnansweredSession,
+  getFirstUnansweredSessionAnywhere,
   isMuxotronDashed,
   punchDashedBorderGaps,
   sanitizeMuxotronDisplayText,
@@ -252,6 +253,11 @@ export function Muxotron({
   // no specific agent can be identified.
   const firstUnanswered = unansweredElsewhere ? getFirstUnansweredSession(active, activePaneId) : undefined;
   const alertBorderColor = firstUnanswered ? AGENT_COLORS[firstUnanswered.agentType] : theme.statusWarning;
+  // The mascot tint is driven by the first unanswered agent anywhere (including
+  // the focused pane), since `needInputFocused` should still carry the agent's
+  // brand color. `firstUnanswered` above excludes the focused pane for border
+  // alerting, so we recompute without that filter here.
+  const mascotAgentType = getFirstUnansweredSessionAnywhere(active)?.agentType;
   const baseBorderColor = unansweredElsewhere ? alertBorderColor : hasAnyAgent ? theme.textSecondary : theme.border;
 
   // Smooth glow when unanswered
@@ -779,6 +785,7 @@ export function Muxotron({
         top={labelOnBottom && termHeight ? Math.max(0, termHeight - totalHeight) : 0}
         totalHeight={totalHeight}
         truncatedInfo={truncatedInfo}
+        unansweredAgentType={mascotAgentType}
         wrappedLines={wrappedLines}
         zIndex={selectedSessionProp ? 22 : 12}
       />
@@ -882,6 +889,7 @@ export function Muxotron({
       sineWaveLastOutputTickAt={sineWaveLastOutputTickAt}
       topLineStr={topLineStr}
       topTextOverlays={topTextOverlays}
+      unansweredAgentType={mascotAgentType}
       vBar={vBar}
       warningCount={warningCount}
     />

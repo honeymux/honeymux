@@ -183,6 +183,12 @@ export function getFirstUnansweredSession(
     .sort((a, b) => a.startedAt - b.startedAt)[0];
 }
 
+export function getFirstUnansweredSessionAnywhere(sessions: AgentSession[]): AgentSession | undefined {
+  return sessions
+    .filter((session) => session.status === "unanswered" && !session.dismissed)
+    .sort((a, b) => a.startedAt - b.startedAt)[0];
+}
+
 /**
  * Decides whether the muxotron should render a dashed border. The dashed
  * pattern signals "latch available" — it appears only when a latch keybinding

@@ -1,9 +1,9 @@
 import { type RGBA, parseColor } from "@opentui/core";
 import { useRef } from "react";
 
-import { HONEYMUX_ANIMATIONS, type HoneymuxState } from "../../agents/types.ts";
+import { AGENT_COLORS, type AgentType, HONEYMUX_ANIMATIONS, type HoneymuxState } from "../../agents/types.ts";
 import { useImperativeAnimation } from "../../app/hooks/use-imperative-animation.ts";
-import { theme } from "../../themes/theme.ts";
+import { hexToRgb, lerpRgb, rgbToHex, theme } from "../../themes/theme.ts";
 import {
   MUXOTRON_SINE_WAVE_DRAIN_STEP_MS,
   MUXOTRON_SINE_WAVE_IDLE_MS,
@@ -14,6 +14,7 @@ interface MascotSnapshot {
   honeymuxState: HoneymuxState;
   sineWaveLastOutputTickAt: null | number;
   ticker: MascotTickerState;
+  unansweredAgentType: AgentType | undefined;
 }
 
 /**
@@ -38,16 +39,30 @@ interface MuxotronMascotOverlayProps {
   /** Timestamp of last agent output tick — mascot brightens while the sine wave is active/draining. */
   sineWaveLastOutputTickAt?: null | number;
   top: number;
+  /** Agent type of the pane-pointed-to unanswered session. When present in a
+   *  `needInput`/`needInputFocused` state, the mascot is tinted with a lerp of
+   *  that agent's brand color so the user can tell at a glance which provider
+   *  is waiting. Absent for idle/sleeping states or synthetic previews. */
+  unansweredAgentType?: AgentType;
 }
 
 let cachedColorKey: null | string = null;
 let cachedColor: RGBA | null = null;
+
+/** Lerp weight between the agent brand color and `theme.statusWarning` for the
+ *  mascot's needInput tint. 0 = pure brand color, 1 = pure warning. Picked so
+ *  cool-brand agents (codex blue, gemini purple) still read as "alert" without
+ *  washing out warm-brand agents (claude orange). */
+const AGENT_ALERT_LERP = 0.5;
+
+const agentAlertColorCache = new Map<string, string>();
 
 export function MuxotronMascotOverlay({
   honeymuxState,
   left,
   sineWaveLastOutputTickAt,
   top,
+  unansweredAgentType,
 }: MuxotronMascotOverlayProps) {
   // Per-instance mutable ticker state.  Initialized once and mutated by the
   // paint/delay callbacks on each frame.
@@ -82,18 +97,27 @@ export function MuxotronMascotOverlay({
       advanceMascotFrame(state.honeymuxState, state.ticker, Date.now());
 
       const frame = anim.frames[state.ticker.frameIdx] ?? anim.frames[0]!;
-      // Unanswered states pull from the theme so the mascot matches the
-      // yellow used to highlight unanswered agents in the sidebar.
-      const unansweredColor =
-        state.honeymuxState === "needInput" || state.honeymuxState === "needInputFocused"
-          ? theme.statusWarning
-          : anim.color;
+      // In needInput states the bear is tinted toward the requesting agent's
+      // brand color (lerp'd with statusWarning so blue/purple/gray agents still
+      // read as "alert"). Falls back to the theme warning when no specific
+      // agent is known (synthetic previews, edge cases).
+      const isNeedInput = state.honeymuxState === "needInput" || state.honeymuxState === "needInputFocused";
+      const unansweredColor = isNeedInput
+        ? state.unansweredAgentType
+          ? resolveAgentAlertColor(state.unansweredAgentType)
+          : theme.statusWarning
+        : anim.color;
       const color = isSineWaveAnimating(state.sineWaveLastOutputTickAt, performance.now())
         ? theme.textBright
         : unansweredColor;
       buffer.drawText(frame, this.x, this.y, resolveMascotColor(color));
     },
-    state: { honeymuxState, sineWaveLastOutputTickAt: sineWaveLastOutputTickAt ?? null, ticker: tickerRef.current },
+    state: {
+      honeymuxState,
+      sineWaveLastOutputTickAt: sineWaveLastOutputTickAt ?? null,
+      ticker: tickerRef.current,
+      unansweredAgentType,
+    },
   });
 
   return (
@@ -190,6 +214,16 @@ function isSineWaveAnimating(lastOutputTickAt: null | number, now: number): bool
   const silenceMs = now - lastOutputTickAt;
   const drainEndMs = MUXOTRON_SINE_WAVE_IDLE_MS + MUXOTRON_SINE_WAVE_WIDTH * MUXOTRON_SINE_WAVE_DRAIN_STEP_MS;
   return silenceMs < drainEndMs;
+}
+
+function resolveAgentAlertColor(agentType: AgentType): string {
+  const warning = theme.statusWarning;
+  const key = `${agentType}:${warning}`;
+  const cached = agentAlertColorCache.get(key);
+  if (cached) return cached;
+  const mixed = rgbToHex(lerpRgb(hexToRgb(AGENT_COLORS[agentType]), hexToRgb(warning), AGENT_ALERT_LERP));
+  agentAlertColorCache.set(key, mixed);
+  return mixed;
 }
 
 function resolveMascotColor(hex: string): RGBA {
