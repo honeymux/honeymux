@@ -23,10 +23,12 @@ interface MuxotronCollapsedViewProps {
   il: number;
   infoCount?: number;
   inner: number;
+  isDashed: boolean;
   isMarquee: boolean;
   labelColor: string;
   marqueeToolInfo: string;
   onNotificationsClick?: () => void;
+  realBg: string;
   showNoAgents: boolean;
   sineWaveHasConnectedAgent: boolean;
   sineWaveLastOutputTickAt: null | number;
@@ -49,10 +51,12 @@ export function MuxotronCollapsedView({
   il,
   infoCount,
   inner,
+  isDashed,
   isMarquee,
   labelColor,
   marqueeToolInfo,
   onNotificationsClick,
+  realBg,
   showNoAgents,
   sineWaveHasConnectedAgent,
   sineWaveLastOutputTickAt,
@@ -101,9 +105,18 @@ export function MuxotronCollapsedView({
         top={0}
         width={inner + 2}
       />
-      <text content={topLineStr} fg={borderColor} left={il} position="absolute" selectable={false} top={0} />
+      <text
+        bg={isDashed ? realBg : undefined}
+        content={topLineStr}
+        fg={borderColor}
+        left={il}
+        position="absolute"
+        selectable={false}
+        top={0}
+      />
       {topTextOverlays.map((overlay, idx) => (
         <text
+          bg={isDashed ? realBg : undefined}
           content={overlay.content}
           fg={labelColor}
           key={`top-ov-${idx}`}
@@ -113,8 +126,24 @@ export function MuxotronCollapsedView({
           top={0}
         />
       ))}
-      <text content={vBar} fg={borderColor} left={il} position="absolute" selectable={false} top={1} />
-      <text content={vBar} fg={borderColor} left={il + inner + 1} position="absolute" selectable={false} top={1} />
+      <text
+        bg={isDashed ? realBg : undefined}
+        content={vBar}
+        fg={borderColor}
+        left={il}
+        position="absolute"
+        selectable={false}
+        top={1}
+      />
+      <text
+        bg={isDashed ? realBg : undefined}
+        content={vBar}
+        fg={borderColor}
+        left={il + inner + 1}
+        position="absolute"
+        selectable={false}
+        top={1}
+      />
       {(() => {
         if (!showBadge) {
           return (

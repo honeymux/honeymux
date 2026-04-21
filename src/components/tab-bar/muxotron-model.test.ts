@@ -10,6 +10,8 @@ import {
   buildMuxotronHintButtons,
   buildMuxotronToolInfo,
   getFirstUnansweredSession,
+  isMuxotronDashed,
+  punchDashedBorderGaps,
   sanitizeMuxotronDisplayText,
   splitMuxotronBorderOverlays,
   toSuperscript,
@@ -198,5 +200,67 @@ describe("muxotron model helpers", () => {
         expect.objectContaining({ content: expect.stringContaining(MUXOTRON_COUNTER_LABEL) }),
       ]),
     );
+  });
+
+  test("punches every 4th horizontal dash into an opaque gap", () => {
+    expect(punchDashedBorderGaps("╭" + "─".repeat(9) + "╮")).toBe("╭─── ─── ─╮");
+    expect(punchDashedBorderGaps("━━━━━━━━━━━━")).toBe("━━━ ━━━ ━━━ ");
+    expect(punchDashedBorderGaps("╭─ label ─────╮")).toBe("╭─ label ── ──╮");
+  });
+});
+
+describe("isMuxotronDashed", () => {
+  const base = {
+    agentLatchBindingLabel: "right shift",
+    eqActive: false,
+    hasActivePermissionRequest: true,
+    muxotronFocusActive: false,
+    reviewLatched: false,
+    selectedSession: false,
+  };
+
+  test("solid when no latch binding is configured", () => {
+    expect(isMuxotronDashed({ ...base, agentLatchBindingLabel: undefined })).toBe(false);
+  });
+
+  test("solid when there's no active permission request", () => {
+    expect(isMuxotronDashed({ ...base, hasActivePermissionRequest: false })).toBe(false);
+  });
+
+  test("solid when the anamorphic equalizer is active", () => {
+    expect(isMuxotronDashed({ ...base, eqActive: true })).toBe(false);
+  });
+
+  test("dashed when a perm is pending and the muxotron is idle", () => {
+    expect(isMuxotronDashed(base)).toBe(true);
+  });
+
+  test("solid after the user zooms the muxotron on a perm request", () => {
+    expect(isMuxotronDashed({ ...base, muxotronFocusActive: true })).toBe(false);
+  });
+
+  test("dashed during review preview (tree selection without latch)", () => {
+    expect(
+      isMuxotronDashed({ ...base, muxotronFocusActive: true, reviewLatched: false, selectedSession: true }),
+    ).toBe(true);
+  });
+
+  test("solid when the review workflow is latched", () => {
+    expect(
+      isMuxotronDashed({ ...base, muxotronFocusActive: true, reviewLatched: true, selectedSession: true }),
+    ).toBe(false);
+  });
+
+  test("re-entering review after prior latch reverts to dashed when unlatched", () => {
+    // Simulates the sequence: review latched → unlatched → exit → re-enter.
+    // After the second entry, reviewLatched is reset to false, so the border
+    // must be dashed again (regression guard for the first-vs-second-review
+    // inconsistency).
+    const latched = { ...base, muxotronFocusActive: true, reviewLatched: true, selectedSession: true };
+    expect(isMuxotronDashed(latched)).toBe(false);
+    const unlatched = { ...latched, reviewLatched: false };
+    expect(isMuxotronDashed(unlatched)).toBe(true);
+    const secondEntry = { ...unlatched, reviewLatched: false };
+    expect(isMuxotronDashed(secondEntry)).toBe(true);
   });
 });

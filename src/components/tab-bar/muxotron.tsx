@@ -27,6 +27,8 @@ import {
   buildMuxotronToolInfo,
   formatMuxotronCount,
   getFirstUnansweredSession,
+  isMuxotronDashed,
+  punchDashedBorderGaps,
   sanitizeMuxotronDisplayText,
   splitMuxotronBorderOverlays,
 } from "./muxotron-model.ts";
@@ -255,6 +257,22 @@ export function Muxotron({
     borderColor = EQ_BORDER;
   }
 
+  const hasActivePermissionRequest =
+    !!configAgentsPreview || active.some((s) => s.status === "unanswered" && !s.dismissed);
+  const isDashed = isMuxotronDashed({
+    agentLatchBindingLabel,
+    eqActive,
+    hasActivePermissionRequest,
+    muxotronFocusActive: !!muxotronFocusActive,
+    reviewLatched: !!reviewLatched,
+    selectedSession: !!selectedSessionProp,
+  });
+
+  // Use actual probed terminal bg for the opaque box — theme.bg may not match.
+  // Hoisted so both collapsed and expanded paths can paint dashed-gap cells
+  // opaque (otherwise the gap spaces would let underlying content through).
+  const realBg = rgbToHex(terminalBgRgb);
+
   // Anamorphic Equalizer border characters
   const cornerTL = eqActive ? "┏" : "╭";
   const cornerTR = eqActive ? "┓" : "╮";
@@ -450,13 +468,9 @@ export function Muxotron({
     const scribbleActive = !!agentAlertAnimScribble && unansweredElsewhere && intermittentActive;
     if (scribbleActive) expandedTopStr = scribbleCycle(expandedTopStr, now);
     // Positions relative to the muxotronEnabled box (not the tab bar)
-    const { lineStr: expandedTopLineStr, overlays: expandedTopOverlays } = splitMuxotronBorderOverlays(
-      expandedTopStr,
-      0,
-    );
-
-    // Use actual probed terminal bg for the opaque box — theme.bg may not match.
-    const realBg = rgbToHex(terminalBgRgb);
+    const split = splitMuxotronBorderOverlays(expandedTopStr, 0);
+    const expandedTopLineStr = isDashed ? punchDashedBorderGaps(split.lineStr) : split.lineStr;
+    const expandedTopOverlays = split.overlays;
 
     // Bottom border row index (shifts down when vertically expanded)
     const botRow = totalHeight - 1;
@@ -473,6 +487,7 @@ export function Muxotron({
       const dashCount = Math.max(0, expandedInner - buttonRowWidth);
       let baseDashes = hDash.repeat(dashCount);
       if (scribbleActive) baseDashes = scribbleCycle(baseDashes, now);
+      if (isDashed) baseDashes = punchDashedBorderGaps(baseDashes);
 
       // Compute button positions (relative to box)
       const buttonAreaStart = 1 + dashCount + 1; // after cornerBL + dashes + left pad space
@@ -578,6 +593,7 @@ export function Muxotron({
       const dashCount = Math.max(0, expandedInner - expandRegionWidth);
       let baseDashes = hDash.repeat(dashCount);
       if (scribbleActive) baseDashes = scribbleCycle(baseDashes, now);
+      if (isDashed) baseDashes = punchDashedBorderGaps(baseDashes);
 
       const botBaseStr = cornerBL + baseDashes + " ".repeat(expandRegionWidth) + cornerBR;
       const expandPadLeft = bx + 1 + dashCount; // left padding space
@@ -712,6 +728,7 @@ export function Muxotron({
         hasUnansweredElsewhere={unansweredElsewhere}
         hmPad={hmPad}
         honeymuxState={honeymuxState}
+        isDashed={isDashed}
         labelColor={labelColor}
         onInteractiveScrollSequence={interactiveActive ? onInteractiveScrollSequence : undefined}
         onMouseScroll={
@@ -742,7 +759,9 @@ export function Muxotron({
   // Collapsed path — reset reported width so the tab bar uses normal overflow.
   if (reportedExpandedWidth !== 0) setReportedExpandedWidth(0);
 
-  const { lineStr: topLineStr, overlays: topTextOverlays } = splitMuxotronBorderOverlays(topBorderStr, il);
+  const topSplit = splitMuxotronBorderOverlays(topBorderStr, il);
+  const topLineStr = isDashed ? punchDashedBorderGaps(topSplit.lineStr) : topSplit.lineStr;
+  const topTextOverlays = topSplit.overlays;
 
   // Bottom border: Anamorphic Equalizer or normal (with optional label for marquee-bottom)
   let bottomBorderNode: ReactNode;
@@ -768,12 +787,23 @@ export function Muxotron({
       showMarqueeHints,
       withLabel: true,
     });
-    const { lineStr: botLineStr, overlays: botTextOverlays } = splitMuxotronBorderOverlays(bottomBorderStr, il);
+    const botSplit = splitMuxotronBorderOverlays(bottomBorderStr, il);
+    const botLineStr = isDashed ? punchDashedBorderGaps(botSplit.lineStr) : botSplit.lineStr;
+    const botTextOverlays = botSplit.overlays;
     bottomBorderNode = (
       <>
-        <text content={botLineStr} fg={borderColor} left={il} position="absolute" selectable={false} top={2} />
+        <text
+          bg={isDashed ? realBg : undefined}
+          content={botLineStr}
+          fg={borderColor}
+          left={il}
+          position="absolute"
+          selectable={false}
+          top={2}
+        />
         {botTextOverlays.map((ov, idx) => (
           <text
+            bg={isDashed ? realBg : undefined}
             content={ov.content}
             fg={labelColor}
             key={`bot-ov-${idx}`}
@@ -786,9 +816,11 @@ export function Muxotron({
       </>
     );
   } else {
+    const plainBottom = `${cornerBL}${hDash.repeat(inner)}${cornerBR}`;
     bottomBorderNode = (
       <text
-        content={`╰${"─".repeat(inner)}╯`}
+        bg={isDashed ? realBg : undefined}
+        content={isDashed ? punchDashedBorderGaps(plainBottom) : plainBottom}
         fg={borderColor}
         left={il}
         position="absolute"
@@ -812,10 +844,12 @@ export function Muxotron({
       il={il}
       infoCount={infoCount}
       inner={inner}
+      isDashed={isDashed}
       isMarquee={isMarquee}
       labelColor={labelColor}
       marqueeToolInfo={marqueeToolInfo}
       onNotificationsClick={onNotificationsClick}
+      realBg={realBg}
       showNoAgents={showNoAgents}
       sineWaveHasConnectedAgent={sineWaveHasConnectedAgent}
       sineWaveLastOutputTickAt={sineWaveLastOutputTickAt}

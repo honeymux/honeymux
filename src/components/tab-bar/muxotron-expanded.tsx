@@ -27,6 +27,7 @@ interface MuxotronExpandedViewProps {
   hasUnansweredElsewhere: boolean;
   hmPad: number;
   honeymuxState: HoneymuxState;
+  isDashed: boolean;
   labelColor: string;
   onInteractiveScrollSequence?: (sequence: string) => void;
   onMouseScroll?: (event: MouseEvent) => void;
@@ -58,6 +59,7 @@ export function MuxotronExpandedView({
   hasUnansweredElsewhere,
   hmPad,
   honeymuxState,
+  isDashed,
   labelColor,
   onInteractiveScrollSequence,
   onMouseScroll,
@@ -77,6 +79,9 @@ export function MuxotronExpandedView({
     top: 3,
     width: expandedInner,
   };
+  // When dashed, replace the vertical side char on every 4th absolute row
+  // with an opaque space — mirrors the horizontal 3-on/1-off gap pattern.
+  const sideBarAt = (absRow: number) => (isDashed && absRow > 0 && absRow % 4 === 0 ? " " : sideBar);
   return (
     <box
       height={totalHeight}
@@ -111,7 +116,15 @@ export function MuxotronExpandedView({
           top={0}
         />
       ))}
-      <text bg={realBg} content={sideBar} fg={borderColor} left={bx} position="absolute" selectable={false} top={1} />
+      <text
+        bg={realBg}
+        content={sideBarAt(1)}
+        fg={borderColor}
+        left={bx}
+        position="absolute"
+        selectable={false}
+        top={1}
+      />
       <MuxotronMascotOverlay
         honeymuxState={honeymuxState}
         left={bx + 1 + hmPad}
@@ -143,7 +156,7 @@ export function MuxotronExpandedView({
       )}
       <text
         bg={realBg}
-        content={sideBar}
+        content={sideBarAt(1)}
         fg={borderColor}
         left={bx + expandedInner + 1}
         position="absolute"
@@ -167,7 +180,7 @@ export function MuxotronExpandedView({
             <box key={`agent-row-${row}`}>
               <text
                 bg={realBg}
-                content={sideBar}
+                content={sideBarAt(3 + row)}
                 fg={borderColor}
                 left={bx}
                 position="absolute"
@@ -176,7 +189,7 @@ export function MuxotronExpandedView({
               />
               <text
                 bg={realBg}
-                content={sideBar}
+                content={sideBarAt(3 + row)}
                 fg={borderColor}
                 left={bx + expandedInner + 1}
                 position="absolute"
@@ -211,7 +224,7 @@ export function MuxotronExpandedView({
           <box key={`wrap-${row}`}>
             <text
               bg={realBg}
-              content={sideBar}
+              content={sideBarAt(3 + row)}
               fg={borderColor}
               left={bx}
               position="absolute"
@@ -230,7 +243,7 @@ export function MuxotronExpandedView({
             />
             <text
               bg={realBg}
-              content={sideBar}
+              content={sideBarAt(3 + row)}
               fg={borderColor}
               left={bx + expandedInner + 1}
               position="absolute"

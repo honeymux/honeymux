@@ -209,6 +209,61 @@ export function getFirstUnansweredSession(
     .sort((a, b) => a.startedAt - b.startedAt)[0];
 }
 
+/**
+ * Decides whether the muxotron should render a dashed border. The dashed
+ * pattern signals "latch available" — it appears only when a latch keybinding
+ * is configured, the user isn't currently engaged with an agent, and at least
+ * one undismissed permission request is active somewhere.
+ *
+ * "Engaged" depends on which latch path is in play:
+ *  - review workflow (tree-selected agent): `reviewLatched` is the truth.
+ *    `muxotronFocusActive` is already true while previewing, so it can't be
+ *    used as the engaged signal here.
+ *  - perm-request latch (no tree selection): pressing agentLatch zooms the
+ *    muxotron via handleAgentLatch, which flips `muxotronFocusActive` but
+ *    leaves `reviewLatched` false — so the focus flag is the engaged signal.
+ *
+ * The eqActive caller takes visual precedence (its heavy solid chars already
+ * carry their own alert meaning), so it's checked by the caller before this.
+ */
+export function isMuxotronDashed(input: {
+  agentLatchBindingLabel?: string;
+  eqActive: boolean;
+  hasActivePermissionRequest: boolean;
+  muxotronFocusActive: boolean;
+  reviewLatched: boolean;
+  selectedSession: boolean;
+}): boolean {
+  if (input.eqActive) return false;
+  if (!input.agentLatchBindingLabel) return false;
+  if (!input.hasActivePermissionRequest) return false;
+  const isEngaged = input.selectedSession ? input.reviewLatched : input.muxotronFocusActive;
+  return !isEngaged;
+}
+
+/**
+ * Punches periodic gaps into horizontal border runs by replacing every 4th
+ * horizontal dash char with a space. The caller must render the result with
+ * an opaque bg so the gap cells don't let underlying content bleed through.
+ * Covers light/heavy/scribble variants so it composes with scribbleCycle.
+ */
+export function punchDashedBorderGaps(s: string): string {
+  const DASH_CHARS = "─━┅┄";
+  let dashSeen = 0;
+  let out = "";
+  for (const ch of s) {
+    if (DASH_CHARS.includes(ch)) {
+      dashSeen += 1;
+      if (dashSeen % 4 === 0) {
+        out += " ";
+        continue;
+      }
+    }
+    out += ch;
+  }
+  return out;
+}
+
 export function sanitizeMuxotronDisplayText(text: string, preserveNewlines = false): string {
   const normalized = preserveNewlines
     ? text.replaceAll("\r\n", "\n").replaceAll("\r", "\n")
