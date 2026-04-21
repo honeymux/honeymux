@@ -7,7 +7,7 @@ import type { CodingAgentPaneActivity } from "../../agents/pane-activity.ts";
 import type { AgentSession, HoneymuxState } from "../../agents/types.ts";
 import type { UIMode } from "../../util/config.ts";
 
-import { HONEYMUX_ANIMATIONS } from "../../agents/types.ts";
+import { AGENT_COLORS, HONEYMUX_ANIMATIONS } from "../../agents/types.ts";
 import { hexToRgb, lerpRgb, rgbToHex, terminalBgRgb, theme } from "../../themes/theme.ts";
 import { EQ_BORDER, computeScannerColors } from "../../util/anamorphic-equalizer.ts";
 import { isMarqueeMode } from "../../util/config.ts";
@@ -240,15 +240,22 @@ export function Muxotron({
     return () => clearInterval(id);
   }, [needsFastTick]);
 
-  // Border color reflects overall mood
-  const baseBorderColor = unansweredElsewhere ? theme.statusWarning : hasAnyAgent ? theme.textSecondary : theme.border;
+  // Border color reflects overall mood. When a permission request is
+  // pending elsewhere, brand the border with the requesting agent's color
+  // (e.g. orange for claude, purple for gemini, blue for codex) so the
+  // user can tell at a glance which agent is waiting. Falls back to the
+  // generic warning hue only for synthetic previews or edge cases where
+  // no specific agent can be identified.
+  const firstUnanswered = unansweredElsewhere ? getFirstUnansweredSession(active, activePaneId) : undefined;
+  const alertBorderColor = firstUnanswered ? AGENT_COLORS[firstUnanswered.agentType] : theme.statusWarning;
+  const baseBorderColor = unansweredElsewhere ? alertBorderColor : hasAnyAgent ? theme.textSecondary : theme.border;
 
   // Smooth glow when unanswered
   let borderColor = baseBorderColor;
   if (unansweredElsewhere && agentAlertAnimGlow === true && intermittentActive) {
     const glowT = (Math.sin((now / 1000) * Math.PI) + 1) / 2;
     const from = hexToRgb(theme.border);
-    const to = hexToRgb(theme.statusWarning);
+    const to = hexToRgb(alertBorderColor);
     borderColor = rgbToHex(lerpRgb(from, to, glowT));
   }
 
@@ -300,7 +307,6 @@ export function Muxotron({
 
   // Marquee mode: show tool detail for the first unanswered agent
   const isMarquee = isMarqueeMode(uiMode);
-  const firstUnanswered = unansweredElsewhere ? getFirstUnansweredSession(active, activePaneId) : undefined;
   // When a session is explicitly selected from the tree, use it as the target for expansion.
   // During config agents preview, force undefined so the dummy preview content is shown
   // instead of any real permission request that may be active.
