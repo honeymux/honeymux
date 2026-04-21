@@ -272,6 +272,7 @@ export function App({ sessionName }: AppProps) {
     connected,
     setClaudeDialogPending,
     setCodexDialogPending,
+    setDialogMode: agentDialogState.setDialogMode,
     setGeminiDialogPending,
     setOpenCodeDialogPending,
   });
@@ -281,6 +282,7 @@ export function App({ sessionName }: AppProps) {
     setClaudeDialogPending,
     setCodexDialogPending,
     setDialogHostId: agentDialogState.setDialogHostId,
+    setDialogMode: agentDialogState.setDialogMode,
     setGeminiDialogPending,
     setOpenCodeDialogPending,
   });

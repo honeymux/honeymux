@@ -62,6 +62,10 @@ export async function installClaudeHooks(host: InstallHost = localInstallHost): 
   }
 }
 
+export function isClaudeConsented(hostId: string = "local"): boolean {
+  return readHostConsent(getConsentFile(), hostId).consented === true;
+}
+
 export function isClaudeIgnored(hostId: string = "local"): boolean {
   return readHostConsent(getConsentFile(), hostId).ignored === true;
 }

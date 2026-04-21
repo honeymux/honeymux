@@ -90,6 +90,7 @@ export function useAgentActions({
     setClaudeDialogPending,
     setCodexDialogPending,
     setDialogHostId,
+    setDialogMode,
     setDialogSelected,
     setGeminiDialogPending,
     setOpenCodeDialogPending,
@@ -291,6 +292,7 @@ export function useAgentActions({
     log("consent", `agent hooks: claude install accepted (host=${hostId ?? "local"})`);
     setClaudeDialogPending(false);
     setDialogHostId(undefined);
+    setDialogMode("install");
     setDialogSelected("install");
     undeferForHost("claude", hostId);
     const host = resolveInstallHost(hostId);
@@ -313,6 +315,7 @@ export function useAgentActions({
     resolveInstallHost,
     setClaudeDialogPending,
     setDialogHostId,
+    setDialogMode,
     setDialogSelected,
     undeferForHost,
   ]);
@@ -321,26 +324,29 @@ export function useAgentActions({
     const hostId = dialogHostIdRef.current ?? "local";
     setClaudeDialogPending(false);
     setDialogHostId(undefined);
+    setDialogMode("install");
     setDialogSelected("install");
     await saveClaudeConsent(false, hostId);
     deferForHost("claude", hostId);
-  }, [deferForHost, setClaudeDialogPending, setDialogHostId, setDialogSelected]);
+  }, [deferForHost, setClaudeDialogPending, setDialogHostId, setDialogMode, setDialogSelected]);
 
   const handleClaudeNever = useCallback(async () => {
     const hostId = dialogHostIdRef.current ?? "local";
     log("consent", `agent hooks: claude install rejected (host=${hostId})`);
     setClaudeDialogPending(false);
     setDialogHostId(undefined);
+    setDialogMode("install");
     setDialogSelected("install");
     await saveClaudeIgnored(hostId);
     undeferForHost("claude", hostId);
-  }, [setClaudeDialogPending, setDialogHostId, setDialogSelected, undeferForHost]);
+  }, [setClaudeDialogPending, setDialogHostId, setDialogMode, setDialogSelected, undeferForHost]);
 
   const handleOpenCodeInstall = useCallback(async () => {
     const hostId = dialogHostIdRef.current;
     log("consent", `agent hooks: opencode install accepted (host=${hostId ?? "local"})`);
     setOpenCodeDialogPending(false);
     setDialogHostId(undefined);
+    setDialogMode("install");
     setDialogSelected("install");
     undeferForHost("opencode", hostId);
     const host = resolveInstallHost(hostId);
@@ -360,6 +366,7 @@ export function useAgentActions({
     registryRef,
     resolveInstallHost,
     setDialogHostId,
+    setDialogMode,
     setDialogSelected,
     setOpenCodeDialogPending,
     undeferForHost,
@@ -369,26 +376,29 @@ export function useAgentActions({
     const hostId = dialogHostIdRef.current ?? "local";
     setOpenCodeDialogPending(false);
     setDialogHostId(undefined);
+    setDialogMode("install");
     setDialogSelected("install");
     await saveOpenCodeConsent(false, hostId);
     deferForHost("opencode", hostId);
-  }, [deferForHost, setDialogHostId, setDialogSelected, setOpenCodeDialogPending]);
+  }, [deferForHost, setDialogHostId, setDialogMode, setDialogSelected, setOpenCodeDialogPending]);
 
   const handleOpenCodeNever = useCallback(async () => {
     const hostId = dialogHostIdRef.current ?? "local";
     log("consent", `agent hooks: opencode install rejected (host=${hostId})`);
     setOpenCodeDialogPending(false);
     setDialogHostId(undefined);
+    setDialogMode("install");
     setDialogSelected("install");
     await saveOpenCodeIgnored(hostId);
     undeferForHost("opencode", hostId);
-  }, [setDialogHostId, setDialogSelected, setOpenCodeDialogPending, undeferForHost]);
+  }, [setDialogHostId, setDialogMode, setDialogSelected, setOpenCodeDialogPending, undeferForHost]);
 
   const handleGeminiInstall = useCallback(async () => {
     const hostId = dialogHostIdRef.current;
     log("consent", `agent hooks: gemini install accepted (host=${hostId ?? "local"})`);
     setGeminiDialogPending(false);
     setDialogHostId(undefined);
+    setDialogMode("install");
     setDialogSelected("install");
     undeferForHost("gemini", hostId);
     const host = resolveInstallHost(hostId);
@@ -408,6 +418,7 @@ export function useAgentActions({
     registryRef,
     resolveInstallHost,
     setDialogHostId,
+    setDialogMode,
     setDialogSelected,
     setGeminiDialogPending,
     undeferForHost,
@@ -417,26 +428,29 @@ export function useAgentActions({
     const hostId = dialogHostIdRef.current ?? "local";
     setGeminiDialogPending(false);
     setDialogHostId(undefined);
+    setDialogMode("install");
     setDialogSelected("install");
     await saveGeminiConsent(false, hostId);
     deferForHost("gemini", hostId);
-  }, [deferForHost, setDialogHostId, setDialogSelected, setGeminiDialogPending]);
+  }, [deferForHost, setDialogHostId, setDialogMode, setDialogSelected, setGeminiDialogPending]);
 
   const handleGeminiNever = useCallback(async () => {
     const hostId = dialogHostIdRef.current ?? "local";
     log("consent", `agent hooks: gemini install rejected (host=${hostId})`);
     setGeminiDialogPending(false);
     setDialogHostId(undefined);
+    setDialogMode("install");
     setDialogSelected("install");
     await saveGeminiIgnored(hostId);
     undeferForHost("gemini", hostId);
-  }, [setDialogHostId, setDialogSelected, setGeminiDialogPending, undeferForHost]);
+  }, [setDialogHostId, setDialogMode, setDialogSelected, setGeminiDialogPending, undeferForHost]);
 
   const handleCodexInstall = useCallback(async () => {
     const hostId = dialogHostIdRef.current;
     log("consent", `agent hooks: codex install accepted (host=${hostId ?? "local"})`);
     setCodexDialogPending(false);
     setDialogHostId(undefined);
+    setDialogMode("install");
     setDialogSelected("install");
     undeferForHost("codex", hostId);
     const host = resolveInstallHost(hostId);
@@ -457,6 +471,7 @@ export function useAgentActions({
     resolveInstallHost,
     setCodexDialogPending,
     setDialogHostId,
+    setDialogMode,
     setDialogSelected,
     undeferForHost,
   ]);
@@ -465,20 +480,22 @@ export function useAgentActions({
     const hostId = dialogHostIdRef.current ?? "local";
     setCodexDialogPending(false);
     setDialogHostId(undefined);
+    setDialogMode("install");
     setDialogSelected("install");
     await saveCodexConsent(false, hostId);
     deferForHost("codex", hostId);
-  }, [deferForHost, setCodexDialogPending, setDialogHostId, setDialogSelected]);
+  }, [deferForHost, setCodexDialogPending, setDialogHostId, setDialogMode, setDialogSelected]);
 
   const handleCodexNever = useCallback(async () => {
     const hostId = dialogHostIdRef.current ?? "local";
     log("consent", `agent hooks: codex install rejected (host=${hostId})`);
     setCodexDialogPending(false);
     setDialogHostId(undefined);
+    setDialogMode("install");
     setDialogSelected("install");
     await saveCodexIgnored(hostId);
     undeferForHost("codex", hostId);
-  }, [setCodexDialogPending, setDialogHostId, setDialogSelected, undeferForHost]);
+  }, [setCodexDialogPending, setDialogHostId, setDialogMode, setDialogSelected, undeferForHost]);
 
   const handleOpenQuickTerminal = useCallback(() => {
     // Set refs FIRST (synchronous, visible to input router immediately)

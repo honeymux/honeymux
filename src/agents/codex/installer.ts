@@ -63,6 +63,10 @@ export async function installCodexHooks(host: InstallHost = localInstallHost): P
   }
 }
 
+export function isCodexConsented(hostId: string = "local"): boolean {
+  return readHostConsent(CONSENT_FILE, hostId).consented === true;
+}
+
 export function isCodexIgnored(hostId: string = "local"): boolean {
   return readHostConsent(CONSENT_FILE, hostId).ignored === true;
 }

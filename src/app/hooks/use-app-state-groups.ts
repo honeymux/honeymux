@@ -18,6 +18,8 @@ export interface AgentDialogState {
   codexDialogPending: boolean;
   /** Remote server name when the current agent-install dialog targets a remote host; undefined = local. */
   dialogHostId: string | undefined;
+  /** Whether the current dialog is a fresh install or an update of already-present hooks. */
+  dialogMode: "install" | "upgrade";
   dialogSelected: "install" | "never" | "skip";
   geminiDialogPending: boolean;
   hookSnifferEvents: HookSnifferEntry[];
@@ -31,6 +33,7 @@ export interface AgentDialogState {
   setClaudeDialogPending: Dispatch<SetStateAction<boolean>>;
   setCodexDialogPending: Dispatch<SetStateAction<boolean>>;
   setDialogHostId: Dispatch<SetStateAction<string | undefined>>;
+  setDialogMode: Dispatch<SetStateAction<"install" | "upgrade">>;
   setDialogSelected: Dispatch<SetStateAction<"install" | "never" | "skip">>;
   setGeminiDialogPending: Dispatch<SetStateAction<boolean>>;
   setHookSnifferEvents: Dispatch<SetStateAction<HookSnifferEntry[]>>;
@@ -114,6 +117,7 @@ export function useAgentDialogState(): AgentDialogState {
   const [codexDialogPending, setCodexDialogPending] = useState(false);
   const [dialogSelected, setDialogSelected] = useState<"install" | "never" | "skip">("install");
   const [dialogHostId, setDialogHostId] = useState<string | undefined>(undefined);
+  const [dialogMode, setDialogMode] = useState<"install" | "upgrade">("install");
   const overlayOpenRef = useRef(false);
   const [quickTerminalOpen, setQuickTerminalOpen] = useState(false);
   // NOTE: quickTerminalOpenRef is managed exclusively by the open/close handlers
@@ -129,6 +133,7 @@ export function useAgentDialogState(): AgentDialogState {
     claudeDialogPending,
     codexDialogPending,
     dialogHostId,
+    dialogMode,
     dialogSelected,
     geminiDialogPending,
     hookSnifferEvents,
@@ -142,6 +147,7 @@ export function useAgentDialogState(): AgentDialogState {
     setClaudeDialogPending,
     setCodexDialogPending,
     setDialogHostId,
+    setDialogMode,
     setDialogSelected,
     setGeminiDialogPending,
     setHookSnifferEvents,

@@ -15,10 +15,10 @@ import type { InstallHost } from "../../agents/install-host.ts";
 import type { RemoteServerManager } from "../../remote/remote-server-manager.ts";
 import type { AgentType } from "./agent-binary-detection-core.ts";
 
-import { areClaudeHooksInstalled, isClaudeIgnored } from "../../agents/claude/installer.ts";
-import { areCodexHooksInstalled, isCodexIgnored } from "../../agents/codex/installer.ts";
-import { areGeminiHooksInstalled, isGeminiIgnored } from "../../agents/gemini/installer.ts";
-import { isOpenCodeIgnored, isOpenCodePluginInstalled } from "../../agents/opencode/installer.ts";
+import { areClaudeHooksInstalled, isClaudeConsented, isClaudeIgnored } from "../../agents/claude/installer.ts";
+import { areCodexHooksInstalled, isCodexConsented, isCodexIgnored } from "../../agents/codex/installer.ts";
+import { areGeminiHooksInstalled, isGeminiConsented, isGeminiIgnored } from "../../agents/gemini/installer.ts";
+import { isOpenCodeConsented, isOpenCodeIgnored, isOpenCodePluginInstalled } from "../../agents/opencode/installer.ts";
 import { detectRemoteRunningAgentTypes } from "../../remote/agent-binary-detection.ts";
 import { RemoteInstallHost } from "../../remote/remote-install-host.ts";
 
@@ -27,23 +27,28 @@ const POLL_INTERVAL_MS = 5000;
 const AGENT_CHECKS: Record<
   AgentType,
   {
+    isConsented: (hostId: string) => boolean;
     isIgnored: (hostId: string) => boolean;
     isInstalled: (host: InstallHost) => Promise<boolean>;
   }
 > = {
   claude: {
+    isConsented: (hostId) => isClaudeConsented(hostId),
     isIgnored: (hostId) => isClaudeIgnored(hostId),
     isInstalled: (host) => areClaudeHooksInstalled(host),
   },
   codex: {
+    isConsented: (hostId) => isCodexConsented(hostId),
     isIgnored: (hostId) => isCodexIgnored(hostId),
     isInstalled: (host) => areCodexHooksInstalled(host),
   },
   gemini: {
+    isConsented: (hostId) => isGeminiConsented(hostId),
     isIgnored: (hostId) => isGeminiIgnored(hostId),
     isInstalled: (host) => areGeminiHooksInstalled(host),
   },
   opencode: {
+    isConsented: (hostId) => isOpenCodeConsented(hostId),
     isIgnored: (hostId) => isOpenCodeIgnored(hostId),
     isInstalled: (host) => isOpenCodePluginInstalled(host),
   },
@@ -67,6 +72,7 @@ interface UseRemoteAgentBinaryDetectionOptions {
   setClaudeDialogPending: Dispatch<SetStateAction<boolean>>;
   setCodexDialogPending: Dispatch<SetStateAction<boolean>>;
   setDialogHostId: Dispatch<SetStateAction<string | undefined>>;
+  setDialogMode: Dispatch<SetStateAction<"install" | "upgrade">>;
   setGeminiDialogPending: Dispatch<SetStateAction<boolean>>;
   setOpenCodeDialogPending: Dispatch<SetStateAction<boolean>>;
 }
@@ -77,6 +83,7 @@ export function useRemoteAgentBinaryDetection({
   setClaudeDialogPending,
   setCodexDialogPending,
   setDialogHostId,
+  setDialogMode,
   setGeminiDialogPending,
   setOpenCodeDialogPending,
 }: UseRemoteAgentBinaryDetectionOptions): RemoteAgentBinaryDetectionApi {
@@ -84,8 +91,9 @@ export function useRemoteAgentBinaryDetection({
   const promptedRef = useRef(new Set<string>());
 
   const setDialogForAgent = useCallback(
-    (agent: AgentType, hostId: string) => {
+    (agent: AgentType, hostId: string, mode: "install" | "upgrade" = "install") => {
       setDialogHostId(hostId);
+      setDialogMode(mode);
       switch (agent) {
         case "claude":
           setClaudeDialogPending(true);
@@ -101,7 +109,14 @@ export function useRemoteAgentBinaryDetection({
           break;
       }
     },
-    [setClaudeDialogPending, setCodexDialogPending, setDialogHostId, setGeminiDialogPending, setOpenCodeDialogPending],
+    [
+      setClaudeDialogPending,
+      setCodexDialogPending,
+      setDialogHostId,
+      setDialogMode,
+      setGeminiDialogPending,
+      setOpenCodeDialogPending,
+    ],
   );
 
   const deferRemoteAgent = useCallback((agent: AgentType, hostId: string) => {
@@ -117,9 +132,21 @@ export function useRemoteAgentBinaryDetection({
 
   const openDeferredRemoteDialog = useCallback(
     (agent: AgentType, hostId: string) => {
-      setDialogForAgent(agent, hostId);
+      const manager = remoteManagerRef.current;
+      const client = manager?.getConnectedClient(hostId);
+      if (!client) {
+        setDialogForAgent(agent, hostId);
+        return;
+      }
+      const installHost = new RemoteInstallHost(hostId, {
+        exec: (argv, options) => client.runRemoteShellCommand(argv, options),
+      });
+      void AGENT_CHECKS[agent]
+        .isInstalled(installHost)
+        .then((installed) => setDialogForAgent(agent, hostId, installed ? "upgrade" : "install"))
+        .catch(() => setDialogForAgent(agent, hostId));
     },
-    [setDialogForAgent],
+    [remoteManagerRef, setDialogForAgent],
   );
 
   useEffect(() => {
@@ -166,10 +193,12 @@ export function useRemoteAgentBinaryDetection({
             continue;
           }
           if (cancelled) return;
-          if (installed) continue;
+          // Installed + consent recorded for this remote → nothing to do.
+          // Installed + no consent → prompt to upgrade.
+          if (installed && checks.isConsented(serverName)) continue;
 
           promptedRef.current.add(key);
-          setDialogForAgent(agent, serverName);
+          setDialogForAgent(agent, serverName, installed ? "upgrade" : "install");
           return; // One dialog at a time across all hosts, like the local flow.
         }
       }

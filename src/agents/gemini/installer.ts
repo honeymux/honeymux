@@ -62,6 +62,10 @@ export async function installGeminiHooks(host: InstallHost = localInstallHost): 
   }
 }
 
+export function isGeminiConsented(hostId: string = "local"): boolean {
+  return readHostConsent(CONSENT_FILE, hostId).consented === true;
+}
+
 export function isGeminiIgnored(hostId: string = "local"): boolean {
   return readHostConsent(CONSENT_FILE, hostId).ignored === true;
 }

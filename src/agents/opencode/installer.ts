@@ -28,6 +28,10 @@ export async function installOpenCodePlugin(host: InstallHost = localInstallHost
   }
 }
 
+export function isOpenCodeConsented(hostId: string = "local"): boolean {
+  return readHostConsent(CONSENT_FILE, hostId).consented === true;
+}
+
 export function isOpenCodeIgnored(hostId: string = "local"): boolean {
   return readHostConsent(CONSENT_FILE, hostId).ignored === true;
 }

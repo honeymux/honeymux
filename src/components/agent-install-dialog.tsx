@@ -8,6 +8,8 @@ interface AgentInstallDialogProps {
   /** When set, labels the dialog as targeting a remote host (e.g. an SSH server name). */
   host?: string;
   installLabel?: "hooks" | "plugin";
+  /** "install" = fresh install prompt; "upgrade" = hooks present but consent not recorded (e.g. outdated script). */
+  mode?: "install" | "upgrade";
   noBackdrop?: boolean;
   onInstall: () => void;
   onNever?: () => void;
@@ -20,6 +22,7 @@ export function AgentInstallDialog({
   docsUrl,
   host,
   installLabel = "hooks",
+  mode = "install",
   noBackdrop = false,
   onInstall,
   onNever,
@@ -28,8 +31,26 @@ export function AgentInstallDialog({
 }: AgentInstallDialogProps) {
   const name = agentName;
   const hasNever = !!onNever;
-  const boxWidth = hasNever ? 58 : 52;
+  const isUpgrade = mode === "upgrade";
+  const actionLabel = isUpgrade ? "Upgrade" : "Install";
+  // Upgrade mode has a longer "Found existing..." detected line that would
+  // crowd the 52/58 install-mode box widths.
+  const boxWidth = isUpgrade ? (hasNever ? 66 : 60) : hasNever ? 58 : 52;
   const boxHeight = host ? 13 : 12;
+  const detectedLine = isUpgrade
+    ? host
+      ? `Found existing ${installLabel} installation for ${name} on ${host}.`
+      : `Found existing ${installLabel} installation for ${name}.`
+    : host
+      ? `${name} detected on ${host}.`
+      : `${name} detected.`;
+  const promptLine = isUpgrade
+    ? host
+      ? `Upgrade ${installLabel} on ${host} to the latest version?`
+      : `Upgrade ${installLabel} to the latest version?`
+    : host
+      ? `Install ${installLabel} on ${host} for real-time monitoring?`
+      : `Install ${installLabel} for real-time monitoring?`;
 
   return (
     <>
@@ -69,15 +90,8 @@ export function AgentInstallDialog({
         <text content="" />
         <text content="ʕ·ᴥ·ʔ" fg={theme.statusWarning} />
         <text content="" />
-        <text content={host ? `${name} detected on ${host}.` : `${name} detected.`} fg={theme.text} />
-        <text
-          content={
-            host
-              ? `Install ${installLabel} on ${host} for real-time monitoring?`
-              : `Install ${installLabel} for real-time monitoring?`
-          }
-          fg={theme.text}
-        />
+        <text content={detectedLine} fg={theme.text} />
+        <text content={promptLine} fg={theme.text} />
         <text content="" />
         <text content={docsUrl} fg={theme.textDim} />
         <text content="" />
@@ -92,7 +106,7 @@ export function AgentInstallDialog({
             width={14}
           >
             <text
-              content={selected === "install" ? "▸ [ Install ]" : "  [ Install ]"}
+              content={selected === "install" ? `▸ [ ${actionLabel} ]` : `  [ ${actionLabel} ]`}
               fg={selected === "install" ? theme.statusSuccess : theme.textDim}
             />
           </box>

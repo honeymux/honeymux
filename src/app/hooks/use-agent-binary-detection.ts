@@ -13,10 +13,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { TmuxControlClient } from "../../tmux/control-client.ts";
 
-import { areClaudeHooksInstalled, isClaudeIgnored } from "../../agents/claude/installer.ts";
-import { areCodexHooksInstalled, isCodexIgnored } from "../../agents/codex/installer.ts";
-import { areGeminiHooksInstalled, isGeminiIgnored } from "../../agents/gemini/installer.ts";
-import { isOpenCodeIgnored, isOpenCodePluginInstalled } from "../../agents/opencode/installer.ts";
+import { areClaudeHooksInstalled, isClaudeConsented, isClaudeIgnored } from "../../agents/claude/installer.ts";
+import { areCodexHooksInstalled, isCodexConsented, isCodexIgnored } from "../../agents/codex/installer.ts";
+import { areGeminiHooksInstalled, isGeminiConsented, isGeminiIgnored } from "../../agents/gemini/installer.ts";
+import { isOpenCodeConsented, isOpenCodeIgnored, isOpenCodePluginInstalled } from "../../agents/opencode/installer.ts";
 
 const isInstalledClaude = () => areClaudeHooksInstalled();
 const isInstalledCodex = () => areCodexHooksInstalled();
@@ -29,6 +29,7 @@ export type { AgentType } from "./agent-binary-detection-core.ts";
 export interface AgentBinaryInfo {
   displayName: string;
   installLabel: "hooks" | "plugin";
+  isConsented: () => boolean;
   isIgnored: () => boolean;
   isInstalled: () => Promise<boolean>;
   type: AgentType;
@@ -38,6 +39,7 @@ const AGENTS: AgentBinaryInfo[] = [
   {
     displayName: "Claude Code",
     installLabel: "hooks",
+    isConsented: () => isClaudeConsented(),
     isIgnored: () => isClaudeIgnored(),
     isInstalled: isInstalledClaude,
     type: "claude",
@@ -45,6 +47,7 @@ const AGENTS: AgentBinaryInfo[] = [
   {
     displayName: "OpenCode",
     installLabel: "plugin",
+    isConsented: () => isOpenCodeConsented(),
     isIgnored: () => isOpenCodeIgnored(),
     isInstalled: isInstalledOpenCode,
     type: "opencode",
@@ -52,6 +55,7 @@ const AGENTS: AgentBinaryInfo[] = [
   {
     displayName: "Gemini CLI",
     installLabel: "hooks",
+    isConsented: () => isGeminiConsented(),
     isIgnored: () => isGeminiIgnored(),
     isInstalled: isInstalledGemini,
     type: "gemini",
@@ -59,6 +63,7 @@ const AGENTS: AgentBinaryInfo[] = [
   {
     displayName: "Codex CLI",
     installLabel: "hooks",
+    isConsented: () => isCodexConsented(),
     isIgnored: () => isCodexIgnored(),
     isInstalled: isInstalledCodex,
     type: "codex",
@@ -81,6 +86,7 @@ interface UseAgentBinaryDetectionOptions {
   connected: boolean;
   setClaudeDialogPending: Dispatch<SetStateAction<boolean>>;
   setCodexDialogPending: Dispatch<SetStateAction<boolean>>;
+  setDialogMode: Dispatch<SetStateAction<"install" | "upgrade">>;
   setGeminiDialogPending: Dispatch<SetStateAction<boolean>>;
   setOpenCodeDialogPending: Dispatch<SetStateAction<boolean>>;
 }
@@ -90,6 +96,7 @@ export function useAgentBinaryDetection({
   connected,
   setClaudeDialogPending,
   setCodexDialogPending,
+  setDialogMode,
   setGeminiDialogPending,
   setOpenCodeDialogPending,
 }: UseAgentBinaryDetectionOptions): AgentBinaryDetectionApi {
@@ -99,7 +106,8 @@ export function useAgentBinaryDetection({
   const promptedRef = useRef(new Set<AgentType>());
 
   const setDialogForAgent = useCallback(
-    (agent: AgentType) => {
+    (agent: AgentType, mode: "install" | "upgrade" = "install") => {
+      setDialogMode(mode);
       switch (agent) {
         case "claude":
           setClaudeDialogPending(true);
@@ -115,7 +123,7 @@ export function useAgentBinaryDetection({
           break;
       }
     },
-    [setClaudeDialogPending, setOpenCodeDialogPending, setGeminiDialogPending, setCodexDialogPending],
+    [setClaudeDialogPending, setCodexDialogPending, setDialogMode, setGeminiDialogPending, setOpenCodeDialogPending],
   );
 
   // Mark an agent as deferred ("Not Now")
@@ -129,10 +137,19 @@ export function useAgentBinaryDetection({
     setDeferredAgents((prev) => prev.filter((a) => a !== agent));
   }, []);
 
-  // Open the dialog for a deferred agent (from badge click)
+  // Open the dialog for a deferred agent (from badge click). Re-check install
+  // status so the prompt reflects current reality (install vs upgrade).
   const openDeferredDialog = useCallback(
     (agent: AgentType) => {
-      setDialogForAgent(agent);
+      const info = AGENTS.find((a) => a.type === agent);
+      if (!info) {
+        setDialogForAgent(agent);
+        return;
+      }
+      void info
+        .isInstalled()
+        .then((installed) => setDialogForAgent(agent, installed ? "upgrade" : "install"))
+        .catch(() => setDialogForAgent(agent));
     },
     [setDialogForAgent],
   );
@@ -157,15 +174,19 @@ export function useAgentBinaryDetection({
           if (!info) continue;
 
           if (info.isIgnored()) continue;
-          if (await info.isInstalled()) continue;
+          const installed = await info.isInstalled();
           if (cancelled) return;
+          // Installed + consent recorded → nothing to do.
+          // Installed + no consent → prompt to upgrade (e.g. stale script from a
+          // prior install whose consent was lost).
+          if (installed && info.isConsented()) continue;
 
           // Already prompted this session → stays in deferred
           if (promptedRef.current.has(agentType)) continue;
 
           // Auto-pop dialog
           promptedRef.current.add(agentType);
-          setDialogForAgent(agentType);
+          setDialogForAgent(agentType, installed ? "upgrade" : "install");
           break; // Only pop one at a time
         }
       } catch {
