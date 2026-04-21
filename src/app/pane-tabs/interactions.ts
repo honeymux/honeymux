@@ -226,9 +226,30 @@ export function usePaneTabInteractions({
     return { slotKey: group.slotKey, tabIndex };
   }
 
-  function updateDragVisual(source: DragTarget, target: DragTarget | null) {
+  function updateDragVisual(source: DragTarget, target: DragTarget | null, previousTarget: DragTarget | null) {
     const client = clientRef.current;
     if (!client) return;
+
+    // If the previous drag-over target was in a group that is neither the
+    // source nor the new target, its border is still showing the inverse drag
+    // indicator — restore it before rebuilding the other formats.
+    if (previousTarget && previousTarget.slotKey !== source.slotKey && previousTarget.slotKey !== target?.slotKey) {
+      const previousGroup = groupsRef.current.get(previousTarget.slotKey);
+      if (previousGroup && previousGroup.tabs.length > 0) {
+        const activePaneId = previousGroup.tabs[previousGroup.activeIndex]!.paneId;
+        client
+          .setPaneBorderFormat(
+            activePaneId,
+            buildBorderFormat(
+              previousGroup.tabs,
+              previousGroup.activeIndex,
+              borderLinesRef.current,
+              borderMaxWidth(previousGroup.slotWidth),
+            ),
+          )
+          .catch(() => {});
+      }
+    }
 
     const sourceGroup = groupsRef.current.get(source.slotKey);
     if (!sourceGroup) return;
@@ -365,7 +386,7 @@ export function usePaneTabInteractions({
         const changed = previousTarget?.slotKey !== target?.slotKey || previousTarget?.tabIndex !== target?.tabIndex;
         if (changed) {
           paneTabDragOverRef.current = target;
-          updateDragVisual(source, target);
+          updateDragVisual(source, target, previousTarget);
         }
       };
 

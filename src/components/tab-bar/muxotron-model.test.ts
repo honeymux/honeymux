@@ -240,15 +240,15 @@ describe("isMuxotronDashed", () => {
   });
 
   test("dashed during review preview (tree selection without latch)", () => {
-    expect(
-      isMuxotronDashed({ ...base, muxotronFocusActive: true, reviewLatched: false, selectedSession: true }),
-    ).toBe(true);
+    expect(isMuxotronDashed({ ...base, muxotronFocusActive: true, reviewLatched: false, selectedSession: true })).toBe(
+      true,
+    );
   });
 
   test("solid when the review workflow is latched", () => {
-    expect(
-      isMuxotronDashed({ ...base, muxotronFocusActive: true, reviewLatched: true, selectedSession: true }),
-    ).toBe(false);
+    expect(isMuxotronDashed({ ...base, muxotronFocusActive: true, reviewLatched: true, selectedSession: true })).toBe(
+      false,
+    );
   });
 
   test("re-entering review after prior latch reverts to dashed when unlatched", () => {
