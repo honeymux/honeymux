@@ -23,7 +23,6 @@ import {
   type MuxotronHintButton,
   buildMuxotronBorderStr,
   buildMuxotronHintButtons,
-  buildMuxotronHintsText,
   buildMuxotronToolInfo,
   formatMuxotronCount,
   getFirstUnansweredSession,
@@ -183,11 +182,12 @@ export function Muxotron({
 
   // Permission requests in a pane other than the currently focused one drive
   // the attention-grabbing visuals: yellow border, glow, scanner, needInput
-  // mascot state, marquee hints. When the only unanswered request is in the
-  // focused pane, the user can already see it directly, so the muxotron stays
-  // calm and only the mascot changes color (orange).
+  // mascot state. When the only unanswered request is in the focused pane,
+  // the user can already see it directly, so the muxotron stays calm and
+  // only the mascot changes color (orange). Dismissed requests are excluded
+  // so the alert visuals stop the moment the user dismisses the prompt.
   const unansweredElsewhere =
-    !!configAgentsPreview || active.some((s) => s.status === "unanswered" && s.paneId !== activePaneId);
+    !!configAgentsPreview || active.some((s) => s.status === "unanswered" && !s.dismissed && s.paneId !== activePaneId);
 
   // Honeymux state
   const now = Date.now();
@@ -332,19 +332,13 @@ export function Muxotron({
     return keybindingsCache;
   };
 
-  // Marquee approval hints (shown only when NOT expanded)
-  const showMarqueeHints = isMarquee && unansweredElsewhere && !agentsDialogOpen;
-  const marqueeHints = showMarqueeHints ? buildMuxotronHintsText(getKeybindings()) : "";
-
   // For marquee-bottom, the label goes on the bottom border
   const labelOnBottom = uiMode === "marquee-bottom";
   const topBorderStr = buildMuxotronBorderStr({
     dash: hDash,
     inner,
     leftCorner: cornerTL,
-    marqueeHints,
     rightCorner: cornerTR,
-    showMarqueeHints,
     withLabel: !labelOnBottom,
   });
 
@@ -408,11 +402,17 @@ export function Muxotron({
     const interactiveActive = !!interactiveAgent && !!agentTerminalNode;
     const interactiveContentCols = agentTermCols && agentTermCols > 0 ? agentTermCols : Math.max(10, width - 4);
     const interactiveDesiredWidth = interactiveContentCols + 2 + outerPad * 2;
-    const expandedWidth = interactiveActive
-      ? Math.max(COLLAPSED_MUXOTRON_WIDTH, Math.min(width, interactiveDesiredWidth))
-      : zoomOrSelected
-        ? Math.max(COLLAPSED_MUXOTRON_WIDTH, widthCap)
-        : Math.max(COLLAPSED_MUXOTRON_WIDTH, Math.min(widthCap, paddedInner + 2 + outerPad * 2));
+    // Marquee modes always render full-width — there is no collapsed vs
+    // expanded distinction in marquee, so the expanded view (used for
+    // permission requests) must span the full terminal width even when
+    // `maxExpandedWidth` would otherwise shrink it to leave room for tabs.
+    const expandedWidth = isMarquee
+      ? width
+      : interactiveActive
+        ? Math.max(COLLAPSED_MUXOTRON_WIDTH, Math.min(width, interactiveDesiredWidth))
+        : zoomOrSelected
+          ? Math.max(COLLAPSED_MUXOTRON_WIDTH, widthCap)
+          : Math.max(COLLAPSED_MUXOTRON_WIDTH, Math.min(widthCap, paddedInner + 2 + outerPad * 2));
     if (expandedWidth !== reportedExpandedWidth) setReportedExpandedWidth(expandedWidth);
     const expandedInner = expandedWidth - 2 - outerPad * 2;
     const expandedIl = Math.floor((width - expandedWidth) / 2);
@@ -465,15 +465,26 @@ export function Muxotron({
     const hasSeparator = clampedExtraLines > 0;
     const totalHeight = 3 + (hasSeparator ? 1 : 0) + clampedExtraLines;
 
-    // Top border: ╭─ "prompt text" ──── total/unanswered ─╮
-    // 1-space padding between truncated prompt and the label
+    // Vertical orientation: in marquee-bottom the whole mux-o-tron is anchored
+    // to the bottom of the screen, so the session/label header lives on the
+    // BOTTOM border and the button strip lives on the TOP border. Corner chars
+    // are still chosen by physical row (top row → ╭╮, bottom row → ╰╯); only
+    // which CONTENT goes where flips.
+    const botRow = totalHeight - 1;
+    const headerCornerL = labelOnBottom ? cornerBL : cornerTL;
+    const headerCornerR = labelOnBottom ? cornerBR : cornerTR;
+    const buttonsCornerL = labelOnBottom ? cornerTL : cornerBL;
+    const buttonsCornerR = labelOnBottom ? cornerTR : cornerBR;
+    const buttonsRow = labelOnBottom ? 0 : botRow;
+
+    // Header border: ╭─ "prompt text" ──── total/unanswered ─╮ (or ╰…╯ if on bottom)
     const topRightBlock = ` ${MUXOTRON_COUNTER_LABEL} `;
     const maxLeftLen = expandedInner - topRightBlock.length - 2; // -2 for the padding spaces in topLeftBlock
     const promptTruncated =
       conversationPrompt.length > maxLeftLen ? conversationPrompt.slice(0, maxLeftLen - 1) + "…" : conversationPrompt;
     const topLeftBlock = ` ${promptTruncated} `;
     const topDashGap = expandedInner - topLeftBlock.length - topRightBlock.length;
-    let expandedTopStr = `${cornerTL}${topLeftBlock}${hDash.repeat(Math.max(0, topDashGap))}${topRightBlock}${cornerTR}`;
+    let expandedTopStr = `${headerCornerL}${topLeftBlock}${hDash.repeat(Math.max(0, topDashGap))}${topRightBlock}${headerCornerR}`;
     // Apply scribble to expanded border line-drawing chars
     const scribbleActive = !!agentAlertAnimScribble && unansweredElsewhere && intermittentActive;
     if (scribbleActive) expandedTopStr = scribbleCycle(expandedTopStr, now);
@@ -482,8 +493,6 @@ export function Muxotron({
     const expandedTopLineStr = isDashed ? punchDashedBorderGaps(split.lineStr) : split.lineStr;
     const expandedTopOverlays = split.overlays;
 
-    // Bottom border row index (shifts down when vertically expanded)
-    const botRow = totalHeight - 1;
     const collapsedInner = COLLAPSED_MUXOTRON_WIDTH - 2;
 
     // Build the bottom border as a single complete string per segment (no overlays).
@@ -491,7 +500,7 @@ export function Muxotron({
     let expandedBottomNode: ReactNode;
 
     if (showAllButtons) {
-      // Full button strip: cornerBL + dashes + [space btn space btn ... space] + cornerBR
+      // Full button strip: cornerL + dashes + [space btn space btn ... space] + cornerR
       // Build the base string with spaces where buttons go (not dashes)
       const buttonRowWidth = allButtonsWidth + 2; // +2 for side padding
       const dashCount = Math.max(0, expandedInner - buttonRowWidth);
@@ -500,7 +509,7 @@ export function Muxotron({
       if (isDashed) baseDashes = punchDashedBorderGaps(baseDashes);
 
       // Compute button positions (relative to box)
-      const buttonAreaStart = 1 + dashCount + 1; // after cornerBL + dashes + left pad space
+      const buttonAreaStart = 1 + dashCount + 1; // after cornerL + dashes + left pad space
       const buttonPositions: Array<{ boxLeft: number; btn: MuxotronHintButton; text: string }> = [];
       let col = buttonAreaStart;
       for (let i = 0; i < hintButtons.length; i++) {
@@ -523,13 +532,13 @@ export function Muxotron({
                 left={scannerStartCol + i}
                 position="absolute"
                 selectable={false}
-                top={botRow}
+                top={buttonsRow}
               />
             ));
           })()
         : null;
 
-      const botBaseStr = cornerBL + baseDashes + " ".repeat(buttonRowWidth) + cornerBR;
+      const botBaseStr = buttonsCornerL + baseDashes + " ".repeat(buttonRowWidth) + buttonsCornerR;
       expandedBottomNode = (
         <>
           <text
@@ -539,7 +548,7 @@ export function Muxotron({
             left={bx}
             position="absolute"
             selectable={false}
-            top={botRow}
+            top={buttonsRow}
           />
           {eqEls}
           {buttonPositions.map((bp, i) => {
@@ -563,7 +572,7 @@ export function Muxotron({
                   onMouseDown={onMouseDown}
                   position="absolute"
                   selectable={false}
-                  top={botRow}
+                  top={buttonsRow}
                 />
               );
             }
@@ -579,7 +588,7 @@ export function Muxotron({
                   onMouseDown={onMouseDown}
                   position="absolute"
                   selectable={false}
-                  top={botRow}
+                  top={buttonsRow}
                 />
                 <text
                   bg={bg}
@@ -589,7 +598,7 @@ export function Muxotron({
                   onMouseDown={onMouseDown}
                   position="absolute"
                   selectable={false}
-                  top={botRow}
+                  top={buttonsRow}
                 />
               </Fragment>
             );
@@ -605,7 +614,7 @@ export function Muxotron({
       if (scribbleActive) baseDashes = scribbleCycle(baseDashes, now);
       if (isDashed) baseDashes = punchDashedBorderGaps(baseDashes);
 
-      const botBaseStr = cornerBL + baseDashes + " ".repeat(expandRegionWidth) + cornerBR;
+      const botBaseStr = buttonsCornerL + baseDashes + " ".repeat(expandRegionWidth) + buttonsCornerR;
       const expandPadLeft = bx + 1 + dashCount; // left padding space
       const expandBtnLeft = expandPadLeft + 1; // button text starts after left pad
       const expandPadRight = expandBtnLeft + expandBtnText.length; // right padding space
@@ -624,7 +633,7 @@ export function Muxotron({
                 left={scannerStartCol + i}
                 position="absolute"
                 selectable={false}
-                top={botRow}
+                top={buttonsRow}
               />
             ));
           })()
@@ -639,7 +648,7 @@ export function Muxotron({
             left={bx}
             position="absolute"
             selectable={false}
-            top={botRow}
+            top={buttonsRow}
           />
           {eqEls}
           <text
@@ -649,7 +658,7 @@ export function Muxotron({
             left={expandPadLeft}
             position="absolute"
             selectable={false}
-            top={botRow}
+            top={buttonsRow}
           />
           <text
             bg={MUXOTRON_HINT_COLORS.dismiss}
@@ -658,7 +667,7 @@ export function Muxotron({
             left={expandBtnLeft}
             position="absolute"
             selectable={false}
-            top={botRow}
+            top={buttonsRow}
           />
           <text
             bg={realBg}
@@ -667,7 +676,7 @@ export function Muxotron({
             left={expandPadRight}
             position="absolute"
             selectable={false}
-            top={botRow}
+            top={buttonsRow}
           />
         </>
       );
@@ -740,6 +749,7 @@ export function Muxotron({
         honeymuxState={honeymuxState}
         isDashed={isDashed}
         labelColor={labelColor}
+        labelOnBottom={labelOnBottom}
         onInteractiveScrollSequence={interactiveActive ? onInteractiveScrollSequence : undefined}
         onMouseDown={
           onMuxotronClick && !interactiveActive
@@ -766,6 +776,7 @@ export function Muxotron({
         sideBar={sideBar}
         sineWaveLastOutputTickAt={sineWaveLastOutputTickAt}
         terminalContentRows={interactiveActive ? clampedExtraLines : 0}
+        top={labelOnBottom && termHeight ? Math.max(0, termHeight - totalHeight) : 0}
         totalHeight={totalHeight}
         truncatedInfo={truncatedInfo}
         wrappedLines={wrappedLines}
@@ -800,9 +811,7 @@ export function Muxotron({
       dash: hDash,
       inner,
       leftCorner: cornerBL,
-      marqueeHints,
       rightCorner: cornerBR,
-      showMarqueeHints,
       withLabel: true,
     });
     const botSplit = splitMuxotronBorderOverlays(bottomBorderStr, il);

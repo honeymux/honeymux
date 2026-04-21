@@ -43,6 +43,10 @@ describe("muxotron focus and agent selection helpers", () => {
     };
     expect(computeMuxotronExpanded("adaptive", [unanswered as any], "%1", null)).toBe(true);
     expect(computeMuxotronExpanded("adaptive", [unanswered as any], "%2", null)).toBe(false);
+    expect(computeMuxotronExpanded("marquee-top", [unanswered as any], "%1", null)).toBe(true);
+    expect(computeMuxotronExpanded("marquee-bottom", [unanswered as any], "%1", null)).toBe(true);
+    expect(computeMuxotronExpanded("marquee-top", [unanswered as any], "%2", null)).toBe(false);
+    expect(computeMuxotronExpanded("raw", [unanswered as any], "%1", null)).toBe(false);
     expect(computeMuxotronExpanded("raw", [], null, unanswered as any)).toBe(true);
   });
 

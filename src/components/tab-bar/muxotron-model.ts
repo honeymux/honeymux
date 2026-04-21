@@ -46,9 +46,7 @@ interface BuildMuxotronBorderStrArgs {
   inner: number;
   labels?: string;
   leftCorner: string;
-  marqueeHints?: string;
   rightCorner: string;
-  showMarqueeHints: boolean;
   withLabel: boolean;
 }
 
@@ -70,21 +68,11 @@ export function buildMuxotronBorderStr({
   inner,
   labels = MUXOTRON_COUNTER_LABEL,
   leftCorner,
-  marqueeHints = "",
   rightCorner,
-  showMarqueeHints,
   withLabel,
 }: BuildMuxotronBorderStrArgs): string {
-  if (!withLabel && !showMarqueeHints) {
+  if (!withLabel) {
     return `${leftCorner}${dash.repeat(inner)}${rightCorner}`;
-  }
-  if (showMarqueeHints) {
-    const rightBlock = withLabel ? ` ${labels} ` : "";
-    const leftBlock = ` ${marqueeHints} `;
-    const maxLeft = inner - rightBlock.length;
-    const leftTruncated = leftBlock.length > maxLeft ? leftBlock.slice(0, maxLeft) : leftBlock;
-    const dashGap = inner - leftTruncated.length - rightBlock.length;
-    return `${leftCorner}${leftTruncated}${dash.repeat(Math.max(0, dashGap))}${rightBlock}${rightCorner}`;
   }
   const rightBlock = ` ${labels} `;
   const dashCount = inner - rightBlock.length;
@@ -168,20 +156,6 @@ export function buildMuxotronHintButtons({
       onClick: onNextAgent,
     },
   ];
-}
-
-export function buildMuxotronHintsText(keybindings: KeybindingConfig): string {
-  const fmt = (action: KeyAction, label: string): string => {
-    const combo = keybindings[action];
-    return combo ? `${formatBinding(combo)}: ${label}` : label;
-  };
-  return [
-    fmt("agentPermApprove", "approve"),
-    fmt("agentPermDeny", "deny"),
-    fmt("agentPermGoto", "goto"),
-    fmt("agentPermDismiss", "dismiss"),
-    fmt("agents", "details"),
-  ].join(", ");
 }
 
 export function buildMuxotronToolInfo(session: AgentSession | undefined, preserveNewlines = false): string {

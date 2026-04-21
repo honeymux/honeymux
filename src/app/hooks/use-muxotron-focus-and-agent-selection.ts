@@ -9,7 +9,7 @@ import type { AppRuntimeRefs } from "./use-app-runtime-refs.ts";
 import type { UiChromeState } from "./use-app-state-groups.ts";
 
 import { groupSessionsForDisplay } from "../../components/agent-tree-groups.ts";
-import { saveConfig } from "../../util/config.ts";
+import { isMarqueeMode, saveConfig } from "../../util/config.ts";
 import { MODIFIER_KEY_CODES, formatBinding } from "../../util/keybindings.ts";
 import { stripAnsiEscapes } from "../../util/text.ts";
 
@@ -133,13 +133,11 @@ export function computeMuxotronExpanded(
   activePaneId: null | string,
   treeSelectedSession: AgentSession | null,
 ): boolean {
-  return (
-    (effectiveUIMode === "adaptive" &&
-      agentSessions.some(
-        (session) => session.status === "unanswered" && !session.dismissed && session.paneId !== activePaneId,
-      )) ||
-    !!treeSelectedSession
+  const hasUnansweredElsewhere = agentSessions.some(
+    (session) => session.status === "unanswered" && !session.dismissed && session.paneId !== activePaneId,
   );
+  const modeExpandsOnPerm = effectiveUIMode === "adaptive" || isMarqueeMode(effectiveUIMode);
+  return (modeExpandsOnPerm && hasUnansweredElsewhere) || !!treeSelectedSession;
 }
 
 export function matchZoomActionForModifierCode(

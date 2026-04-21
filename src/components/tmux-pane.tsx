@@ -6,7 +6,7 @@ import { rgbToHex, terminalBgRgb, theme } from "../themes/theme.ts";
 import { AgentsDialog } from "./agents-dialog.tsx";
 import { TerminalView } from "./terminal-view.tsx";
 import { computeReservedRightChromeMask } from "./tmux-pane/chrome-mask.ts";
-import { TmuxPaneMinimalMode } from "./tmux-pane/minimal-mode.tsx";
+import { TmuxPaneMarqueeMode } from "./tmux-pane/marquee-mode.tsx";
 import { TmuxPaneNormalMode } from "./tmux-pane/normal-mode.tsx";
 import { TmuxPaneOverlayLayer } from "./tmux-pane/overlay-layer.tsx";
 import { useTmuxPaneViewModel } from "./tmux-pane/use-tmux-pane-view-model.ts";
@@ -196,28 +196,51 @@ export const TmuxPane = memo(function TmuxPane({
 
   if (uiMode === "marquee-top" || uiMode === "marquee-bottom") {
     return (
-      <TmuxPaneMinimalMode
+      <TmuxPaneMarqueeMode
         activePaneId={activePaneId}
         agentAlertAnimConfusables={agentAlertAnimConfusables}
+        agentAlertAnimCycleCount={agentAlertAnimCycleCount}
+        agentAlertAnimDelay={agentAlertAnimDelay}
+        agentAlertAnimEqualizer={agentAlertAnimEqualizer}
         agentAlertAnimGlow={agentAlertAnimGlow}
+        agentAlertAnimScribble={agentAlertAnimScribble}
+        agentLatchBindingLabel={agentLatchBindingLabel}
         agentSessions={agentSessions}
+        agentTermCols={agentTermCols}
+        agentTermRows={agentTermRows}
+        agentTerminalNode={agentTerminalNode}
         agentsDialogNode={agentsDialogNode}
         agentsDialogOpen={agentsDialogOpen}
+        capturedPaneLines={capturedPaneLines}
         codingAgentActivity={codingAgentActivity}
         configAgentsPreview={configAgentsPreview}
         height={height}
         infoCount={infoCount}
+        interactiveAgent={interactiveAgent}
+        muxotronExpanded={muxotronExpanded}
+        muxotronFocusActive={muxotronFocusActive}
+        onApprove={onApprove}
+        onDeny={onDeny}
+        onDismiss={onDismiss}
+        onGoto={onGoto}
+        onInteractiveScrollSequence={onInteractiveScrollSequence}
         onMuxotronClick={onMuxotronClick}
+        onNextAgent={onNextAgent}
         onNotificationsClick={onNotificationsClick}
+        onPrevAgent={onPrevAgent}
+        onReviewLatchToggle={onReviewLatchToggle}
         overlayLayer={
           <>
             {chromeMaskNode}
             {overlayLayer}
           </>
         }
+        reviewLatched={reviewLatched}
         rootOverlayNode={rootOverlayNode}
+        selectedSession={selectedSession}
         sidebarOpen={sidebarOpen}
         sidebarWidth={sidebarWidth}
+        termHeight={termHeight}
         terminalNode={terminalNode}
         uiMode={uiMode}
         warningCount={warningCount}

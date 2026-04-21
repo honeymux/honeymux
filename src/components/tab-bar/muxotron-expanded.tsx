@@ -29,6 +29,10 @@ interface MuxotronExpandedViewProps {
   honeymuxState: HoneymuxState;
   isDashed: boolean;
   labelColor: string;
+  /** When true (marquee-bottom), flip the interior vertically: session/label
+   *  header sits on the bottom border, button strip on the top border, and
+   *  the mascot/divider/content-zoom rows are mirrored top↔bottom. */
+  labelOnBottom?: boolean;
   onInteractiveScrollSequence?: (sequence: string) => void;
   onMouseDown?: (event: MouseEvent) => void;
   onMouseScroll?: (event: MouseEvent) => void;
@@ -37,6 +41,10 @@ interface MuxotronExpandedViewProps {
   sineWaveLastOutputTickAt?: null | number;
   /** Number of content rows the agentTerminalNode should occupy. */
   terminalContentRows?: number;
+  /** Row offset from the parent's top. Defaults to 0 (anchor at top). For
+   *  marquee-bottom, the parent passes termHeight - totalHeight so the box
+   *  anchors from the bottom of the screen. */
+  top?: number;
   totalHeight: number;
   truncatedInfo: string;
   wrappedLines: string[];
@@ -62,6 +70,7 @@ export function MuxotronExpandedView({
   honeymuxState,
   isDashed,
   labelColor,
+  labelOnBottom = false,
   onInteractiveScrollSequence,
   onMouseDown,
   onMouseScroll,
@@ -69,16 +78,29 @@ export function MuxotronExpandedView({
   sideBar,
   sineWaveLastOutputTickAt,
   terminalContentRows = 0,
+  top = 0,
   totalHeight,
   truncatedInfo,
   wrappedLines,
   zIndex,
 }: MuxotronExpandedViewProps) {
   const showInteractiveTerminal = agentTerminalNode != null && terminalContentRows > 0;
+  // Row layout. In normal (label-on-top) orientation:
+  //   row 0             = header (session name + unanswered/total)
+  //   row 1             = mascot + tool info + counter
+  //   row 2             = divider (only when zoom/terminal rows exist)
+  //   rows 3..3+N-1     = zoom / interactive terminal content
+  //   row totalHeight-1 = button strip (baked into bottomNode by the parent)
+  // In label-on-bottom orientation (marquee-bottom) the interior mirrors,
+  // so the button strip lands on row 0 and the header on row totalHeight-1.
+  const headerRow = labelOnBottom ? totalHeight - 1 : 0;
+  const mascotRow = labelOnBottom ? totalHeight - 2 : 1;
+  const dividerRow = labelOnBottom ? totalHeight - 3 : 2;
+  const contentTop = labelOnBottom ? 1 : 3;
   const interactiveFrame = {
     height: terminalContentRows,
     left: expandedIl + bx + 1,
-    top: 3,
+    top: contentTop,
     width: expandedInner,
   };
   // When dashed, replace the vertical side char on every 4th absolute row
@@ -93,7 +115,7 @@ export function MuxotronExpandedView({
       onMouseScroll={onMouseScroll}
       position="absolute"
       selectable={false}
-      top={0}
+      top={top}
       width={expandedWidth}
       zIndex={zIndex}
     >
@@ -105,7 +127,7 @@ export function MuxotronExpandedView({
         left={bx}
         position="absolute"
         selectable={false}
-        top={0}
+        top={headerRow}
       />
       {expandedTopOverlays.map((overlay, idx) => (
         <text
@@ -116,23 +138,23 @@ export function MuxotronExpandedView({
           left={bx + overlay.left}
           position="absolute"
           selectable={false}
-          top={0}
+          top={headerRow}
         />
       ))}
       <text
         bg={realBg}
-        content={sideBarAt(1)}
+        content={sideBarAt(mascotRow)}
         fg={borderColor}
         left={bx}
         position="absolute"
         selectable={false}
-        top={1}
+        top={mascotRow}
       />
       <MuxotronMascotOverlay
         honeymuxState={honeymuxState}
         left={bx + 1 + hmPad}
         sineWaveLastOutputTickAt={sineWaveLastOutputTickAt}
-        top={1}
+        top={mascotRow}
       />
       {truncatedInfo && (
         <text
@@ -143,7 +165,7 @@ export function MuxotronExpandedView({
           left={bx + centeredLeft}
           position="absolute"
           selectable={false}
-          top={1}
+          top={mascotRow}
         />
       )}
       {hasAnyAgent && (
@@ -154,17 +176,17 @@ export function MuxotronExpandedView({
           left={bx + expandedInner - counterStr.length}
           position="absolute"
           selectable={false}
-          top={1}
+          top={mascotRow}
         />
       )}
       <text
         bg={realBg}
-        content={sideBarAt(1)}
+        content={sideBarAt(mascotRow)}
         fg={borderColor}
         left={bx + expandedInner + 1}
         position="absolute"
         selectable={false}
-        top={1}
+        top={mascotRow}
       />
       {(wrappedLines.length > 0 || showInteractiveTerminal) && (
         <text
@@ -174,7 +196,7 @@ export function MuxotronExpandedView({
           left={bx}
           position="absolute"
           selectable={false}
-          top={2}
+          top={dividerRow}
         />
       )}
       {showInteractiveTerminal && (
@@ -183,21 +205,21 @@ export function MuxotronExpandedView({
             <box key={`agent-row-${row}`}>
               <text
                 bg={realBg}
-                content={sideBarAt(3 + row)}
+                content={sideBarAt(contentTop + row)}
                 fg={borderColor}
                 left={bx}
                 position="absolute"
                 selectable={false}
-                top={3 + row}
+                top={contentTop + row}
               />
               <text
                 bg={realBg}
-                content={sideBarAt(3 + row)}
+                content={sideBarAt(contentTop + row)}
                 fg={borderColor}
                 left={bx + expandedInner + 1}
                 position="absolute"
                 selectable={false}
-                top={3 + row}
+                top={contentTop + row}
               />
             </box>
           ))}
@@ -215,7 +237,7 @@ export function MuxotronExpandedView({
                 : undefined
             }
             position="absolute"
-            top={3}
+            top={contentTop}
             width={expandedInner}
           >
             {agentTerminalNode}
@@ -227,12 +249,12 @@ export function MuxotronExpandedView({
           <box key={`wrap-${row}`}>
             <text
               bg={realBg}
-              content={sideBarAt(3 + row)}
+              content={sideBarAt(contentTop + row)}
               fg={borderColor}
               left={bx}
               position="absolute"
               selectable={false}
-              top={3 + row}
+              top={contentTop + row}
             />
             <text
               attributes={TextAttributes.BOLD}
@@ -242,16 +264,16 @@ export function MuxotronExpandedView({
               left={bx + 2}
               position="absolute"
               selectable={false}
-              top={3 + row}
+              top={contentTop + row}
             />
             <text
               bg={realBg}
-              content={sideBarAt(3 + row)}
+              content={sideBarAt(contentTop + row)}
               fg={borderColor}
               left={bx + expandedInner + 1}
               position="absolute"
               selectable={false}
-              top={3 + row}
+              top={contentTop + row}
             />
           </box>
         ))}

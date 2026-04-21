@@ -24,6 +24,7 @@ import type { OptionsWorkflowApi } from "./use-options-workflow.ts";
 import type { TabActionsApi } from "./use-tab-actions.ts";
 import type { UiActionsApi } from "./use-ui-actions.ts";
 
+import { isMarqueeMode } from "../../util/config.ts";
 import { TAB_ROWS } from "../options/model.ts";
 
 export interface ClosePaneDropdownOptions {
@@ -307,7 +308,10 @@ export function buildAppPaneProps({
     muxotronEnabled: optionsWorkflow.optionsDialogOpen
       ? optionsWorkflow.configMuxotronEnabled
       : (optionsWorkflow.config.muxotronEnabled ?? true),
-    muxotronExpanded: (effectiveUIMode === "adaptive" && hasUnansweredElsewhere) || !!selectedSession,
+    muxotronExpanded:
+      ((effectiveUIMode === "adaptive" || (effectiveUIMode != null && isMarqueeMode(effectiveUIMode))) &&
+        hasUnansweredElsewhere) ||
+      !!selectedSession,
     muxotronFocusActive,
     onAgentsDialogClose: handleAgentsDialogClose,
     onAgentsDialogSelect: agentActions.handleAgentsDialogSelect,

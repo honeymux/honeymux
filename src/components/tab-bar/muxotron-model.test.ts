@@ -184,9 +184,7 @@ describe("muxotron model helpers", () => {
       dash: "─",
       inner: 40,
       leftCorner: "╭",
-      marqueeHints: "approve, deny",
       rightCorner: "╮",
-      showMarqueeHints: true,
       withLabel: true,
     });
 
@@ -195,11 +193,19 @@ describe("muxotron model helpers", () => {
     expect(split.lineStr).toContain("╭");
     expect(split.lineStr).toContain("╮");
     expect(split.overlays).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ content: expect.stringContaining("approve"), left: 5 }),
-        expect.objectContaining({ content: expect.stringContaining(MUXOTRON_COUNTER_LABEL) }),
-      ]),
+      expect.arrayContaining([expect.objectContaining({ content: expect.stringContaining(MUXOTRON_COUNTER_LABEL) })]),
     );
+  });
+
+  test("omits label when withLabel is false", () => {
+    const border = buildMuxotronBorderStr({
+      dash: "─",
+      inner: 10,
+      leftCorner: "╭",
+      rightCorner: "╮",
+      withLabel: false,
+    });
+    expect(border).toBe("╭──────────╮");
   });
 
   test("punches every 4th horizontal dash into an opaque gap", () => {
