@@ -16,6 +16,8 @@ import {
   computeHoneybeamOffsets,
   runHoneybeamAnimation,
 } from "../../util/honeybeam-animation.ts";
+import { writeTerminalOutput } from "../../util/terminal-output.ts";
+import { CLEAR_SCREEN_AND_SCROLLBACK } from "../../util/terminal-sequences.ts";
 import { refreshAttachedTmuxClient } from "../runtime/tmux-client-resync.ts";
 import {
   PANE_TAB_STATE_OPTION,
@@ -607,6 +609,14 @@ export function useUiActions({
       (terminalRef.current as unknown as GhosttyTerminalWithDirtyFlag)._ansiDirty = true;
     }
 
+    // Wipe the real terminal in the same breath as the render buffer so the
+    // two stay in sync. Without the terminal-side clear, cells that are
+    // blank in both the freshly-cleared currentRenderBuffer and the next
+    // render (e.g. where a dialog just unmounted and nothing else paints)
+    // would diff as "unchanged" and the stale dialog chrome would remain on
+    // screen. ESC[0m first so the erase uses default SGR, not whatever was
+    // last active. Safe on alt screen; tracks buffer-zoom's sequence.
+    writeTerminalOutput("\x1b[0m" + CLEAR_SCREEN_AND_SCROLLBACK);
     renderer.currentRenderBuffer.clear();
     renderer.requestRender();
 
