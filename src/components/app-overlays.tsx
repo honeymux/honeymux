@@ -7,6 +7,7 @@ import type { HistoryWorkflowApi } from "../app/hooks/use-history-workflow.ts";
 import type { OptionsWorkflowApi } from "../app/hooks/use-options-workflow.ts";
 import type { PaneTabsApi } from "../app/pane-tabs/use-pane-tabs.ts";
 import type { UIMode } from "../util/config.ts";
+import type { FatalReport } from "../util/fatal-report.ts";
 import type { KeyAction } from "../util/keybindings.ts";
 import type { KeybindingConfig } from "../util/keybindings.ts";
 
@@ -14,6 +15,7 @@ import { formatBinding } from "../util/keybindings.ts";
 import { AgentInstallDialog } from "./agent-install-dialog.tsx";
 import { AgentsZoomOverlay } from "./agents-zoom-overlay.tsx";
 import { ConversationsDialog } from "./conversations-dialog.tsx";
+import { FatalErrorDialog } from "./fatal-error-dialog.tsx";
 import { HistoryConsentDialog } from "./history-consent-dialog.tsx";
 import { InfoItemDialog, infoItemDialogHeight } from "./info-item-dialog.tsx";
 import { MainMenuDialog } from "./main-menu-dialog.tsx";
@@ -36,11 +38,13 @@ interface AppOverlaysNotificationsReview {
 interface AppOverlaysProps {
   agentActions: AgentActionsApi;
   agentDialogState: AgentDialogState;
+  fatalReport: FatalReport | null;
   hasFavoriteProfile: boolean;
   height: number;
   historyWorkflow: HistoryWorkflowApi;
   keybindingConfig: KeybindingConfig;
   notificationsReview: AppOverlaysNotificationsReview;
+  onFatalErrorDismiss: () => void;
   optionsWorkflow: OptionsWorkflowApi;
   paneTabsApi: PaneTabsApi;
   refs: AppRuntimeRefs;
@@ -74,11 +78,13 @@ interface AppOverlaysZoomState {
 export function AppOverlays({
   agentActions,
   agentDialogState,
+  fatalReport,
   hasFavoriteProfile,
   height,
   historyWorkflow,
   keybindingConfig,
   notificationsReview,
+  onFatalErrorDismiss,
   optionsWorkflow,
   paneTabsApi,
   refs,
@@ -440,6 +446,7 @@ export function AppOverlays({
           width={width}
         />
       )}
+      {fatalReport && <FatalErrorDialog onDismiss={onFatalErrorDismiss} report={fatalReport} />}
     </>
   );
 }

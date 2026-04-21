@@ -3,6 +3,7 @@ import type { GhosttyTerminalRenderable } from "ghostty-opentui/terminal-buffer"
 import { useRenderer, useTerminalDimensions } from "@opentui/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import type { FatalReport } from "./util/fatal-report.ts";
 import type { KeybindingConfig } from "./util/keybindings.ts";
 
 import { buildAppRuntimeContext } from "./app/hooks/build-app-runtime-context.ts";
@@ -34,6 +35,7 @@ import { useRootDetection } from "./app/hooks/use-root-detection.ts";
 import { isScrollbackTooTall, useScreenshotWorkflow } from "./app/hooks/use-screenshot-workflow.ts";
 import { useTabActions } from "./app/hooks/use-tab-actions.ts";
 import { useUiActions } from "./app/hooks/use-ui-actions.ts";
+import { registerFatalErrorHandler } from "./app/runtime/fatal-error-handler.ts";
 import { setupTmuxRuntime } from "./app/runtime/setup-tmux-runtime.ts";
 import { saveLastSession } from "./app/services/session-persistence.ts";
 import { AppOverlays } from "./components/app-overlays.tsx";
@@ -56,6 +58,7 @@ import { prepareGhosttyTerminalForTmux } from "./util/ghostty-terminal.ts";
 import { buildSequenceMap, loadKeybindings } from "./util/keybindings.ts";
 import { log } from "./util/log.ts";
 import { computeTerminalMetrics } from "./util/pane-layout.ts";
+import { disableInputModesBeforeShutdown, shutdownRenderer } from "./util/shutdown-renderer.ts";
 
 interface AppProps {
   sessionName: string;
@@ -98,6 +101,26 @@ export function App({ sessionName }: AppProps) {
   const [sequenceMap, setSequenceMap] = useState(() => buildSequenceMap(keybindingConfig));
   const appRuntimeRefs = useAppRuntimeRefs({ sequenceMap });
   const [isMobileMode, setIsMobileMode] = useState(false);
+
+  // Fatal error surfaced via the renderer: when an orderly exit path (tmux PTY
+  // death, unexpected session-changed) reports a fatal, stash the crash report
+  // and show the dialog instead of silently exiting. Dismiss runs the shutdown
+  // sequence and exits with code 1.
+  const [fatalReport, setFatalReport] = useState<FatalReport | null>(null);
+  useEffect(() => registerFatalErrorHandler(setFatalReport), []);
+  const handleFatalErrorDismiss = useCallback(async () => {
+    try {
+      await disableInputModesBeforeShutdown(renderer);
+    } catch {
+      // best-effort
+    }
+    try {
+      await shutdownRenderer(renderer);
+    } catch {
+      // best-effort
+    }
+    process.exit(1);
+  }, [renderer]);
 
   const suppressPassthroughRef = useRef(false);
   const {
@@ -815,11 +838,13 @@ export function App({ sessionName }: AppProps) {
       <AppOverlays
         agentActions={agentActionState}
         agentDialogState={agentDialogState}
+        fatalReport={fatalReport}
         hasFavoriteProfile={hasFavoriteProfile}
         height={height}
         historyWorkflow={historyWorkflow}
         keybindingConfig={keybindingConfig}
         notificationsReview={overlayNotificationsReview}
+        onFatalErrorDismiss={handleFatalErrorDismiss}
         optionsWorkflow={guardedOptionsWorkflow}
         paneTabsApi={paneTabsApi}
         refs={appRuntimeRefs}

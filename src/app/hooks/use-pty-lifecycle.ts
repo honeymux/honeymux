@@ -13,6 +13,7 @@ import { trackChildPid } from "../../util/child-pids.ts";
 import { createPassthroughForwarder, spawnPty } from "../../util/pty.ts";
 import { disableInputModesBeforeShutdown, shutdownRenderer } from "../../util/shutdown-renderer.ts";
 import { tmuxCmd } from "../../util/tmux-server.ts";
+import { reportFatalError } from "../runtime/fatal-error-handler.ts";
 
 export interface PtyLifecycleApi {
   spawnPtyBridge: (targetSession: string) => PtyBridge;
@@ -88,7 +89,7 @@ export function usePtyLifecycle({
       trackChildPid(pty.pid);
 
       // Handle PTY exit
-      pty.exited.then(async () => {
+      pty.exited.then(async (exitCode) => {
         if (ptyRef.current !== pty) return;
         // Don't exit when too narrow — PTY may have died from tiny dimensions
         if (tooNarrowRef.current) return;
@@ -97,6 +98,12 @@ export function usePtyLifecycle({
         } catch {
           // ignore
         }
+        const handled = reportFatalError({
+          error: new Error(`tmux client PTY for session "${targetSession}" exited with code ${exitCode}`),
+          kind: "tmux pty exit",
+          sessionName: targetSession,
+        });
+        if (handled) return;
         await disableInputModesBeforeShutdown(renderer);
         await shutdownRenderer(renderer);
         process.exit(0);

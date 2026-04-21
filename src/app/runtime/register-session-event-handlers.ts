@@ -1,9 +1,10 @@
 import type { TmuxWindow } from "../../tmux/types.ts";
 import type { SetupTmuxRuntimeContext } from "./runtime-context.ts";
 
-import { type TmuxControlClient, listSessionNames } from "../../tmux/control-client.ts";
+import { type TmuxControlClient, isTmuxServerReachable, listSessionNames } from "../../tmux/control-client.ts";
 import { disableInputModesBeforeShutdown, shutdownRenderer } from "../../util/shutdown-renderer.ts";
 import { syncActivePaneRef } from "./active-pane-sync.ts";
+import { reportFatalError } from "./fatal-error-handler.ts";
 
 export interface SessionEventHandlers {
   applyPendingRenames: (windows: TmuxWindow[]) => void;
@@ -177,6 +178,14 @@ export function registerSessionEventHandlers(
         // ignore
       }
     } else if (name !== attachedSession && !tooNarrowRef.current) {
+      const handled = reportFatalError({
+        error: new Error(
+          `tmux switched our client to session "${name}" without our request (expected "${attachedSession}")`,
+        ),
+        kind: "unexpected session switch",
+        sessionName: attachedSession ?? undefined,
+      });
+      if (handled) return;
       await disableInputModesBeforeShutdown(renderer);
       await shutdownRenderer(renderer);
 
@@ -209,8 +218,10 @@ export function registerSessionEventHandlers(
     if (tooNarrowRef.current) return;
 
     // Check for remaining sessions on this server (all belong to this instance)
+    let others: string[] = [];
+    let listError: unknown = null;
     try {
-      const others = await listSessionNames();
+      others = await listSessionNames();
       if (others.length > 0) {
         // Switch to first remaining session — triggers useEffect re-init.
         // Do not update currentSessionName here: hooks bound to the old runtime
@@ -222,8 +233,30 @@ export function registerSessionEventHandlers(
         setSessionKey((k: number) => k + 1);
         return;
       }
-    } catch {
-      // tmux gone or no sessions
+    } catch (error) {
+      listError = error;
+    }
+
+    // Distinguish "server died" from "user killed last session". Both reach
+    // here with no remaining sessions, but `listSessionNames` swallows command
+    // failures and returns [] when the server is gone, so an empty list alone
+    // is ambiguous. Probe reachability directly — this only runs on the exit
+    // path (never during steady-state operation), so it adds one extra tmux
+    // spawn to a shutdown that was about to happen anyway.
+    let fatalReason: null | string = null;
+    if (listError !== null) {
+      fatalReason = `listSessionNames failed: ${listError instanceof Error ? listError.message : String(listError)}`;
+    } else if (others.length === 0 && !(await isTmuxServerReachable())) {
+      fatalReason = "tmux server no longer responds (crashed or killed)";
+    }
+
+    if (fatalReason !== null) {
+      const handled = reportFatalError({
+        error: new Error(fatalReason),
+        kind: "tmux server unreachable",
+        sessionName: attachedSession ?? undefined,
+      });
+      if (handled) return;
     }
 
     // No other sessions — exit normally
