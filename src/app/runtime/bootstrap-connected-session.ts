@@ -16,6 +16,7 @@ import { AgentSessionStore } from "../../agents/session-store.ts";
 import { TeamService } from "../../agents/teams/index.ts";
 import { DEFAULT_SCHEME, getNextSessionColor } from "../../themes/theme.ts";
 import { loadConfig } from "../../util/config.ts";
+import { syncActivePaneRef } from "./active-pane-sync.ts";
 import { buildHookSnifferEntry } from "./hook-sniffer-entry.ts";
 
 export interface BootstrapConnectedSessionOptions {
@@ -197,6 +198,12 @@ export function bootstrapConnectedSession({
       if (activeWin) {
         setActiveIndex(visibleWindows.indexOf(activeWin));
       }
+      await syncActivePaneRef({
+        activePaneIdRef,
+        client,
+        fallbackPaneId: activeWin?.paneId ?? null,
+        windowId: activeWin?.id,
+      });
 
       // Load key bindings + status bar info, refresh periodically
       client

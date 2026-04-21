@@ -139,7 +139,13 @@ export function useMainPaneModel({
         const client = refs.clientRef.current;
         if (!client) return;
         await client.selectWindow(windowId).catch(() => {});
-        await client.selectPane(paneId).catch(() => {});
+        const paneSelected = await client
+          .selectPane(paneId)
+          .then(() => true)
+          .catch(() => false);
+        if (paneSelected) {
+          refs.activePaneIdRef.current = paneId;
+        }
       };
 
       if (shouldSwitchTreeSession(tmuxSessionState.currentSessionName, sessionName)) {
@@ -151,7 +157,7 @@ export function useMainPaneModel({
 
       void selectTargetPane();
     },
-    [refs.clientRef, tmuxSessionState.currentSessionName, uiActions.handleSessionSelect],
+    [refs.activePaneIdRef, refs.clientRef, tmuxSessionState.currentSessionName, uiActions.handleSessionSelect],
   );
 
   const bufferZoomBinding = formatBufferZoomBinding(keybindingConfig);

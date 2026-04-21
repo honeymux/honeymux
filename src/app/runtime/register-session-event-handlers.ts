@@ -3,6 +3,7 @@ import type { SetupTmuxRuntimeContext } from "./runtime-context.ts";
 
 import { type TmuxControlClient, listSessionNames } from "../../tmux/control-client.ts";
 import { disableInputModesBeforeShutdown, shutdownRenderer } from "../../util/shutdown-renderer.ts";
+import { syncActivePaneRef } from "./active-pane-sync.ts";
 
 export interface SessionEventHandlers {
   applyPendingRenames: (windows: TmuxWindow[]) => void;
@@ -13,6 +14,7 @@ export function registerSessionEventHandlers(
   ctx: SetupTmuxRuntimeContext,
 ): SessionEventHandlers {
   const {
+    agentRuntime: { activePaneIdRef },
     input: { validateTabGroups },
     sessionRuntime: { detachingRef, initTargetRef, ptyRef, renderer, switchingRef, tooNarrowRef },
     sessionState: { setActiveIndex, setCurrentSessionName, setSessionKey, setSessions, setWindows },
@@ -109,6 +111,12 @@ export function registerSessionEventHandlers(
       if (activeWin) {
         setActiveIndex(updated.indexOf(activeWin));
       }
+      await syncActivePaneRef({
+        activePaneIdRef,
+        client,
+        fallbackPaneId: activeWin?.paneId ?? null,
+        windowId: activeWin?.id,
+      });
       // Ask tmux to repaint the PTY client directly — avoids the
       // pane-layout drift that resize toggling causes.
       await client.refreshPtyClient();
@@ -158,6 +166,12 @@ export function registerSessionEventHandlers(
           if (activeWin) {
             setActiveIndex(updated.indexOf(activeWin));
           }
+          await syncActivePaneRef({
+            activePaneIdRef,
+            client,
+            fallbackPaneId: activeWin?.paneId ?? null,
+            windowId: activeWin?.id,
+          });
         }
       } catch {
         // ignore

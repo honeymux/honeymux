@@ -70,6 +70,7 @@ export function useAgentActions({
   uiActions,
 }: UseAgentActionsOptions): AgentActionsApi {
   const {
+    activePaneIdRef,
     clientRef,
     dropdownInputRef,
     handlePermissionRespondRef,
@@ -182,7 +183,13 @@ export function useAgentActions({
           if (session.windowId) await client.selectWindow(session.windowId).catch(() => {});
           if (session.paneId) {
             await switchToTab(session.paneId);
-            await client.selectPane(session.paneId).catch(() => {});
+            const paneSelected = await client
+              .selectPane(session.paneId)
+              .then(() => true)
+              .catch(() => false);
+            if (paneSelected) {
+              activePaneIdRef.current = session.paneId;
+            }
           }
         });
       } else {
@@ -193,13 +200,20 @@ export function useAgentActions({
             if (session.windowId) await client.selectWindow(session.windowId).catch(() => {});
             if (session.paneId) {
               await switchToTab(session.paneId);
-              await client.selectPane(session.paneId).catch(() => {});
+              const paneSelected = await client
+                .selectPane(session.paneId)
+                .then(() => true)
+                .catch(() => false);
+              if (paneSelected) {
+                activePaneIdRef.current = session.paneId;
+              }
             }
           })();
         }
       }
     },
     [
+      activePaneIdRef,
       clientRef,
       currentSessionName,
       dropdownInputRef,

@@ -198,21 +198,22 @@ export function App({ sessionName }: AppProps) {
   const activeWindowIdRef = useRef<null | string>(null);
   const displayWindows = tmuxSessionState.windows;
   const activeWindow = tmuxSessionState.windows[tmuxSessionState.activeIndex];
-  // Only update window/pane refs when we have a valid active window.
-  // During pane-tab switches the window-renamed handler removes the staging
-  // window from state before setActiveIndex is corrected, leaving a transient
-  // render where activeWindow is undefined.  Unconditionally writing null here
-  // would poison the ref for every subsequent re-render until a
-  // session-window-changed refresh happens — and even that gets overwritten by
-  // later re-renders from unrelated state changes (e.g. setPaneTabGroups).
+  // Only update refs when we have a valid active window. During pane-tab
+  // switches the window-renamed handler removes the staging window from state
+  // before setActiveIndex is corrected, leaving a transient render where
+  // activeWindow is undefined. Unconditionally writing null here would poison
+  // the ref for every subsequent re-render until a later tmux refresh.
   const prevActiveWindowId = useRef<null | string>(null);
   if (activeWindow) {
     activeWindowIdRef.current = activeWindow.id;
     if (activeWindow.id !== prevActiveWindowId.current) {
       prevActiveWindowId.current = activeWindow.id;
-      // Only initialize activePaneIdRef from window data when the active window
-      // changes.  Within a window, %window-pane-changed keeps it up to date.
-      activePaneIdRef.current = activeWindow.paneId ?? null;
+      // Runtime event handlers own activePaneIdRef. Only fall back to the
+      // list-windows snapshot during initial bootstrap before any live pane
+      // sync has populated the ref.
+      if (activePaneIdRef.current === null) {
+        activePaneIdRef.current = activeWindow.paneId ?? null;
+      }
     }
   }
 

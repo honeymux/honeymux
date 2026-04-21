@@ -6,6 +6,11 @@ import type { SetupTmuxRuntimeContext } from "./runtime-context.ts";
 import { registerSessionEventHandlers } from "./register-session-event-handlers.ts";
 
 class FakeTmuxClient {
+  listPanesInWindowQueue: Array<Array<{ active: boolean; height: number; id: string; width: number }>> = [];
+  listPanesInWindow = mock(async (_windowId: string) => {
+    if (this.listPanesInWindowQueue.length === 0) return [];
+    return this.listPanesInWindowQueue.shift()!;
+  });
   listSessionsQueue: Array<Array<{ attached: boolean; color?: string; id: string; name: string }>> = [];
   listSessions = mock(async () => {
     if (this.listSessionsQueue.length === 0) return [];
@@ -240,9 +245,14 @@ describe("registerSessionEventHandlers", () => {
       { active: false, id: "@1", index: 1, layout: "abc", name: "one", paneId: "%1" },
       { active: true, id: "@2", index: 2, layout: "def", name: "two", paneId: "%2" },
     ]);
+    client.listPanesInWindowQueue.push([
+      { active: false, height: 20, id: "%2", width: 80 },
+      { active: true, height: 20, id: "%7", width: 80 },
+    ]);
 
     await client.emit("session-window-changed");
     expect(activeIndexRef.current).toBe(1);
+    expect(ctx.agentRuntime.activePaneIdRef.current).toBe("%7");
     expect(client.refreshPtyClient).toHaveBeenCalledTimes(1);
   });
 
@@ -271,6 +281,10 @@ describe("registerSessionEventHandlers", () => {
     await client.emit("session-changed", "$1", "alpha");
     ctx.sessionRuntime.switchingRef.current.add("beta");
     client.listWindowsQueue.push([{ active: true, id: "@3", index: 1, layout: "ghi", name: "beta", paneId: "%3" }]);
+    client.listPanesInWindowQueue.push([
+      { active: false, height: 20, id: "%3", width: 80 },
+      { active: true, height: 20, id: "%9", width: 80 },
+    ]);
     client.listSessionsQueue.push([
       { attached: false, color: "#ff8b16", id: "$1", name: "alpha" },
       { attached: true, color: "#1c38ff", id: "$2", name: "beta" },
@@ -284,6 +298,7 @@ describe("registerSessionEventHandlers", () => {
       { attached: false, color: "#ff8b16", id: "$1", name: "alpha" },
       { attached: true, color: "#1c38ff", id: "$2", name: "beta" },
     ]);
+    expect(ctx.agentRuntime.activePaneIdRef.current).toBe("%9");
     expect(rendererDestroyMock).not.toHaveBeenCalled();
   });
 
