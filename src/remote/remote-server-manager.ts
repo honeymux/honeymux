@@ -574,25 +574,28 @@ export class RemoteServerManager extends EventEmitter {
 
     let output: string;
     try {
-      output = await client.sendCommand("list-panes -a -F ' #{pane_id}'");
+      output = await client.sendCommand("list-panes -a -F ' #{pane_id}\t#{pane_dead}'");
     } catch {
       // Connection failed during query — don't assume panes are dead
       return;
     }
 
-    const livePanes = new Set(
-      output
-        .split("\n")
-        .map((l) => l.trim())
-        .filter(Boolean),
-    );
+    const remotePaneStates = new Map<string, boolean>();
+    for (const line of output.split("\n")) {
+      if (!line.trim()) continue;
+      const cleaned = line.replace(/^ /, "").replace(/\r$/, "");
+      const [paneId, paneDead = "0"] = cleaned.split("\t");
+      if (!paneId) continue;
+      remotePaneStates.set(paneId, paneDead === "1");
+    }
 
-    // If we got no panes at all, the query likely failed — don't kill anything
-    if (livePanes.size === 0) return;
+    // If we got no panes at all, the query likely failed — don't kill anything.
+    if (remotePaneStates.size === 0) return;
 
     for (const [localPaneId, mapping] of [...this.paneMappings]) {
       if (mapping.serverName !== serverName) continue;
-      if (!livePanes.has(mapping.remotePaneId)) {
+      const paneDead = remotePaneStates.get(mapping.remotePaneId);
+      if (paneDead === undefined || paneDead) {
         this.killLocalProxyPane(localPaneId);
       }
     }
@@ -895,6 +898,29 @@ export class RemoteServerManager extends EventEmitter {
     await this.localClient.runCommandArgs(["set-option", "-p", "-t", paneId, key, value]);
   }
 
+  private async syncPaneMappingsFromMirror(serverName: string): Promise<void> {
+    const mirror = this.mirrors.get(serverName);
+    if (!mirror) return;
+
+    const updates: Array<{ localPaneId: string; remotePaneId: string }> = [];
+    for (const [localPaneId, mapping] of this.paneMappings) {
+      if (mapping.serverName !== serverName) continue;
+      const remotePaneId = mirror.getRemotePaneId(localPaneId);
+      if (!remotePaneId || remotePaneId === mapping.remotePaneId) continue;
+      this.paneMappings.set(localPaneId, {
+        ...mapping,
+        remotePaneId,
+      });
+      updates.push({ localPaneId, remotePaneId });
+    }
+
+    await Promise.all(
+      updates.map(({ localPaneId, remotePaneId }) =>
+        this.setLocalPaneOption(localPaneId, "@hmx-remote-pane", remotePaneId).catch(() => {}),
+      ),
+    );
+  }
+
   private async updatePaneBorder(localPaneId: string, serverName: string): Promise<void> {
     // Center the server name with ↗ prefix, use dashes to simulate simple border style
     const label = ` ↗ ${escapeTmuxFormatLiteral(serverName)} `;
@@ -942,6 +968,7 @@ export class RemoteServerManager extends EventEmitter {
         // mirror rescan to make newly created panes convertible.
         mirror
           .fullSync()
+          .then(() => this.syncPaneMappingsFromMirror(serverName))
           .then(() => {
             this.emitMirrorStateChange();
           })
@@ -952,9 +979,10 @@ export class RemoteServerManager extends EventEmitter {
     });
 
     this.localClient.on("layout-change", (windowId: string, layoutStr: string) => {
-      for (const mirror of this.mirrors.values()) {
+      for (const [serverName, mirror] of this.mirrors) {
         mirror
           .onLayoutChange(windowId, layoutStr)
+          .then(() => this.syncPaneMappingsFromMirror(serverName))
           .then(() => {
             this.emitMirrorStateChange();
           })
@@ -965,9 +993,10 @@ export class RemoteServerManager extends EventEmitter {
     });
 
     this.localClient.on("window-add", (windowId: string) => {
-      for (const mirror of this.mirrors.values()) {
+      for (const [serverName, mirror] of this.mirrors) {
         mirror
           .onWindowAdd(windowId)
+          .then(() => this.syncPaneMappingsFromMirror(serverName))
           .then(() => {
             this.emitMirrorStateChange();
           })
@@ -976,9 +1005,10 @@ export class RemoteServerManager extends EventEmitter {
     });
 
     this.localClient.on("window-close", (windowId: string) => {
-      for (const mirror of this.mirrors.values()) {
+      for (const [serverName, mirror] of this.mirrors) {
         mirror
           .onWindowClose(windowId)
+          .then(() => this.syncPaneMappingsFromMirror(serverName))
           .then(() => {
             this.emitMirrorStateChange();
           })

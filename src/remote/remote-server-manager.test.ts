@@ -401,6 +401,44 @@ describe("RemoteServerManager remote hook ingress", () => {
     expect(runCommandArgs).toHaveBeenCalledTimes(4);
   });
 
+  it("kills a mapped local proxy pane when the remote pane is dead but still listed", async () => {
+    const killPaneById = mock(async () => {});
+    const runCommandArgs = mock(async () => {});
+    const localClient = {
+      killPaneById,
+      runCommandArgs,
+    } as any;
+    const sendCommand = mock(async () => " %77\t1\n %88\t0\n");
+    const manager = new RemoteServerManager(localClient, [{ host: "dev-box", name: "dev-box" }]);
+
+    (manager as any).clients.set("dev-box", {
+      isConnected: true,
+      sendCommand,
+    });
+    (manager as any).paneMappings.set("%10", {
+      localPaneId: "%10",
+      remotePaneId: "%77",
+      serverName: "dev-box",
+    });
+    (manager as any).paneMappings.set("%11", {
+      localPaneId: "%11",
+      remotePaneId: "%88",
+      serverName: "dev-box",
+    });
+
+    await (manager as any).checkForDeadRemotePanes("dev-box");
+
+    expect(sendCommand).toHaveBeenCalledWith("list-panes -a -F ' #{pane_id}\t#{pane_dead}'");
+    expect(killPaneById).toHaveBeenCalledTimes(1);
+    expect(killPaneById).toHaveBeenCalledWith("%10");
+    expect((manager as any).paneMappings.has("%10")).toBe(false);
+    expect((manager as any).paneMappings.get("%11")).toEqual({
+      localPaneId: "%11",
+      remotePaneId: "%88",
+      serverName: "dev-box",
+    });
+  });
+
   it("token-reuse recovery re-registers the stored token without respawning the pane", async () => {
     const respawnPane = mock(async () => {});
     const runCommand = mock(async () => " %10\tdev-box\tstoredtoken123\n");
@@ -506,6 +544,56 @@ describe("RemoteServerManager remote hook ingress", () => {
     await Promise.resolve();
 
     expect(fullSync).toHaveBeenCalledTimes(1);
+  });
+
+  it("re-syncs mapped remote pane ids after a local layout change", async () => {
+    const runCommandArgs = mock(async () => {});
+    const localClient = Object.assign(new LocalEventClient(), { runCommandArgs });
+    const manager = new RemoteServerManager(localClient as any, [{ host: "dev-box", name: "dev-box" }]);
+    const remotePaneIds = new Map([
+      ["%10", "%77"],
+      ["%11", "%88"],
+    ]);
+    const onLayoutChange = mock(async () => {
+      remotePaneIds.set("%11", "%99");
+    });
+
+    (manager as any).clients.set("dev-box", {
+      isConnected: true,
+    });
+    (manager as any).mirrors.set("dev-box", {
+      getRemotePaneId: (paneId: string) => remotePaneIds.get(paneId),
+      onLayoutChange,
+    });
+    (manager as any).paneMappings.set("%10", {
+      localPaneId: "%10",
+      remotePaneId: "%77",
+      serverName: "dev-box",
+    });
+    (manager as any).paneMappings.set("%11", {
+      localPaneId: "%11",
+      remotePaneId: "%88",
+      serverName: "dev-box",
+    });
+
+    (manager as any).wireLocalEvents();
+
+    localClient.emitEvent("layout-change", "@1", "layout");
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(onLayoutChange).toHaveBeenCalledWith("@1", "layout");
+    expect((manager as any).paneMappings.get("%10")).toEqual({
+      localPaneId: "%10",
+      remotePaneId: "%77",
+      serverName: "dev-box",
+    });
+    expect((manager as any).paneMappings.get("%11")).toEqual({
+      localPaneId: "%11",
+      remotePaneId: "%99",
+      serverName: "dev-box",
+    });
+    expect(runCommandArgs).toHaveBeenCalledWith(["set-option", "-p", "-t", "%11", "@hmx-remote-pane", "%99"]);
   });
 
   it("clears orphaned remote metadata when the mirror has no mapping for the local pane", async () => {
