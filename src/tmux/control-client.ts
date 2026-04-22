@@ -10,6 +10,7 @@ import {
   type ControlClientSize,
   MIN_CONTROL_CLIENT_SIZE,
   applyControlClientBootstrap,
+  applyControlClientPaneBorderColors,
   buildDefaultPaneBorderFormat,
   clampControlClientSize,
   setControlClientSize,
@@ -193,6 +194,7 @@ export class TmuxControlClient extends EventEmitter {
     await this.sendCommand(
       `set-option -g pane-border-format ${quoteTmuxArg("format", buildDefaultPaneBorderFormat())}`,
     );
+    await applyControlClientPaneBorderColors((command) => this.sendCommand(command));
   }
 
   /**

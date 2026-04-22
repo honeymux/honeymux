@@ -29,12 +29,32 @@ export async function applyControlClientBootstrap(
   await sendCommand("set-option -g mouse on");
   await sendCommand("set-option -g pane-border-status top");
   await sendCommand(`set-option -g pane-border-format ${quoteTmuxArg("format", buildDefaultPaneBorderFormat())}`);
+  await applyControlClientPaneBorderColors(sendCommand);
   await sendCommand("set-option -g window-size smallest");
   await setControlClientSize(sendCommand, size);
   await applyControlClientTerminalColors(sendCommand, fg);
   if (cursorStyle) {
     await sendCommand(`set-option -g cursor-style ${cursorStyle}`);
   }
+}
+
+/**
+ * Push uniform pane-border styling so every tmux-drawn border char (the
+ * vertical divider between panes, the horizontal divider between stacked
+ * panes, and any `#[default]`-styled runs inside `pane-border-format`) paints
+ * in the same color as the tab-bar brackets. Without this, tmux falls back
+ * to its built-in defaults (`fg=default` for inactive borders and `fg=green`
+ * for active borders) and the border reads as a patchwork of mismatched
+ * colors around the theme-colored brackets.
+ *
+ * Applied both at bootstrap and whenever pane tabs are re-enabled; call sites
+ * that live-update the theme should invoke this again to refresh tmux's view
+ * of the current palette.
+ */
+export async function applyControlClientPaneBorderColors(sendCommand: SendCommand): Promise<void> {
+  const style = `fg=${theme.textDim}`;
+  await sendCommand(`set-option -g pane-border-style '${style}'`);
+  await sendCommand(`set-option -g pane-active-border-style '${style}'`);
 }
 
 export async function applyControlClientTerminalColors(sendCommand: SendCommand, fg: RGB): Promise<void> {
