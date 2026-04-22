@@ -35,6 +35,8 @@ These features include:
 - Toolbar
 - Window tabs
 
+Try the interactive demo in a browser terminal at [https://hmx.dev](https://hmx.dev) !
+
 Honeymux is base16-themed and has a zero-config bootstrap. Most functionality (e.g. key bindings) are configured through the [Main Menu](https://docs.hmx.dev/main-menu/) and [Options](https://docs.hmx.dev/options/) dialogs.
 
 Give it a try if one or more of the following describes you:
