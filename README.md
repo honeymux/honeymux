@@ -35,7 +35,7 @@ These features include:
 - Toolbar
 - Window tabs
 
-Honeymux is base16-themed and has a zero-config bootstrap. Most functionality (e.g. key bindings) are configured through the [Main Menu](/main-menu) and [Options](/options) dialogs.
+Honeymux is base16-themed and has a zero-config bootstrap. Most functionality (e.g. key bindings) are configured through the [Main Menu](https://docs.hmx.dev/main-menu/) and [Options](https://docs.hmx.dev/options/) dialogs.
 
 Give it a try if one or more of the following describes you:
 
@@ -54,7 +54,7 @@ curl -fsSL https://get.hmx.dev | bash
 ```
 
 > [!WARNING]
-> This is new, pre-1.0 release software and definitely contains bugs. Please do try it out, but don't count on it as a daily driver just yet.
+> This is new, pre-1.0 release software and is yet to be pressure-tested in a wider variety of environments. Give it a try but expect bugs and YMMV on stability depending on the subset of features you use.
 
 ## Documentation
 
