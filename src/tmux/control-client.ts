@@ -1056,21 +1056,6 @@ export class TmuxControlClient extends EventEmitter {
   }
 }
 
-/**
- * Probe whether the tmux server is reachable on the current `-L` socket.
- * Returns true only on a zero exit code from a lightweight command, so a
- * killed server (no-server-running error, exits 1) is reliably distinguished
- * from a live server with zero sessions.
- */
-export async function isTmuxServerReachable(): Promise<boolean> {
-  const proc = Bun.spawn(tmuxCmd("list-sessions", "-F", ""), {
-    env: cleanEnv(),
-    stderr: "ignore",
-    stdout: "ignore",
-  });
-  return (await proc.exited) === 0;
-}
-
 export function listPanePidsByIdSync(): Map<string, number> {
   const { exitCode, stdout } = runStandaloneTmuxCommandSync(["list-panes", "-a", "-F", "#{pane_id}\t#{pane_pid}"]);
   const next = new Map<string, number>();

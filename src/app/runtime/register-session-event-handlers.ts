@@ -1,7 +1,7 @@
 import type { TmuxWindow } from "../../tmux/types.ts";
 import type { SetupTmuxRuntimeContext } from "./runtime-context.ts";
 
-import { type TmuxControlClient, isTmuxServerReachable, listSessionNames } from "../../tmux/control-client.ts";
+import { type TmuxControlClient, listSessionNames } from "../../tmux/control-client.ts";
 import { disableInputModesBeforeShutdown, shutdownRenderer } from "../../util/shutdown-renderer.ts";
 import { syncActivePaneRef } from "./active-pane-sync.ts";
 import { reportFatalError } from "./fatal-error-handler.ts";
@@ -194,17 +194,27 @@ export function registerSessionEventHandlers(
   });
 
   client.on("exit", async () => {
-    // Null out ptyRef so the PTY stream-end handler returns early
-    const oldPty = ptyRef.current;
-    ptyRef.current = null;
-    try {
-      oldPty?.kill();
-    } catch {
-      // ignore
-    }
+    // Null out ptyRef and kill the attach PTY for branches that own the
+    // teardown directly (detach, too-narrow hibernation, session switch).
+    // For the "no remaining sessions" branch we leave the PTY alone so the
+    // use-pty-lifecycle handler can read its exit code and distinguish a
+    // normal shutdown (code 0) from a server crash (non-zero).
+    const takePty = (): { kill(): void } | null => {
+      const oldPty = ptyRef.current;
+      ptyRef.current = null;
+      return oldPty;
+    };
+    const killPty = (oldPty: { kill(): void } | null): void => {
+      try {
+        oldPty?.kill();
+      } catch {
+        // ignore
+      }
+    };
 
     // If user explicitly detached, exit immediately
     if (detachingRef.current) {
+      killPty(takePty());
       // Brief delay to let pending terminal responses (window geometry
       // reports etc.) drain through the input handler before we tear
       // down — prevents them echoing as garbage on the normal screen.
@@ -215,55 +225,37 @@ export function registerSessionEventHandlers(
     }
 
     // Don't exit when too narrow — will reconnect when widened
-    if (tooNarrowRef.current) return;
+    if (tooNarrowRef.current) {
+      killPty(takePty());
+      return;
+    }
 
     // Check for remaining sessions on this server (all belong to this instance)
-    let others: string[] = [];
-    let listError: unknown = null;
     try {
-      others = await listSessionNames();
+      const others = await listSessionNames();
       if (others.length > 0) {
         // Switch to first remaining session — triggers useEffect re-init.
         // Do not update currentSessionName here: hooks bound to the old runtime
         // may observe the new name and issue tmux commands before the new
         // control client has connected, which turns orderly session exit into a
         // late "Client closed" rejection.
+        killPty(takePty());
         const candidate = others[0]!;
         initTargetRef.current = candidate;
         setSessionKey((k: number) => k + 1);
         return;
       }
-    } catch (error) {
-      listError = error;
+    } catch {
+      // Fall through — attach PTY's exit code will drive the fatal/normal
+      // decision (see use-pty-lifecycle).
     }
 
-    // Distinguish "server died" from "user killed last session". Both reach
-    // here with no remaining sessions, but `listSessionNames` swallows command
-    // failures and returns [] when the server is gone, so an empty list alone
-    // is ambiguous. Probe reachability directly — this only runs on the exit
-    // path (never during steady-state operation), so it adds one extra tmux
-    // spawn to a shutdown that was about to happen anyway.
-    let fatalReason: null | string = null;
-    if (listError !== null) {
-      fatalReason = `listSessionNames failed: ${listError instanceof Error ? listError.message : String(listError)}`;
-    } else if (others.length === 0 && !(await isTmuxServerReachable())) {
-      fatalReason = "tmux server no longer responds (crashed or killed)";
-    }
-
-    if (fatalReason !== null) {
-      const handled = reportFatalError({
-        error: new Error(fatalReason),
-        kind: "tmux server unreachable",
-        sessionName: attachedSession ?? undefined,
-      });
-      if (handled) return;
-    }
-
-    // No other sessions — exit normally
-    await disableInputModesBeforeShutdown(renderer);
-    await shutdownRenderer(renderer);
-
-    process.exit(0);
+    // No remaining sessions. Let the attach PTY exit on its own: the PTY
+    // lifecycle handler inspects its exit code and distinguishes a normal
+    // shutdown (code 0 — user exited last shell, kill-server, etc.) from
+    // a server crash or lost connection (non-zero — surfaces the fatal
+    // dialog). The control client's exit signal alone is ambiguous because
+    // tmux sends %exit in both cases.
   });
 
   return { applyPendingRenames };

@@ -88,7 +88,10 @@ export function usePtyLifecycle({
       ptyRef.current = pty;
       trackChildPid(pty.pid);
 
-      // Handle PTY exit
+      // Handle PTY exit. The attach-session PTY exits with code 0 when tmux
+      // tells it to disconnect cleanly (last shell exited, kill-server, etc.)
+      // and non-zero when it loses the server (crash/SIGKILL). Use that to
+      // distinguish normal shutdown from a fatal condition.
       pty.exited.then(async (exitCode) => {
         if (ptyRef.current !== pty) return;
         // Don't exit when too narrow — PTY may have died from tiny dimensions
@@ -98,12 +101,14 @@ export function usePtyLifecycle({
         } catch {
           // ignore
         }
-        const handled = reportFatalError({
-          error: new Error(`tmux client PTY for session "${targetSession}" exited with code ${exitCode}`),
-          kind: "tmux pty exit",
-          sessionName: targetSession,
-        });
-        if (handled) return;
+        if (exitCode !== 0) {
+          const handled = reportFatalError({
+            error: new Error(`tmux client PTY for session "${targetSession}" exited with code ${exitCode}`),
+            kind: "tmux pty exit",
+            sessionName: targetSession,
+          });
+          if (handled) return;
+        }
         await disableInputModesBeforeShutdown(renderer);
         await shutdownRenderer(renderer);
         process.exit(0);
