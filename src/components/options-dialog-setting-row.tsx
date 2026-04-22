@@ -26,9 +26,9 @@ import { getDialogCombinedW } from "./main-menu-dialog.tsx";
 import { fitOptionsText, rightTruncateOptionsText, sanitizeOptionsText } from "./options-dialog-display.ts";
 
 /** Width to pad the feature name before appending "  opacity". */
-const COMBINED_NAME_W = 27; // " ▸ (◉) Root shell detection" is the longest
+const COMBINED_NAME_W = 32; // " ▸ (◉) Privileged pane detection" is the longest
 /** Total label area width: name padded + "  opacity" + 1 space before ◂. */
-const COMBINED_LABEL_W = COMBINED_NAME_W + 10; // "  opacity" (9) + 1 padding = 37
+const COMBINED_LABEL_W = COMBINED_NAME_W + 10; // "  opacity" (9) + 1 padding = 42
 export const AGENT_CURSOR_COLOR_SWATCH = "\u2588\u2588";
 
 export function SettingRow({
@@ -402,7 +402,7 @@ export function SettingRow({
     case "rootDetect": {
       const disabled = !state.privilegedPaneDetection;
       const check = state.privilegedPaneDetection ? "(●)" : "( )";
-      const nameText = padEndToWidth(`${prefix}${check} Root shell detection`, COMBINED_NAME_W);
+      const nameText = padEndToWidth(`${prefix}${check} Privileged pane detection`, COMBINED_NAME_W);
       const padded = padEndToWidth(`${nameText}  opacity`, COMBINED_LABEL_W);
       const rowColor = disabled ? theme.textDim : color;
       const barWidth = (ROOT_TINT_MAX - ROOT_TINT_MIN) / ROOT_TINT_STEP;
