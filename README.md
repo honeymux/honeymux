@@ -52,8 +52,7 @@ Please also check out [OpenTUI](https://github.com/anomalyco/opentui), [libghost
 ## Install or upgrade
 
 ```bash
-brew tap honeymux/tap
-brew install hmx
+brew install honeymux/tap/hmx
 ```
 
 or
