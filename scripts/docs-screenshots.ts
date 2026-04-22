@@ -1468,14 +1468,6 @@ async function captureScene(sceneName: SceneName, options: CliOptions, repoRoot:
       await splitWorkspaceToGrid(harness, ctx);
       await seedBufferZoomGridPanes(harness, ctx);
       await harness.waitForIdle(500);
-    } else if (sceneName === "inactive-pane-dimming") {
-      // Build a 2x2 grid with `ls -l /dev` in the upper-left (active) pane
-      // and empty prompts in the other three. The harness config sets
-      // dimInactivePanes: true so the three non-active panes render with
-      // the semi-transparent dark overlay and visibly recede.
-      await splitWorkspaceToGrid(harness, ctx);
-      await seedInactivePaneDimmingGridPanes(harness, ctx);
-      await harness.waitForIdle(500);
       if (options.bufferZoomActive) {
         await openMainMenu(harness);
         harness.send("b");
@@ -1486,6 +1478,14 @@ async function captureScene(sceneName: SceneName, options: CliOptions, repoRoot:
         // window to let the transition (and fade, if enabled) settle.
         await sleep(2_000);
       }
+    } else if (sceneName === "inactive-pane-dimming") {
+      // Build a 2x2 grid with `ls -l /dev` in the upper-left (active) pane
+      // and empty prompts in the other three. The harness config sets
+      // dimInactivePanes: true so the three non-active panes render with
+      // the semi-transparent dark overlay and visibly recede.
+      await splitWorkspaceToGrid(harness, ctx);
+      await seedInactivePaneDimmingGridPanes(harness, ctx);
+      await harness.waitForIdle(500);
     } else if (sceneName === "privileged-pane") {
       // Upper pane (privileged): clear the seedWorkspacePane printf output,
       // then type "sudo make me a sandwich" after the prompt so the tinted
