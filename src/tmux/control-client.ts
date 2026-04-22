@@ -60,6 +60,14 @@ export { unescapeTmuxOutput } from "./control-mode-parser.ts";
  * A separate PTY running `tmux attach` handles all rendering and input.
  */
 export class TmuxControlClient extends EventEmitter {
+  /**
+   * True when tmux sent `%exit` on the control stream (orderly shutdown:
+   * last session ended, kill-server, etc.). False if the stream closed
+   * without `%exit` (crash, SIGKILL, lost connection). Callers use this
+   * to decide whether "exit" represents a clean teardown or a fatal
+   * condition worth surfacing to the user.
+   */
+  cleanExit = false;
   private closed = false;
   private lastClientSize: ControlClientSize | null = null;
   private parser: ControlModeParser | null = null;
@@ -951,6 +959,7 @@ export class TmuxControlClient extends EventEmitter {
       isClosed: () => this.closed,
       notifications: {
         onExit: () => {
+          this.cleanExit = true;
           this.closed = true;
           this.emit("exit");
         },

@@ -88,27 +88,31 @@ export function usePtyLifecycle({
       ptyRef.current = pty;
       trackChildPid(pty.pid);
 
-      // Handle PTY exit. The attach-session PTY exits with code 0 when tmux
-      // tells it to disconnect cleanly (last shell exited, kill-server, etc.)
-      // and non-zero when it loses the server (crash/SIGKILL). Use that to
-      // distinguish normal shutdown from a fatal condition.
+      // Handle PTY exit. The control client's exit handler is normally the
+      // authoritative owner of shutdown/session-switch — it nulls ptyRef
+      // synchronously on %exit, so this handler returns early via the
+      // `ptyRef.current !== pty` check. When the PTY's exited promise
+      // resolves first (e.g. `pkill -f tmux` tears the attach-session PTY
+      // down before the control stream's close has been processed), exit
+      // code 0 means tmux detached us cleanly — yield so the control
+      // client's handler can switch sessions or shut down. A non-zero
+      // code means the server was lost abruptly; surface the fatal dialog.
       pty.exited.then(async (exitCode) => {
         if (ptyRef.current !== pty) return;
         // Don't exit when too narrow — PTY may have died from tiny dimensions
         if (tooNarrowRef.current) return;
+        if (exitCode === 0) return;
         try {
           clientRef.current?.destroy();
         } catch {
           // ignore
         }
-        if (exitCode !== 0) {
-          const handled = reportFatalError({
-            error: new Error(`tmux client PTY for session "${targetSession}" exited with code ${exitCode}`),
-            kind: "tmux pty exit",
-            sessionName: targetSession,
-          });
-          if (handled) return;
-        }
+        const handled = reportFatalError({
+          error: new Error(`tmux client PTY for session "${targetSession}" exited with code ${exitCode}`),
+          kind: "tmux pty exit",
+          sessionName: targetSession,
+        });
+        if (handled) return;
         await disableInputModesBeforeShutdown(renderer);
         await shutdownRenderer(renderer);
         process.exit(0);

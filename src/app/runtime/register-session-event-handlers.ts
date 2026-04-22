@@ -194,27 +194,20 @@ export function registerSessionEventHandlers(
   });
 
   client.on("exit", async () => {
-    // Null out ptyRef and kill the attach PTY for branches that own the
-    // teardown directly (detach, too-narrow hibernation, session switch).
-    // For the "no remaining sessions" branch we leave the PTY alone so the
-    // use-pty-lifecycle handler can read its exit code and distinguish a
-    // normal shutdown (code 0) from a server crash (non-zero).
-    const takePty = (): { kill(): void } | null => {
-      const oldPty = ptyRef.current;
-      ptyRef.current = null;
-      return oldPty;
-    };
-    const killPty = (oldPty: { kill(): void } | null): void => {
-      try {
-        oldPty?.kill();
-      } catch {
-        // ignore
-      }
-    };
+    // Null out ptyRef and kill the attach PTY synchronously, before any
+    // await. The PTY's lifecycle handler checks `ptyRef.current !== pty`
+    // and returns early, so nulling here wins the race and hands ownership
+    // of shutdown/session-switch to this handler.
+    const oldPty = ptyRef.current;
+    ptyRef.current = null;
+    try {
+      oldPty?.kill();
+    } catch {
+      // ignore
+    }
 
     // If user explicitly detached, exit immediately
     if (detachingRef.current) {
-      killPty(takePty());
       // Brief delay to let pending terminal responses (window geometry
       // reports etc.) drain through the input handler before we tear
       // down — prevents them echoing as garbage on the normal screen.
@@ -225,10 +218,7 @@ export function registerSessionEventHandlers(
     }
 
     // Don't exit when too narrow — will reconnect when widened
-    if (tooNarrowRef.current) {
-      killPty(takePty());
-      return;
-    }
+    if (tooNarrowRef.current) return;
 
     // Check for remaining sessions on this server (all belong to this instance)
     try {
@@ -239,23 +229,31 @@ export function registerSessionEventHandlers(
         // may observe the new name and issue tmux commands before the new
         // control client has connected, which turns orderly session exit into a
         // late "Client closed" rejection.
-        killPty(takePty());
         const candidate = others[0]!;
         initTargetRef.current = candidate;
         setSessionKey((k: number) => k + 1);
         return;
       }
     } catch {
-      // Fall through — attach PTY's exit code will drive the fatal/normal
-      // decision (see use-pty-lifecycle).
+      // tmux gone or listing failed — fall through to shutdown/fatal below
     }
 
-    // No remaining sessions. Let the attach PTY exit on its own: the PTY
-    // lifecycle handler inspects its exit code and distinguishes a normal
-    // shutdown (code 0 — user exited last shell, kill-server, etc.) from
-    // a server crash or lost connection (non-zero — surfaces the fatal
-    // dialog). The control client's exit signal alone is ambiguous because
-    // tmux sends %exit in both cases.
+    // No remaining sessions. If the control stream closed without `%exit`,
+    // tmux crashed or lost its connection — surface the fatal dialog.
+    // Otherwise (tmux sent `%exit`) this is a clean shutdown.
+    if (!client.cleanExit) {
+      const handled = reportFatalError({
+        error: new Error("tmux control stream closed without orderly %exit (server crash or lost connection)"),
+        kind: "tmux server unreachable",
+        sessionName: attachedSession ?? undefined,
+      });
+      if (handled) return;
+    }
+
+    await disableInputModesBeforeShutdown(renderer);
+    await shutdownRenderer(renderer);
+
+    process.exit(0);
   });
 
   return { applyPendingRenames };
