@@ -244,14 +244,28 @@ export function QuickTerminalOverlay({
     quickTerminalSessionRef.current = sessionName;
 
     (async () => {
+      let cwd: string | undefined;
       try {
         const client = clientRef?.current;
         if (client) {
-          await client.createDetachedSession(sessionName);
+          cwd = await client.getActivePaneCwd();
+        } else {
+          const raw = await runStandaloneTmuxCommand(["display-message", "-p", "#{pane_current_path}"]);
+          cwd = raw.trim() || undefined;
+        }
+      } catch {
+        // cwd query failed — session will use default directory
+      }
+      try {
+        const client = clientRef?.current;
+        if (client) {
+          await client.createDetachedSession(sessionName, undefined, cwd);
           await client.setSessionOption(sessionName, "status", "off");
           await client.setSessionOption(sessionName, "pane-border-status", "off");
         } else {
-          await runStandaloneTmuxCommand(["new-session", "-d", "-s", sessionName]);
+          const sessionArgs = ["new-session", "-d", "-s", sessionName];
+          if (cwd) sessionArgs.push("-c", cwd);
+          await runStandaloneTmuxCommand(sessionArgs);
           await runStandaloneTmuxCommand(["set-option", "-t", sessionName, "status", "off"]);
           await runStandaloneTmuxCommand(["set-option", "-t", sessionName, "pane-border-status", "off"]);
         }

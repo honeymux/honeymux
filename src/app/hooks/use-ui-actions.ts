@@ -286,7 +286,8 @@ export function useUiActions({
       const client = clientRef.current;
       if (!client) return;
       try {
-        const sessionName = await client.createSession(name || undefined);
+        const cwd = await client.getActivePaneCwd();
+        const sessionName = await client.createSession(name || undefined, cwd);
         // Auto-assign a color from the palette based on what other sessions use
         const existing = await client.listSessions();
         const color = getNextSessionColor(existing.filter((s) => s.name !== sessionName).map((s) => s.color));
@@ -364,7 +365,13 @@ export function useUiActions({
   );
 
   const handleNewWindow = useCallback(() => {
-    clientRef.current?.newWindow().catch(() => {});
+    const client = clientRef.current;
+    if (client) {
+      client
+        .getActivePaneCwd()
+        .then((cwd) => client.newWindow(cwd).catch(() => {}))
+        .catch(() => client.newWindow().catch(() => {}));
+    }
   }, [clientRef]);
 
   // Cancel-and-chain mechanism for honeybeam animations.
@@ -412,7 +419,10 @@ export function useUiActions({
     if (!client) return;
 
     if (config.honeybeamsEnabled === false || !terminalRef.current) {
-      client.splitVertical().catch(() => {});
+      client
+        .getActivePaneCwd()
+        .then((cwd) => client.splitVertical(undefined, cwd).catch(() => {}))
+        .catch(() => client.splitVertical().catch(() => {}));
       return;
     }
 
@@ -460,7 +470,7 @@ export function useUiActions({
               ).then(async () => {
                 if (token.cancelled) return;
                 const topologyChange = waitForNextHoneybeamTopologyChange(client);
-                await client.splitVertical(paneInfo.paneId);
+                await client.splitVertical(paneInfo.paneId, paneInfo.cwd);
                 tmuxHandledRepaint = true;
                 await topologyChange;
                 await refreshAttachedTmuxClient({
@@ -494,7 +504,10 @@ export function useUiActions({
     if (!client) return;
 
     if (config.honeybeamsEnabled === false || !terminalRef.current) {
-      client.splitHorizontal().catch(() => {});
+      client
+        .getActivePaneCwd()
+        .then((cwd) => client.splitHorizontal(undefined, cwd).catch(() => {}))
+        .catch(() => client.splitHorizontal().catch(() => {}));
       return;
     }
 
@@ -540,7 +553,7 @@ export function useUiActions({
               ).then(async () => {
                 if (token.cancelled) return;
                 const topologyChange = waitForNextHoneybeamTopologyChange(client);
-                await client.splitHorizontal(paneInfo.paneId);
+                await client.splitHorizontal(paneInfo.paneId, paneInfo.cwd);
                 tmuxHandledRepaint = true;
                 await topologyChange;
                 await refreshAttachedTmuxClient({

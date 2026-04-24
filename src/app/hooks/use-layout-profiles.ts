@@ -66,8 +66,9 @@ export function useLayoutProfiles({
       if (!client) return;
       try {
         await client.killAllPanesExceptActive();
+        const cwd = await client.getActivePaneCwd();
         if (profile.paneCount > 1) {
-          await client.createPanes(profile.paneCount - 1);
+          await client.createPanes(profile.paneCount - 1, cwd);
         }
         await client.applyLayout(profile.layout);
 
@@ -146,7 +147,8 @@ export function useLayoutProfiles({
       if (!client) return;
 
       try {
-        await client.newWindow();
+        const cwd = await client.getActivePaneCwd();
+        await client.newWindow(cwd);
         await applyLayoutProfile(profile);
         if (shouldReattachSessionPty(profile)) {
           resyncProfileSessionPty();

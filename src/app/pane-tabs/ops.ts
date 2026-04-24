@@ -415,7 +415,8 @@ export function createPaneTabOps({
     }
 
     const previousGroups = new Map(groupsRef.current);
-    const { paneId: newPaneId, windowId: newWindowId } = await client.newDetachedWindow("_hmx_tab");
+    const cwd = await client.getActivePaneCwd().catch(() => undefined);
+    const { paneId: newPaneId, windowId: newWindowId } = await client.newDetachedWindow("_hmx_tab", cwd);
 
     try {
       await client.disableAutomaticRename(newWindowId);

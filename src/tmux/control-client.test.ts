@@ -153,6 +153,105 @@ describe("TmuxControlClient split targeting", () => {
   });
 });
 
+describe("TmuxControlClient cwd inheritance", () => {
+  test("splitVertical passes cwd via -c flag", async () => {
+    const client = new TmuxControlClient();
+    const sendCommand = mock(async (_command: string) => "");
+
+    (client as unknown as { sendCommand: typeof sendCommand }).sendCommand = sendCommand;
+
+    await client.splitVertical("%9", "/home/user");
+
+    expect(sendCommand).toHaveBeenCalledWith(
+      `split-window -h -t ${quoteTmuxArg("paneId", "%9")} -c ${quoteTmuxArg("cwd", "/home/user")}`,
+    );
+  });
+
+  test("splitHorizontal passes cwd via -c flag", async () => {
+    const client = new TmuxControlClient();
+    const sendCommand = mock(async (_command: string) => "");
+
+    (client as unknown as { sendCommand: typeof sendCommand }).sendCommand = sendCommand;
+
+    await client.splitHorizontal("%7", "/tmp/project");
+
+    expect(sendCommand).toHaveBeenCalledWith(
+      `split-window -v -t ${quoteTmuxArg("paneId", "%7")} -c ${quoteTmuxArg("cwd", "/tmp/project")}`,
+    );
+  });
+
+  test("newWindow passes cwd via -c flag", async () => {
+    const client = new TmuxControlClient();
+    const sendCommand = mock(async (_command: string) => "");
+
+    (client as unknown as { sendCommand: typeof sendCommand }).sendCommand = sendCommand;
+
+    await client.newWindow("/home/user");
+
+    expect(sendCommand).toHaveBeenCalledWith(`new-window -c ${quoteTmuxArg("cwd", "/home/user")}`);
+  });
+
+  test("newDetachedWindow passes cwd via -c flag", async () => {
+    const client = new TmuxControlClient();
+    const sendCommand = mock(async (_command: string) => " %0 %1");
+
+    (client as unknown as { sendCommand: typeof sendCommand }).sendCommand = sendCommand;
+
+    await client.newDetachedWindow("myname", "/var/log");
+
+    expect(sendCommand).toHaveBeenCalledWith(
+      `new-window -d -n ${quoteTmuxArg("windowName", "myname")} -c ${quoteTmuxArg("cwd", "/var/log")} -P -F ' #{window_id} #{pane_id}'`,
+    );
+  });
+
+  test("createDetachedSession passes cwd via -c flag", async () => {
+    const client = new TmuxControlClient();
+    const runCommandArgs = mock(async (_args: string[]) => "");
+
+    (client as unknown as { runCommandArgs: typeof runCommandArgs }).runCommandArgs = runCommandArgs;
+
+    await client.createDetachedSession("mysession", undefined, "/home/user/project");
+
+    expect(runCommandArgs).toHaveBeenCalledWith(["new-session", "-d", "-s", "mysession", "-c", "/home/user/project"]);
+  });
+
+  test("createSession passes cwd via -c flag", async () => {
+    const client = new TmuxControlClient();
+    const runCommandArgs = mock(async (_args: string[]) => "mysession");
+
+    (client as unknown as { runCommandArgs: typeof runCommandArgs }).runCommandArgs = runCommandArgs;
+
+    await client.createSession("mysession", "/home/user");
+
+    expect(runCommandArgs).toHaveBeenCalledWith(["new-session", "-d", "-s", "mysession", "-c", "/home/user"]);
+  });
+
+  test("createPanes passes cwd via -c flag", async () => {
+    const client = new TmuxControlClient();
+    const sendCommand = mock(async (_command: string) => "");
+
+    (client as unknown as { sendCommand: typeof sendCommand }).sendCommand = sendCommand;
+
+    await client.createPanes(2, "/home/user/project");
+
+    expect(sendCommand).toHaveBeenCalledTimes(2);
+    expect(sendCommand).toHaveBeenCalledWith(`split-window -fh -c ${quoteTmuxArg("cwd", "/home/user/project")}`);
+  });
+
+  test("split methods omit -c when cwd is not provided", async () => {
+    const client = new TmuxControlClient();
+    const sendCommand = mock(async (_command: string) => "");
+
+    (client as unknown as { sendCommand: typeof sendCommand }).sendCommand = sendCommand;
+
+    await client.splitVertical("%9");
+    await client.splitHorizontal("%7");
+
+    expect(sendCommand).toHaveBeenCalledWith(`split-window -h -t ${quoteTmuxArg("paneId", "%9")}`);
+    expect(sendCommand).toHaveBeenCalledWith(`split-window -v -t ${quoteTmuxArg("paneId", "%7")}`);
+  });
+});
+
 describe("TmuxControlClient.runCommandArgs", () => {
   test("quotes argv-style commands before sending them to tmux control mode", async () => {
     const client = new TmuxControlClient();
