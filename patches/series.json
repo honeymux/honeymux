@@ -33,6 +33,11 @@
         "file": "0005-skip-noop-box-render-on-fwcab.patch",
         "description": "Skip BoxRenderable.renderSelf drawBox call for pure layout containers (rebased on fix-wide-char-alpha-blending)",
         "branch": "skip-noop-box-render-on-fwcab"
+      },
+      {
+        "file": "0006-fix-renderable-id-invariant.patch",
+        "description": "Changes from branch 'fix-renderable-id-invariant'",
+        "branch": "fix-renderable-id-invariant"
       }
     ]
   },
@@ -51,11 +56,6 @@
         "file": "0002-batch-render-requests-during-react-commits.patch",
         "description": "Batch render requests during React commits",
         "branch": "batch-render-requests-during-react-commits"
-      },
-      {
-        "file": "0003-fix-id-prop-removal-undefined.patch",
-        "description": "Preserve renderable id when React id prop is removed (orphans children otherwise)",
-        "branch": "fix-id-prop-removal-undefined"
       }
     ]
   },
