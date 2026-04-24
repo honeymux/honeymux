@@ -68,6 +68,7 @@ function createMapperHarness(
       qtResizeDragMoveRef: { current: null },
       qtResizeDraggingRef: { current: false },
       qtResizeSizeRef: { current: 90 },
+      quickTerminalMenuOpenRef: { current: false },
       sidebarDragEndRef: { current: null },
       sidebarDragMoveRef: { current: null },
       sidebarDraggingRef: { current: false },
@@ -326,6 +327,7 @@ describe("createMouseCoordinateMapper", () => {
         qtResizeDragMoveRef: { current: null },
         qtResizeDraggingRef: { current: false },
         qtResizeSizeRef: { current: 90 },
+        quickTerminalMenuOpenRef: { current: false },
         sidebarDragEndRef: { current: null },
         sidebarDragMoveRef: { current: null },
         sidebarDraggingRef: { current: false },
@@ -424,6 +426,7 @@ describe("createMouseCoordinateMapper", () => {
         qtResizeDragMoveRef: { current: null },
         qtResizeDraggingRef: { current: false },
         qtResizeSizeRef: { current: 90 },
+        quickTerminalMenuOpenRef: { current: false },
         sidebarDragEndRef: { current: null },
         sidebarDragMoveRef: { current: null },
         sidebarDraggingRef: { current: false },
@@ -447,5 +450,125 @@ describe("createMouseCoordinateMapper", () => {
     } as any);
 
     expect(mapper(10, 6, 0, "M")).toBeNull();
+  });
+
+  describe("quick terminal overlay", () => {
+    // width=120, height=40, qtResizeSize=90 → ow=108, oh=36, ol=6, ot=2
+    // Outer 1-based: x∈[7..114], y∈[3..38]. Body: x∈[8..113], y∈[4..37]. Resize corner: (114, 38)
+    function createQtHarness() {
+      const qtResizeDraggingRef = { current: false };
+      const quickTerminalMenuOpenRef = { current: false };
+      const mapper = createMouseCoordinateMapper({
+        clickToMoveRef: { current: null },
+        dialogs: {
+          agentInstallDialogRef: { current: false },
+          dropdownInputRef: { current: null },
+        } as any,
+        input: {
+          handleSidebarCancelRef: { current: () => {} },
+          handleToolbarCancelRef: { current: () => {} },
+          handleZoomEndRef: { current: () => {} },
+          muxotronFocusActiveRef: { current: false },
+          paneTabBorderClickRef: { current: null },
+          sidebarFocusedRef: { current: false },
+          toolbarFocusedIndexRef: { current: -1 },
+          toolbarOpenRef: { current: false },
+          zoomActionRef: { current: null },
+        } as any,
+        mouse: {
+          agentsDialogOpenRef: { current: false },
+          dropdownOpenRef: { current: false },
+          ignoreMouseInputRef: { current: false },
+          layoutDropdownOpenRef: { current: false },
+          mainMenuDialogOpenRef: { current: false },
+          mobileModeRef: { current: false },
+          muxotronExpandedRef: { current: false },
+          overflowOpenRef: { current: false },
+          overlayOpenRef: { current: true },
+          paneTabBorderHitTestRef: { current: null },
+          paneTabBorderRightClickRef: { current: null },
+          paneTabDragEndRef: { current: null },
+          paneTabDragMoveRef: { current: null },
+          paneTabDraggingRef: { current: false },
+          ptyDragActiveRef: { current: null },
+          qtResizeDragEndRef: { current: () => {} },
+          qtResizeDragMoveRef: { current: () => {} },
+          qtResizeDraggingRef,
+          qtResizeSizeRef: { current: 90 },
+          quickTerminalMenuOpenRef,
+          sidebarDragEndRef: { current: null },
+          sidebarDragMoveRef: { current: null },
+          sidebarDraggingRef: { current: false },
+          sidebarOpenRef: { current: false },
+          sidebarWidthRef: { current: 32 },
+          statusBarBottomOffsetRef: { current: 0 },
+          statusBarClickRef: { current: null },
+          statusBarTopOffsetRef: { current: 0 },
+          tabDragEndRef: { current: null },
+          tabDragMoveRef: { current: null },
+          tabDraggingRef: { current: false },
+          tabPressOriginRef: { current: null },
+          tabRightClickRef: { current: null },
+          toolbarOpenRef: { current: false },
+          uiModeRef: { current: "adaptive" },
+        } as any,
+        paneRectsRef: { current: [] },
+        sessionRuntime: {
+          dimsRef: { current: { height: 40, width: 120 } },
+        } as any,
+      });
+      return { mapper, qtResizeDraggingRef, quickTerminalMenuOpenRef };
+    }
+
+    test("forwards body-interior press to QT PTY with local coordinates", () => {
+      const { mapper } = createQtHarness();
+      // Screen (20, 10) → local (20-7, 10-3) = (13, 7)
+      expect(mapper(20, 10, 0, "M")).toEqual({ x: 13, y: 7 });
+    });
+
+    test("grabs press on resize corner and arms the drag", () => {
+      const { mapper, qtResizeDraggingRef } = createQtHarness();
+      expect(mapper(114, 38, 0, "M")).toBe("consume");
+      expect(qtResizeDraggingRef.current).toBe(true);
+    });
+
+    test("returns null for presses on the top border (lets OpenTUI dispatch hamburger, etc.)", () => {
+      const { mapper } = createQtHarness();
+      // y=3 is the top border row — outside body
+      expect(mapper(20, 3, 0, "M")).toBeNull();
+    });
+
+    test("returns null for backdrop clicks outside the overlay", () => {
+      const { mapper } = createQtHarness();
+      expect(mapper(2, 2, 0, "M")).toBeNull();
+    });
+
+    test("drags that started inside keep routing to QT even when motion leaves the body", () => {
+      const { mapper } = createQtHarness();
+      expect(mapper(20, 10, 0, "M")).toEqual({ x: 13, y: 7 });
+      // motion well outside the overlay body — clamp to ow-2 = 106 on x
+      const motion = mapper(200, 10, 32, "M");
+      expect(motion).toEqual({ x: 106, y: 7 });
+      // release also clamped and clears ownership
+      const release = mapper(200, 10, 0, "m");
+      expect(release).toEqual({ x: 106, y: 7 });
+      // subsequent click outside the body no longer owned — returns null
+      expect(mapper(2, 2, 0, "M")).toBeNull();
+    });
+
+    test("scroll wheel inside body forwards without taking press ownership", () => {
+      const { mapper } = createQtHarness();
+      // button 64 = scroll up (no press)
+      expect(mapper(20, 10, 64, "M")).toEqual({ x: 13, y: 7 });
+      // next backdrop click must still return null (scroll didn't claim ownership)
+      expect(mapper(2, 2, 0, "M")).toBeNull();
+    });
+
+    test("hamburger menu open → all events pass through to OpenTUI", () => {
+      const { mapper, quickTerminalMenuOpenRef } = createQtHarness();
+      quickTerminalMenuOpenRef.current = true;
+      // Even an in-body press goes to OpenTUI so menu item clicks fire
+      expect(mapper(20, 10, 0, "M")).toBeNull();
+    });
   });
 });

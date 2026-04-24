@@ -105,6 +105,7 @@ export function AppOverlays({
     qtResizeDragMoveRef,
     qtResizeDraggingRef,
     qtResizeSizeRef,
+    quickTerminalMenuOpenRef,
     registryRef,
     textInputActive,
     textInputEscapeHandlerRef,
@@ -230,6 +231,7 @@ export function AppOverlays({
           qtResizeDragMoveRef={qtResizeDragMoveRef}
           qtResizeDraggingRef={qtResizeDraggingRef}
           qtResizeSizeRef={qtResizeSizeRef}
+          quickTerminalMenuOpenRef={quickTerminalMenuOpenRef}
           quickTerminalSize={configQuickTerminalSize}
           width={width}
           writeFnRef={writeFnRef}

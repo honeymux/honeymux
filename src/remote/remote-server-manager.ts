@@ -28,6 +28,9 @@ const REMOTE_TTY_CACHE_MS = 1_000;
 const REMOTE_PID_BINDING_CACHE_MS = 1_000;
 const LOCAL_PANE_METADATA_CACHE_MS = 1_000;
 const REMOTE_HOOK_SOCKET_TMUX_OPTION = "@hmx-agent-socket-path";
+// SGR mouse sequence: ESC [ < <button> ; <col> ; <row> M|m
+// eslint-disable-next-line no-control-regex
+const SGR_MOUSE_RE = /^\x1b\[<\d+;\d+;\d+[Mm]$/;
 const REMOTE_PID_BINDING_SCRIPT = [
   'pid="$1"',
   'tty="$2"',
@@ -399,6 +402,14 @@ export class RemoteServerManager extends EventEmitter {
 
     const client = this.clients.get(mapping.serverName);
     if (!client || !client.isConnected) return false;
+
+    // Decline SGR mouse events so they fall through to the local PTY where
+    // local tmux dispatches the click to whichever pane it lands on
+    // (including cross-pane focus changes when the active pane is remote).
+    // `send-keys -H` would otherwise inject the raw mouse bytes into the
+    // remote pane's stdin, bypassing remote tmux's mouse parser and showing
+    // up as `^[[<0;177;3M` echo in shells that aren't mouse-aware.
+    if (SGR_MOUSE_RE.test(data)) return false;
 
     const pasteText = extractBracketedPastePayload(data);
     if (pasteText !== null) {

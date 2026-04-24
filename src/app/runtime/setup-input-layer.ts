@@ -368,11 +368,9 @@ export function setupInputLayer(ctx: SetupTmuxRuntimeContext): () => void {
     });
 
     const teardownMouseForward = setupMouseForward(
-      (data: string) => {
-        const pty = ptyRef.current;
-        if (!pty || !inputReady.current) return;
-        pty.write(data);
-      },
+      // Route through writeFnRef so overlays that swap it (e.g. the quick
+      // terminal) retarget mouse output to their own PTY, matching keyboard.
+      writeUserInputToPane,
       {
         isDialogOpen: () => agentInstallDialogRef.current,
         isDropdownOpen: () => dropdownInputRef.current !== null,

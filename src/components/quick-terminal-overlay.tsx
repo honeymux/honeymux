@@ -34,6 +34,7 @@ interface QuickTerminalOverlayProps {
   qtResizeDragMoveRef?: React.MutableRefObject<((screenX: number, screenY: number) => void) | null>;
   qtResizeDraggingRef?: React.MutableRefObject<boolean>;
   qtResizeSizeRef?: React.MutableRefObject<number>;
+  quickTerminalMenuOpenRef?: React.MutableRefObject<boolean>;
   quickTerminalSize?: number;
   width: number;
   writeFnRef: React.MutableRefObject<(data: string) => void>;
@@ -54,6 +55,7 @@ export function QuickTerminalOverlay({
   qtResizeDragMoveRef,
   qtResizeDraggingRef,
   qtResizeSizeRef,
+  quickTerminalMenuOpenRef,
   quickTerminalSize,
   width,
   writeFnRef,
@@ -72,6 +74,13 @@ export function QuickTerminalOverlay({
   const [menuFocusedIndex, setMenuFocusedIndex] = useState(0);
   const menuOpenRef = useRef(false);
   menuOpenRef.current = menuOpen;
+  if (quickTerminalMenuOpenRef) quickTerminalMenuOpenRef.current = menuOpen;
+  // Clear the shared menu-open flag when the overlay unmounts
+  useEffect(() => {
+    return () => {
+      if (quickTerminalMenuOpenRef) quickTerminalMenuOpenRef.current = false;
+    };
+  }, [quickTerminalMenuOpenRef]);
   const menuFocusedIndexRef = useRef(0);
   menuFocusedIndexRef.current = menuFocusedIndex;
 
