@@ -284,7 +284,7 @@ describe("setupInputLayer", () => {
     expect(ctx.sessionState.historyLoadStartedRef.current).toBe(false);
   });
 
-  test("routes forwarded raw mouse input through the local PTY", () => {
+  test("routes forwarded raw mouse input through writeFnRef so overlays can retarget it", () => {
     const { ctx, ptyWriteMock, writeFnMock } = createContext();
 
     setupInputLayer(ctx);
@@ -294,7 +294,9 @@ describe("setupInputLayer", () => {
 
     writeMouseToPane?.("\x1b[<64;20;5M");
 
-    expect(ptyWriteMock).toHaveBeenCalledWith("\x1b[<64;20;5M");
-    expect(writeFnMock).not.toHaveBeenCalled();
+    // Mouse writes go through writeFnRef (same pathway as keyboard) so overlays
+    // that swap writeFnRef (e.g. quick terminal) receive mouse events too.
+    expect(writeFnMock).toHaveBeenCalledWith("\x1b[<64;20;5M");
+    expect(ptyWriteMock).not.toHaveBeenCalled();
   });
 });

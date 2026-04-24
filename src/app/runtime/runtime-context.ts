@@ -177,6 +177,7 @@ export interface SetupTmuxRuntimeMouseContext {
   qtResizeDragMoveRef: MutableRefObject<((screenX: number, screenY: number) => void) | null>;
   qtResizeDraggingRef: MutableRefObject<boolean>;
   qtResizeSizeRef: MutableRefObject<number>;
+  quickTerminalMenuOpenRef: MutableRefObject<boolean>;
   quickTerminalOpenRef: MutableRefObject<boolean>;
   sidebarDragEndRef: MutableRefObject<(() => void) | null>;
   sidebarDragMoveRef: MutableRefObject<((x: number) => void) | null>;

@@ -105,6 +105,7 @@ export interface AppRuntimeRefs {
   qtResizeDragMoveRef: MutableRefObject<((screenX: number, screenY: number) => void) | null>;
   qtResizeDraggingRef: MutableRefObject<boolean>;
   qtResizeSizeRef: MutableRefObject<number>;
+  quickTerminalMenuOpenRef: MutableRefObject<boolean>;
   reEncodeActiveRef: MutableRefObject<boolean>;
   registryRef: MutableRefObject<AgentProviderRegistry | null>;
   remoteManagerRef: MutableRefObject<RemoteServerManager | null>;
@@ -286,6 +287,7 @@ export function useAppRuntimeRefs({ sequenceMap }: UseAppRuntimeRefsOptions): Ap
   const qtResizeSizeRef = useRef(90);
   const qtResizeDragMoveRef = useRef<((screenX: number, screenY: number) => void) | null>(null);
   const qtResizeDragEndRef = useRef<(() => void) | null>(null);
+  const quickTerminalMenuOpenRef = useRef(false);
   const statusBarBottomOffsetRef = useRef(0);
   const statusBarClickRef = useRef<(() => boolean) | null>(null);
   const remoteManagerRef = useRef<RemoteServerManager | null>(null);
@@ -386,6 +388,7 @@ export function useAppRuntimeRefs({ sequenceMap }: UseAppRuntimeRefsOptions): Ap
     qtResizeDragMoveRef,
     qtResizeDraggingRef,
     qtResizeSizeRef,
+    quickTerminalMenuOpenRef,
     reEncodeActiveRef,
     registryRef,
     remoteManagerRef,

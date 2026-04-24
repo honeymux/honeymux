@@ -67,6 +67,7 @@ export function createMouseCoordinateMapper({
     qtResizeDragMoveRef,
     qtResizeDraggingRef,
     qtResizeSizeRef,
+    quickTerminalMenuOpenRef,
     sidebarDragEndRef,
     sidebarDragMoveRef,
     sidebarDraggingRef,
@@ -88,6 +89,10 @@ export function createMouseCoordinateMapper({
   // the PTY (or be consumed). Letting an orphaned release reach
   // OpenTUI crashes yoga in finishSelection.
   const ptyOwnsPress = { current: false };
+  // Quick-terminal press ownership: mirror of ptyOwnsPress, scoped to the QT PTY.
+  // A drag that starts inside the QT body stays routed to the QT PTY even if
+  // motion strays outside the body.
+  let qtOwnsPress = false;
   let ptyHintFired = false;
   let pressOnBorder = false;
   let tabSecondaryPressSeen = false;
@@ -343,8 +348,52 @@ export function createMouseCoordinateMapper({
       return "consume";
     }
 
-    // When dropdown/overlay is open, let OpenTUI handle all mouse events
-    // (but detect press on the QT resize handle corner first)
+    // Quick terminal: forward body-interior events to the QT PTY so tmux mouse
+    // selection, clicks, scroll, and drag gestures work inside the overlay.
+    // Border clicks (hamburger, close hint, resize corner) and backdrop clicks
+    // fall through to OpenTUI. When the QT's own hamburger menu is open, keep
+    // the blanket pass-through so its OpenTUI click handlers still fire.
+    if (overlayOpenRef.current && !quickTerminalMenuOpenRef.current) {
+      const { height: H, width: W } = dimsRef.current;
+      const pct = qtResizeSizeRef.current / 100;
+      const ow = Math.max(20, Math.floor(W * pct));
+      const oh = Math.max(8, Math.floor(H * pct));
+      const ol = Math.floor((W - ow) / 2);
+      const ot = Math.floor((H - oh) / 2);
+
+      // Detect press on the ↘ resize corner (backup for onMouseDown)
+      if (isPress && (button & 3) === 0 && qtResizeDragMoveRef.current) {
+        if (screenX === ol + ow && screenY === ot + oh) {
+          qtResizeDraggingRef.current = true;
+          return "consume";
+        }
+      }
+
+      // Body is the rectangle inside the 1-cell border (1-based SGR coords)
+      const insideBody = screenX > ol + 1 && screenX < ol + ow && screenY > ot + 1 && screenY < ot + oh;
+
+      if (qtOwnsPress) {
+        if (isRelease) qtOwnsPress = false;
+        // Clamp so tmux never sees out-of-range coords when a drag leaves the body
+        const localX = Math.max(1, Math.min(ow - 2, screenX - (ol + 1)));
+        const localY = Math.max(1, Math.min(oh - 2, screenY - (ot + 1)));
+        return { x: localX, y: localY };
+      }
+
+      if (insideBody) {
+        // Take ownership on real button press so subsequent motion/release
+        // remain routed to the QT PTY. Scroll (button & 64) doesn't grab.
+        if (isPress && (button & 64) === 0) qtOwnsPress = true;
+        return { x: screenX - (ol + 1), y: screenY - (ot + 1) };
+      }
+
+      // Outside the body (borders, backdrop): let OpenTUI dispatch normally
+      tabPressOriginRef.current = null;
+      paneTabPressOrigin = null;
+      return null;
+    }
+
+    // When dropdown/other dialog is open, let OpenTUI handle all mouse events
     if (
       dropdownOpenRef.current ||
       layoutDropdownOpenRef.current ||
@@ -355,20 +404,6 @@ export function createMouseCoordinateMapper({
       agentInstallDialogRef.current ||
       dropdownInputRef.current !== null
     ) {
-      // Detect press on the quick terminal ↘ resize corner (backup for onMouseDown)
-      if (overlayOpenRef.current && isPress && (button & 3) === 0 && qtResizeDragMoveRef.current) {
-        const { height, width } = dimsRef.current;
-        const pct = qtResizeSizeRef.current / 100;
-        const ow = Math.max(20, Math.floor(width * pct));
-        const oh = Math.max(8, Math.floor(height * pct));
-        const ol = Math.floor((width - ow) / 2);
-        const ot = Math.floor((height - oh) / 2);
-        // ⤡ sits at the bottom-right corner of the overlay border (1-based SGR coords)
-        if (screenX === ol + ow && screenY === ot + oh) {
-          qtResizeDraggingRef.current = true;
-          return "consume";
-        }
-      }
       tabPressOriginRef.current = null;
       paneTabPressOrigin = null;
       return null;

@@ -163,6 +163,7 @@ export function buildAppRuntimeContext({
       qtResizeDragMoveRef: refs.qtResizeDragMoveRef,
       qtResizeDraggingRef: refs.qtResizeDraggingRef,
       qtResizeSizeRef: refs.qtResizeSizeRef,
+      quickTerminalMenuOpenRef: refs.quickTerminalMenuOpenRef,
       quickTerminalOpenRef: agentDialogState.quickTerminalOpenRef,
       sidebarDragEndRef: refs.sidebarDragEndRef,
       sidebarDragMoveRef: refs.sidebarDragMoveRef,

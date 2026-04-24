@@ -257,6 +257,35 @@ describe("RemoteServerManager remote hook ingress", () => {
     expect(runCommandArgs).not.toHaveBeenCalled();
   });
 
+  it("declines SGR mouse events so the caller forwards them to local tmux", () => {
+    // `send-keys -H` injects bytes directly into the remote pane's stdin,
+    // bypassing remote tmux's mouse parser. Forwarding raw mouse SGR
+    // sequences makes shells like bash echo `^[[<0;177;3M` as visible
+    // text. Returning false lets the caller fall through to the local PTY,
+    // where local tmux dispatches clicks (including cross-pane focus
+    // changes when the active pane is remote-backed).
+    const runCommandArgs = mock(async () => {});
+    const sendCommand = mock(async () => "");
+    const manager = new RemoteServerManager({ runCommandArgs } as any, [{ host: "dev-box", name: "dev-box" }]);
+
+    (manager as any).clients.set("dev-box", {
+      isConnected: true,
+      sendCommand,
+    });
+    (manager as any).paneMappings.set("%10", {
+      localPaneId: "%10",
+      remotePaneId: "%77",
+      serverName: "dev-box",
+    });
+
+    expect(manager.routeInput("%10", "\x1b[<0;177;3M")).toBe(false); // press
+    expect(manager.routeInput("%10", "\x1b[<0;177;3m")).toBe(false); // release
+    expect(manager.routeInput("%10", "\x1b[<32;50;10M")).toBe(false); // motion+button
+
+    expect(sendCommand).not.toHaveBeenCalled();
+    expect(runCommandArgs).not.toHaveBeenCalled();
+  });
+
   it("routes bracketed paste through a single set-buffer ; paste-buffer command", async () => {
     const runCommandArgs = mock(async () => {});
     const sendCalls: string[] = [];
