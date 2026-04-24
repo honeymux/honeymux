@@ -1,0 +1,68 @@
+name: release-preflight
+
+on:
+  pull_request:
+    paths:
+      - "CHANGELOG.md"
+      - ".github/workflows/release.yml"
+      - ".github/workflows/release-preflight.yml"
+
+jobs:
+  changelog:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate CHANGELOG.md
+        run: |
+          set -euo pipefail
+          CHANGELOG=CHANGELOG.md
+
+          if [ ! -f "$CHANGELOG" ]; then
+            echo "::error::CHANGELOG.md is missing"
+            exit 1
+          fi
+
+          if ! grep -qE '^## Unreleased([[:space:]]|$)' "$CHANGELOG"; then
+            echo "::error::CHANGELOG.md has no '## Unreleased' section"
+            exit 1
+          fi
+
+          bad_headers=$(grep -nE '^## v' "$CHANGELOG" | grep -vE '^[0-9]+:## v[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9.]+)?([[:space:]]|$)' || true)
+          if [ -n "$bad_headers" ]; then
+            echo "::error::Malformed version headers in CHANGELOG.md:"
+            echo "$bad_headers"
+            exit 1
+          fi
+
+          declared=$(awk '/^## v[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9.]+)?([[:space:]]|$)/ {print $2}' "$CHANGELOG" | sort -u)
+          existing=$(git tag --list 'v[0-9]*.[0-9]*.[0-9]*' | sort -u)
+          upcoming=$(comm -23 <(printf '%s\n' "$declared") <(printf '%s\n' "$existing") | grep -v '^$' || true)
+          count=$(printf '%s\n' "$upcoming" | grep -c . || true)
+
+          if [ "$count" -gt 1 ]; then
+            echo "::error::CHANGELOG.md declares multiple untagged versions:"
+            printf '%s\n' "$upcoming"
+            exit 1
+          fi
+
+          if [ "$count" = 1 ]; then
+            tag="$upcoming"
+            body=$(awk -v header="## $tag" '
+              $0 == header || index($0, header " ") == 1 { in_section = 1; next }
+              in_section && /^## / { exit }
+              in_section { print }
+            ' "$CHANGELOG")
+            if ! printf '%s' "$body" | grep -q '[^[:space:]]'; then
+              echo "::error::CHANGELOG.md section for upcoming release $tag is empty"
+              exit 1
+            fi
+            echo "OK: upcoming release $tag extracts non-empty content:"
+            printf '%s\n' "$body" | sed 's/^/  /'
+          else
+            echo "OK: no upcoming release declared"
+          fi
+
+          echo "OK: CHANGELOG.md preflight passed"
