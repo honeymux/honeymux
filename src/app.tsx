@@ -517,6 +517,7 @@ export function App({ sessionName }: AppProps) {
     clientRef,
     connected,
     deferredSessionRef,
+    detachingRef: tmuxSessionState.detachingRef,
     dimsRef,
     inputReady,
     policyOsc52Passthrough: config.policyLocalOsc52Passthrough,

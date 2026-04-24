@@ -23,6 +23,7 @@ interface UsePtyLifecycleOptions {
   clientRef: MutableRefObject<TmuxControlClient | null>;
   connected: boolean;
   deferredSessionRef: MutableRefObject<null | string>;
+  detachingRef: MutableRefObject<boolean>;
   dimsRef: MutableRefObject<Pick<RuntimeDims, "cols" | "rows">>;
   inputReady: MutableRefObject<boolean>;
   policyOsc52Passthrough: Osc52Passthrough;
@@ -42,6 +43,7 @@ export function usePtyLifecycle({
   clientRef,
   connected,
   deferredSessionRef,
+  detachingRef,
   dimsRef,
   inputReady,
   policyOsc52Passthrough,
@@ -88,20 +90,26 @@ export function usePtyLifecycle({
       ptyRef.current = pty;
       trackChildPid(pty.pid);
 
-      // Handle PTY exit. The control client's exit handler is normally the
-      // authoritative owner of shutdown/session-switch — it nulls ptyRef
-      // synchronously on %exit, so this handler returns early via the
-      // `ptyRef.current !== pty` check. When the PTY's exited promise
-      // resolves first (e.g. `pkill -f tmux` tears the attach-session PTY
-      // down before the control stream's close has been processed), exit
-      // code 0 means tmux detached us cleanly — yield so the control
-      // client's handler can switch sessions or shut down. A non-zero
-      // code means the server was lost abruptly; surface the fatal dialog.
+      // Handle PTY exit. The control client's exit handler owns shutdown /
+      // session-switch when tmux sends %exit — it nulls ptyRef synchronously,
+      // so this handler returns early via the `ptyRef.current !== pty` check.
+      // The two signals (PTY exit, control-stream %exit) are independent and
+      // can arrive in either order, and tmux's native detach (C-b d) detaches
+      // only the attach PTY without emitting %exit at all. On exit code 0,
+      // wait briefly for any racing %exit to land; if ptyRef still points at
+      // this PTY, drive the same eject flow as the toolbar detach button.
+      // Non-zero means the server was lost abruptly; surface the fatal dialog.
       pty.exited.then(async (exitCode) => {
         if (ptyRef.current !== pty) return;
         // Don't exit when too narrow — PTY may have died from tiny dimensions
         if (tooNarrowRef.current) return;
-        if (exitCode === 0) return;
+        if (exitCode === 0) {
+          await new Promise<void>((resolve) => setTimeout(resolve, 100));
+          if (ptyRef.current !== pty) return;
+          detachingRef.current = true;
+          clientRef.current?.detach().catch(() => {});
+          return;
+        }
         try {
           clientRef.current?.destroy();
         } catch {
@@ -128,6 +136,7 @@ export function usePtyLifecycle({
     },
     [
       clientRef,
+      detachingRef,
       dimsRef,
       inputReady,
       policyOtherOscPassthrough,
