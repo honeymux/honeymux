@@ -18,6 +18,7 @@ import { getTmuxServer } from "../util/tmux-server.ts";
 import { type RemotePaneBinding, validateRemoteAgentEvent } from "./agent-event-validator.ts";
 import { ForwardedRemoteAgentIngressFactory } from "./agent-transport.ts";
 import { MirrorLayoutManager } from "./mirror-layout.ts";
+import { extractBracketedPastePayload, pasteTextIntoRemotePane } from "./paste.ts";
 import { buildRemoteProxyProcessArgv } from "./proxy-command.ts";
 import { RemoteProxyServer } from "./proxy-server.ts";
 import { RemoteControlClient } from "./remote-control-client.ts";
@@ -399,6 +400,19 @@ export class RemoteServerManager extends EventEmitter {
     const client = this.clients.get(mapping.serverName);
     if (!client || !client.isConnected) return false;
 
+    const pasteText = extractBracketedPastePayload(data);
+    if (pasteText !== null) {
+      pasteTextIntoRemotePane(client, mapping.remotePaneId, pasteText).catch((err) => {
+        const message = err instanceof Error ? err.message : String(err);
+        log(
+          "remote",
+          `remote paste failed for ${this.serverTag(mapping.serverName)} pane=${mapping.remotePaneId}: ${message}`,
+        );
+        this.emit("warning", `Remote paste failed for ${mapping.serverName}: ${message}`);
+      });
+      return true;
+    }
+
     if (data === "\x1b") {
       // Remote-backed panes can still leave the local proxy pane's tmux in a
       // stray copy mode (for example after local mouse-wheel scroll). Cancel
@@ -410,9 +424,8 @@ export class RemoteServerManager extends EventEmitter {
       this.localClient.runCommandArgs(["send-keys", "-X", "-t", paneId, "cancel"]).catch(() => {});
     }
 
-    // Send raw bytes via send-keys -H (hex mode)
     const hex = Buffer.from(data).toString("hex").match(/.{2}/g)!.join(" ");
-    client.sendCommand(`send-keys -H -t ${mapping.remotePaneId} ${hex}`).catch(() => {});
+    client.sendCommand(`send-keys -H -t ${quoteTmuxArg("remotePaneId", mapping.remotePaneId)} ${hex}`).catch(() => {});
     return true;
   }
 
