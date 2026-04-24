@@ -78,9 +78,9 @@ import type { AgentEvent, AgentSession } from "../../agents/types.ts";
 
 interface UseHarnessHooksOptions {
   addInfoRef: MutableRefObject<((id: string, message: string | string[]) => void) | null>;
+  handleActivateMenuRef: MutableRefObject<() => void>;
   /** Called to trigger the perm-request latch flow (no tree selection). */
   handleAgentLatchRef: MutableRefObject<() => void>;
-  handleActivateMenuRef: MutableRefObject<() => void>;
   handleNotificationsClickRef: MutableRefObject<() => void>;
   /**
    * Rename every pane-tab in every group to `${prefix}${index+1}`. Called
@@ -104,10 +104,16 @@ const HARNESS_TRIGGER_DELAY_MS = (() => {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 1_400;
 })();
 
+interface PaneOverrides {
+  paneId?: string;
+  sessionName?: string;
+  windowId?: string;
+}
+
 export function useHarnessHooks({
   addInfoRef,
-  handleAgentLatchRef,
   handleActivateMenuRef,
+  handleAgentLatchRef,
   handleNotificationsClickRef,
   renameAllPaneTabsRef,
   setAgentSessionsRef,
@@ -211,12 +217,6 @@ export function useHarnessHooks({
     toggleReviewLatchRef,
     treeAgentSelectRef,
   ]);
-}
-
-interface PaneOverrides {
-  paneId?: string;
-  sessionName?: string;
-  windowId?: string;
 }
 
 /**

@@ -1,5 +1,6 @@
 import { describe, expect, mock, test } from "bun:test";
 
+import { theme } from "../themes/theme.ts";
 import {
   MIN_CONTROL_CLIENT_SIZE,
   applyControlClientBootstrap,
@@ -25,15 +26,18 @@ describe("control client bootstrap helpers", () => {
 
     await applyControlClientBootstrap(sendCommand, [255, 170, 0], "underline", { cols: 120, rows: 40 });
 
+    const borderStyle = `fg=${theme.textDim}`;
     expect(sendCommand).toHaveBeenNthCalledWith(1, "set-option detach-on-destroy on");
     expect(sendCommand).toHaveBeenNthCalledWith(2, "set-option -g mouse on");
     expect(sendCommand).toHaveBeenNthCalledWith(3, "set-option -g pane-border-status top");
     expect(sendCommand.mock.calls[3]?.[0]).toContain("set-option -g pane-border-format ");
-    expect(sendCommand).toHaveBeenNthCalledWith(5, "set-option -g window-size smallest");
-    expect(sendCommand).toHaveBeenNthCalledWith(6, "refresh-client -C 120,40");
-    expect(sendCommand).toHaveBeenNthCalledWith(7, "set-option -g window-style 'fg=#ffaa00,bg=terminal'");
-    expect(sendCommand).toHaveBeenNthCalledWith(8, "set-option -g window-active-style 'fg=#ffaa00,bg=terminal'");
-    expect(sendCommand).toHaveBeenNthCalledWith(9, "set-option -g cursor-style underline");
+    expect(sendCommand).toHaveBeenNthCalledWith(5, `set-option -g pane-border-style '${borderStyle}'`);
+    expect(sendCommand).toHaveBeenNthCalledWith(6, `set-option -g pane-active-border-style '${borderStyle}'`);
+    expect(sendCommand).toHaveBeenNthCalledWith(7, "set-option -g window-size smallest");
+    expect(sendCommand).toHaveBeenNthCalledWith(8, "refresh-client -C 120,40");
+    expect(sendCommand).toHaveBeenNthCalledWith(9, "set-option -g window-style 'fg=#ffaa00,bg=terminal'");
+    expect(sendCommand).toHaveBeenNthCalledWith(10, "set-option -g window-active-style 'fg=#ffaa00,bg=terminal'");
+    expect(sendCommand).toHaveBeenNthCalledWith(11, "set-option -g cursor-style underline");
   });
 
   test("skips the cursor-style command when the terminal style is unknown", async () => {

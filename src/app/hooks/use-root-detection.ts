@@ -22,28 +22,6 @@ interface UseRootDetectionOptions {
 
 const POLL_INTERVAL_MS = 2000;
 
-/**
- * Harness-only override for docs screenshots: returns true/false to force the
- * verdict for a pane, or null to defer to the real platform check. Controlled
- * by HMX_HARNESS_ROOT_FORCE ("all", "top", or "left"). A no-op in production
- * because HMX_HARNESS is only set by the docs-screenshots harness.
- */
-function harnessForcesRoot(
-  pane: { left: number; top: number },
-  extents: { minLeft: number; minTop: number },
-): boolean | null {
-  if (process.env["HMX_HARNESS"] !== "1") return null;
-  const mode = process.env["HMX_HARNESS_ROOT_FORCE"];
-  if (mode === "all") return true;
-  // "top"/"left" mark the pane(s) at the smallest top/left coordinate. Tmux
-  // reports pane geometry relative to the window, and the upper-left pane may
-  // not sit at exactly (0,0) due to status/tab-bar offsets — hence the
-  // compare-to-minimum instead of compare-to-zero.
-  if (mode === "top") return pane.top === extents.minTop;
-  if (mode === "left") return pane.left === extents.minLeft;
-  return null;
-}
-
 export function useRootDetection({ clientRef, connected, enabled = true, targetSession }: UseRootDetectionOptions) {
   const [rootPanes, setRootPanes] = useState<RootPaneRect[]>([]);
   const lastJsonRef = useRef("[]");
@@ -72,7 +50,7 @@ export function useRootDetection({ clientRef, connected, enabled = true, targetS
         const minLeft = panes.length > 0 ? Math.min(...panes.map((p) => p.left)) : 0;
         const results = await Promise.all(
           panes.map(async (pane) => {
-            const isRoot = harnessForcesRoot(pane, { minTop, minLeft }) ?? (await isActivePaneRoot(pane.pid, pane.tty));
+            const isRoot = harnessForcesRoot(pane, { minLeft, minTop }) ?? (await isActivePaneRoot(pane.pid, pane.tty));
             return isRoot ? { height: pane.height, left: pane.left, top: pane.top, width: pane.width } : null;
           }),
         );
@@ -105,4 +83,26 @@ export function useRootDetection({ clientRef, connected, enabled = true, targetS
   }, [clientRef, connected, enabled, targetSession]);
 
   return { rootPanes };
+}
+
+/**
+ * Harness-only override for docs screenshots: returns true/false to force the
+ * verdict for a pane, or null to defer to the real platform check. Controlled
+ * by HMX_HARNESS_ROOT_FORCE ("all", "top", or "left"). A no-op in production
+ * because HMX_HARNESS is only set by the docs-screenshots harness.
+ */
+function harnessForcesRoot(
+  pane: { left: number; top: number },
+  extents: { minLeft: number; minTop: number },
+): boolean | null {
+  if (process.env["HMX_HARNESS"] !== "1") return null;
+  const mode = process.env["HMX_HARNESS_ROOT_FORCE"];
+  if (mode === "all") return true;
+  // "top"/"left" mark the pane(s) at the smallest top/left coordinate. Tmux
+  // reports pane geometry relative to the window, and the upper-left pane may
+  // not sit at exactly (0,0) due to status/tab-bar offsets — hence the
+  // compare-to-minimum instead of compare-to-zero.
+  if (mode === "top") return pane.top === extents.minTop;
+  if (mode === "left") return pane.left === extents.minLeft;
+  return null;
 }

@@ -1063,7 +1063,7 @@ async function runAgentsDemo(ctx: SceneContext): Promise<void> {
   });
 }
 
-async function runQuickTerminalCommand(harness: TuiHarness): Promise<void> {
+async function runQuickTerminalCommand(_harness: TuiHarness): Promise<void> {
   // Quick terminal opens to a fresh shell. Send a printf so the shot is not
   // empty. Use the literal sequence rather than C-l so we keep the prompt.
   await sleep(400);

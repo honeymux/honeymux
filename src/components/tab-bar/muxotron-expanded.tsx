@@ -1,8 +1,7 @@
 import type { ReactNode } from "react";
 
-import { Fragment } from "react";
-
 import { type MouseEvent, TextAttributes } from "@opentui/core";
+import { Fragment } from "react";
 
 import type { AgentType, HoneymuxState } from "../../agents/types.ts";
 import type { MuxotronBorderOverlay } from "./muxotron-model.ts";
