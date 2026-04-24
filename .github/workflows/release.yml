@@ -4,12 +4,19 @@ on:
   push:
     tags:
       - "v*"
+      # Tags ending in -test are reserved for dry-run bootstrap; they do not auto-release.
+      - "!v*-test"
   workflow_dispatch:
     inputs:
       release_tag:
         description: Existing v* tag to build and publish
         required: true
         type: string
+      dry_run:
+        description: Create a DRAFT release for testing (not published, not public)
+        default: false
+        required: false
+        type: boolean
 
 permissions:
   contents: read
@@ -96,6 +103,36 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event_name == 'workflow_dispatch' && format('refs/tags/{0}', github.event.inputs.release_tag) || github.ref }}
+
+      - name: Ensure tag is reachable from main
+        if: github.event_name != 'workflow_dispatch' || github.event.inputs.dry_run != 'true'
+        run: |
+          git fetch --no-tags origin main
+          if ! git merge-base --is-ancestor HEAD FETCH_HEAD; then
+            echo "::error::Tag ${GITHUB_REF_NAME} (commit ${GITHUB_SHA}) is not reachable from main; refusing to publish"
+            exit 1
+          fi
+
+      - name: Extract release notes from CHANGELOG.md
+        env:
+          TAG: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.release_tag || github.ref_name }}
+        run: |
+          awk -v header="## $TAG" '
+            $0 == header || index($0, header " ") == 1 { in_section = 1; next }
+            in_section && /^## / { exit }
+            in_section { print }
+          ' CHANGELOG.md > release-notes.md
+          if [ ! -s release-notes.md ]; then
+            echo "ERROR: no CHANGELOG.md section found for tag $TAG" >&2
+            exit 1
+          fi
+          echo "--- release-notes.md ---"
+          cat release-notes.md
+
       - uses: actions/download-artifact@v4
         with:
           path: dist
@@ -108,11 +145,25 @@ jobs:
           cat SHA256SUMS
 
       - name: Create release
+        if: github.event_name != 'workflow_dispatch' || github.event.inputs.dry_run != 'true'
         uses: softprops/action-gh-release@26e8ad27a09a225049a7075d7ec1caa2df6ff332 # v2.6.0
         with:
           files: |
             dist/hmx-*
             dist/SHA256SUMS
           tag_name: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.release_tag || github.ref_name }}
-          generate_release_notes: true
+          body_path: release-notes.md
+          fail_on_unmatched_files: true
+
+      - name: Create draft release (dry run)
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run == 'true'
+        uses: softprops/action-gh-release@26e8ad27a09a225049a7075d7ec1caa2df6ff332 # v2.6.0
+        with:
+          files: |
+            dist/hmx-*
+            dist/SHA256SUMS
+          tag_name: ${{ github.event.inputs.release_tag }}-dryrun
+          name: "[DRAFT] ${{ github.event.inputs.release_tag }}"
+          body_path: release-notes.md
+          draft: true
           fail_on_unmatched_files: true
