@@ -253,8 +253,64 @@ describe("RemoteServerManager remote hook ingress", () => {
 
     expect(manager.routeInput("%10", "ab")).toBe(true);
 
-    expect(sendCommand).toHaveBeenCalledWith("send-keys -H -t %77 61 62");
+    expect(sendCommand).toHaveBeenCalledWith("send-keys -H -t '%77' 61 62");
     expect(runCommandArgs).not.toHaveBeenCalled();
+  });
+
+  it("routes bracketed paste through a single set-buffer ; paste-buffer command", async () => {
+    const runCommandArgs = mock(async () => {});
+    const sendCalls: string[] = [];
+    const sendCommand = mock(async (cmd: string) => {
+      sendCalls.push(cmd);
+      return "";
+    });
+    const manager = new RemoteServerManager({ runCommandArgs } as any, [{ host: "dev-box", name: "dev-box" }]);
+
+    (manager as any).clients.set("dev-box", {
+      isConnected: true,
+      sendCommand,
+    });
+    (manager as any).paneMappings.set("%10", {
+      localPaneId: "%10",
+      remotePaneId: "%77",
+      serverName: "dev-box",
+    });
+
+    expect(manager.routeInput("%10", "\x1b[200~hello\nworld\x1b[201~")).toBe(true);
+
+    expect(sendCalls).toHaveLength(1);
+    const match = sendCalls[0]!.match(
+      /^set-buffer -b '(hmx-paste-[0-9a-f]+)' "hello\\012world" ; paste-buffer -p -d -b '\1' -t '%77'$/,
+    );
+    expect(match).not.toBeNull();
+    expect(runCommandArgs).not.toHaveBeenCalled();
+  });
+
+  it("preserves paste-then-keystroke order on the wire", async () => {
+    const runCommandArgs = mock(async () => {});
+    const sendCalls: string[] = [];
+    const sendCommand = mock(async (cmd: string) => {
+      sendCalls.push(cmd);
+      return "";
+    });
+    const manager = new RemoteServerManager({ runCommandArgs } as any, [{ host: "dev-box", name: "dev-box" }]);
+
+    (manager as any).clients.set("dev-box", {
+      isConnected: true,
+      sendCommand,
+    });
+    (manager as any).paneMappings.set("%10", {
+      localPaneId: "%10",
+      remotePaneId: "%77",
+      serverName: "dev-box",
+    });
+
+    expect(manager.routeInput("%10", "\x1b[200~paste\x1b[201~")).toBe(true);
+    expect(manager.routeInput("%10", "\r")).toBe(true);
+
+    expect(sendCalls).toHaveLength(2);
+    expect(sendCalls[0]!).toMatch(/^set-buffer -b 'hmx-paste-[0-9a-f]+' "paste" ; paste-buffer /);
+    expect(sendCalls[1]!).toBe("send-keys -H -t '%77' 0d");
   });
 
   it("cancels stray local copy mode before forwarding Escape to a remote pane", async () => {
@@ -276,7 +332,7 @@ describe("RemoteServerManager remote hook ingress", () => {
     await Promise.resolve();
 
     expect(runCommandArgs).toHaveBeenCalledWith(["send-keys", "-X", "-t", "%10", "cancel"]);
-    expect(sendCommand).toHaveBeenCalledWith("send-keys -H -t %77 1b");
+    expect(sendCommand).toHaveBeenCalledWith("send-keys -H -t '%77' 1b");
   });
 
   it("forces a mirror sync during conversion when the pane mapping is missing", async () => {
