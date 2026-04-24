@@ -450,7 +450,7 @@ export class RemoteServerManager extends EventEmitter {
 
     for (const config of this.configs) {
       const hostError = validateSshDestination(config.host);
-      const mirrorSession = `hmx-mirror-${getTmuxServer()}`;
+      const mirrorSession = `__hmx-mirror-${getTmuxServer()}`;
       const state: RemoteServerState = {
         config,
         error: hostError ? `Invalid SSH destination: ${hostError}` : undefined,
