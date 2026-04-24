@@ -1,0 +1,108 @@
+diff --git a/src/Renderable.ts b/src/Renderable.ts
+index 14eb8037..9be85bc6 100644
+--- a/src/Renderable.ts
++++ b/src/Renderable.ts
+@@ -36,6 +36,10 @@ import {
+ 
+ const BrandedRenderable: unique symbol = Symbol.for("@opentui/core/Renderable")
+ 
++function isValidRenderableId(value: unknown): value is string {
++  return typeof value === "string" && value.length > 0
++}
++
+ export enum LayoutEvents {
+   LAYOUT_CHANGED = "layout-changed",
+   ADDED = "added",
+@@ -145,7 +149,7 @@ export abstract class BaseRenderable extends EventEmitter {
+   constructor(options: BaseRenderableOptions) {
+     super()
+     this.num = BaseRenderable.renderableNumber++
+-    this._id = options.id ?? `renderable-${this.num}`
++    this._id = isValidRenderableId(options.id) ? options.id : `renderable-${this.num}`
+   }
+ 
+   public abstract add(obj: BaseRenderable | unknown, index?: number): number
+@@ -162,6 +166,10 @@ export abstract class BaseRenderable extends EventEmitter {
+   }
+ 
+   public set id(value: string) {
++    if (!isValidRenderableId(value)) {
++      return
++    }
++
+     this._id = value
+   }
+ 
+@@ -307,6 +315,10 @@ export abstract class Renderable extends BaseRenderable {
+   }
+ 
+   public override set id(value: string) {
++    if (!isValidRenderableId(value)) {
++      return
++    }
++
+     if (this.parent) {
+       this.parent.renderableMapById.delete(this.id)
+       this.parent.renderableMapById.set(value, this)
+diff --git a/src/tests/renderable.test.ts b/src/tests/renderable.test.ts
+index 57b1e74e..80fb6eb4 100644
+--- a/src/tests/renderable.test.ts
++++ b/src/tests/renderable.test.ts
+@@ -105,6 +105,22 @@ describe("BaseRenderable", () => {
+     expect(renderable.id).toBe("custom-id")
+   })
+ 
++  test("falls back to generated id for invalid constructor id", () => {
++    for (const id of ["", null, 42]) {
++      const renderable = new TestBaseRenderable({ id } as any)
++      expect(renderable.id).toMatch(/^renderable-\d+$/)
++    }
++  })
++
++  test("ignores invalid id assignments", () => {
++    const renderable = new TestBaseRenderable({ id: "stable-id" })
++
++    for (const id of ["", null, undefined, 42]) {
++      renderable.id = id as any
++      expect(renderable.id).toBe("stable-id")
++    }
++  })
++
+   test("has unique numbers", () => {
+     const r1 = new TestBaseRenderable({})
+     const r2 = new TestBaseRenderable({})
+@@ -428,6 +444,34 @@ describe("Renderable - Child Management", () => {
+     expect(parent.getRenderable("new-child-id")).toBe(child)
+   })
+ 
++  test("ignores invalid renderable id changes and preserves parent mapping", () => {
++    const parent = new TestRenderable(testRenderer, { id: "parent" })
++    const child = new TestRenderable(testRenderer, { id: "child" })
++
++    parent.add(child)
++
++    for (const id of ["", null, undefined, 42]) {
++      child.id = id as any
++      expect(child.id).toBe("child")
++      expect(parent.getRenderable("child")).toBe(child)
++    }
++
++    parent.remove(child.id)
++    expect(parent.getChildrenCount()).toBe(0)
++  })
++
++  test("can remove child created with invalid id option", () => {
++    const parent = new TestRenderable(testRenderer, { id: "parent" })
++    const child = new TestRenderable(testRenderer, { id: "" } as any)
++
++    expect(child.id).toMatch(/^renderable-\d+$/)
++
++    parent.add(child)
++    parent.remove(child.id)
++
++    expect(parent.getChildrenCount()).toBe(0)
++  })
++
+   test("findDescendantById finds direct children", () => {
+     const parent = new TestRenderable(testRenderer, { id: "parent" })
+     const child1 = new TestRenderable(testRenderer, { id: "child1" })
