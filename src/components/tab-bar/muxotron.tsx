@@ -376,6 +376,7 @@ export function Muxotron({
       onLatchToggle: onReviewLatchToggle,
       onNextAgent,
       onPrevAgent,
+      permissionAgentType: firstUnanswered?.agentType,
       selectedSession: selectedSessionProp,
     });
 

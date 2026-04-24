@@ -18,6 +18,21 @@ export const AGENT_COLORS: Record<AgentType, string> = {
   opencode: "#b0b0b0",
 };
 
+/**
+ * Whether honeymux's allow/deny actions can actually decide a permission
+ * request via the agent's hook. Claude and OpenCode block the agent on the
+ * hook's response. Codex and Gemini run hooks fire-and-forget (Codex by
+ * design — its native UI runs after the hook regardless; Gemini because its
+ * hook protocol isn't authoritative), so the user must answer the agent's
+ * own in-pane prompt. honeymux's allow/deny UI is hidden for those agents.
+ */
+export const AGENT_SUPPORTS_HOOK_DECISIONS: Record<AgentType, boolean> = {
+  claude: true,
+  codex: false,
+  gemini: false,
+  opencode: true,
+};
+
 export const CLAUDE_ANIMATIONS: AgentAnimationConfig = {
   alive: { char: "\u00b7", color: "#66bf73" },
   unanswered: { char: "\u25cf", color: "#ffb300" },

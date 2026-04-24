@@ -1,7 +1,8 @@
-import type { AgentSession } from "../../agents/types.ts";
+import type { AgentSession, AgentType } from "../../agents/types.ts";
 import type { KeyAction, KeybindingConfig } from "../../util/keybindings.ts";
 
 import { getToolPermissionInfo } from "../../agents/tool-permission-info.ts";
+import { AGENT_SUPPORTS_HOOK_DECISIONS } from "../../agents/types.ts";
 import { theme } from "../../themes/theme.ts";
 import { formatBinding } from "../../util/keybindings.ts";
 
@@ -60,6 +61,10 @@ interface BuildMuxotronHintButtonsArgs {
   onLatchToggle?: () => void;
   onNextAgent?: () => void;
   onPrevAgent?: () => void;
+  /** Agent type of the unanswered session driving the alert strip. When the
+   *  agent doesn't support honeymux-driven hook decisions (e.g. codex,
+   *  gemini), approve/deny are omitted — the user must answer in-pane. */
+  permissionAgentType?: AgentType;
   selectedSession?: AgentSession | null;
 }
 
@@ -89,6 +94,7 @@ export function buildMuxotronHintButtons({
   onLatchToggle,
   onNextAgent,
   onPrevAgent,
+  permissionAgentType,
   selectedSession,
 }: BuildMuxotronHintButtonsArgs): MuxotronHintButton[] {
   const fmt = (action: KeyAction, label: string): string => {
@@ -105,28 +111,34 @@ export function buildMuxotronHintButtons({
   // while latched, so its hotkey stays fully lit.
   const dimHotkey = !!selectedSession && !!latched;
 
-  // Permission-response strip: approve / deny / goto / dismiss.
+  // Permission-response strip: approve / deny / goto / dismiss. Approve and
+  // deny are omitted when the alerted agent doesn't support honeymux-driven
+  // hook decisions — for those agents the user must answer in-pane, so
+  // showing dead buttons here would be misleading.
   if (!selectedSession) {
-    return [
-      {
+    const showApproveDeny = permissionAgentType ? AGENT_SUPPORTS_HOOK_DECISIONS[permissionAgentType] : true;
+    const buttons: MuxotronHintButton[] = [];
+    if (showApproveDeny) {
+      buttons.push({
         color: canRespondToPermission ? MUXOTRON_HINT_COLORS.approve : theme.textDim,
         disabled: !canRespondToPermission,
         label: fmt("agentPermApprove", "approve"),
         onClick: canRespondToPermission ? onApprove : undefined,
-      },
-      {
+      });
+      buttons.push({
         color: canRespondToPermission ? MUXOTRON_HINT_COLORS.deny : theme.textDim,
         disabled: !canRespondToPermission,
         label: fmt("agentPermDeny", "deny"),
         onClick: canRespondToPermission ? onDeny : undefined,
-      },
-      { color: MUXOTRON_HINT_COLORS.goto, label: fmt("agentPermGoto", "goto"), onClick: onGoto },
-      {
-        color: MUXOTRON_HINT_COLORS.dismiss,
-        label: fmt("agentPermDismiss", "dismiss"),
-        onClick: onDismiss,
-      },
-    ];
+      });
+    }
+    buttons.push({ color: MUXOTRON_HINT_COLORS.goto, label: fmt("agentPermGoto", "goto"), onClick: onGoto });
+    buttons.push({
+      color: MUXOTRON_HINT_COLORS.dismiss,
+      label: fmt("agentPermDismiss", "dismiss"),
+      onClick: onDismiss,
+    });
+    return buttons;
   }
 
   // Review-workflow strip: latch / goto / prev / next. Approve and deny

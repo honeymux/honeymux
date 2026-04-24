@@ -22,7 +22,7 @@ export function getToolPermissionInfo(
     case "claude":
       return claudeToolPermissionInfo(toolName, toolInput);
     case "codex":
-      return codexToolPermissionInfo(toolName);
+      return codexToolPermissionInfo(toolName, toolInput);
     case "gemini":
       return geminiToolPermissionInfo(toolName, toolInput);
     case "opencode":
@@ -130,8 +130,22 @@ function claudeToolPermissionInfo(toolName: string | undefined, input: Record<st
   }
 }
 
-function codexToolPermissionInfo(toolName: string | undefined): ToolPermissionInfo {
+function codexToolPermissionInfo(toolName: string | undefined, input: Record<string, unknown>): ToolPermissionInfo {
   const name = toolName ?? "";
+  // Codex PermissionRequest currently routes shell, unified exec, and network
+  // approvals through tool_name="Bash" with {command, description?} in
+  // tool_input. Description is a human-readable justification (e.g.
+  // "network-access <host>") and should lead the summary when present.
+  const command = str(input, "command");
+  const description = str(input, "description");
+  if (command || description) {
+    const summaryBody = description || oneLine(command.split("\n")[0]!);
+    const detailBody = description && command ? `${description}\n${command}` : description || command;
+    return {
+      detail: prefixed(name, detailBody),
+      summary: prefixed(name, summaryBody),
+    };
+  }
   return { detail: name || "Permission needed", summary: name || "Permission needed" };
 }
 
@@ -196,7 +210,7 @@ function openCodeToolPermissionInfo(toolName: string | undefined, input: Record<
 }
 
 // ---------------------------------------------------------------------------
-// Codex (stub — no permission hooks yet)
+// Codex
 // ---------------------------------------------------------------------------
 
 /** Prefix a body with `toolName: ` when toolName is non-empty. */

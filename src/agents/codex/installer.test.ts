@@ -29,10 +29,20 @@ describe("buildCodexHookCommand", () => {
 });
 
 describe("upsertCodexHookSettings", () => {
-  it("replaces existing honeymux hook entries for SessionStart", () => {
+  it("replaces existing honeymux hook entries for every registered event", () => {
     const settings = upsertCodexHookSettings(
       {
         hooks: {
+          PermissionRequest: [
+            {
+              hooks: [
+                {
+                  command: "python3 /old/honeymux.py",
+                  type: "command",
+                },
+              ],
+            },
+          ],
           SessionStart: [
             {
               hooks: [
@@ -74,5 +84,47 @@ describe("upsertCodexHookSettings", () => {
         ],
       },
     ]);
+
+    expect(settings.hooks?.["PermissionRequest"]).toEqual([
+      {
+        hooks: [
+          {
+            command: "/usr/bin/python3 /home/me/.codex/hooks/honeymux.py",
+            type: "command",
+          },
+        ],
+      },
+    ]);
+  });
+
+  it("registers PermissionRequest on a clean install", () => {
+    const settings = upsertCodexHookSettings({}, "/usr/bin/python3 /home/me/.codex/hooks/honeymux.py");
+    expect(settings.hooks?.["PermissionRequest"]).toEqual([
+      {
+        hooks: [
+          {
+            command: "/usr/bin/python3 /home/me/.codex/hooks/honeymux.py",
+            type: "command",
+          },
+        ],
+      },
+    ]);
+    expect(settings.hooks?.["SessionStart"]).toEqual([
+      {
+        hooks: [
+          {
+            command: "/usr/bin/python3 /home/me/.codex/hooks/honeymux.py",
+            type: "command",
+          },
+        ],
+      },
+    ]);
+  });
+
+  it("is idempotent across repeat installs", () => {
+    const command = "/usr/bin/python3 /home/me/.codex/hooks/honeymux.py";
+    const once = upsertCodexHookSettings({}, command);
+    const twice = upsertCodexHookSettings(once, command);
+    expect(twice).toEqual(once);
   });
 });

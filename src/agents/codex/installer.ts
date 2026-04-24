@@ -10,11 +10,12 @@ import { localInstallHost } from "../install-host.ts";
 import HOOK_CONTENT from "./hooks.py" with { type: "text" };
 
 const HOOK_SCRIPT_NAME = "honeymux.py";
+// SessionStart fires at session boot; PermissionRequest blocks Codex while the
+// honeymux UI collects an allow/deny decision from the user.
+const HOOK_EVENTS = ["PermissionRequest", "SessionStart"] as const;
 
 type CodexSettings = {
-  hooks?: {
-    SessionStart?: HookMatcherGroup[];
-  };
+  hooks?: Record<string, HookMatcherGroup[]>;
 };
 
 type HookHandler = {
@@ -111,18 +112,22 @@ export function upsertCodexHookSettings(settings: CodexSettings, command: string
   };
   const hooks = next.hooks!;
 
-  hooks["SessionStart"] = Array.isArray(hooks["SessionStart"])
-    ? hooks["SessionStart"].filter((group: unknown) => !containsOurHook(group))
-    : [];
+  for (const event of HOOK_EVENTS) {
+    const existing = Array.isArray(hooks[event])
+      ? hooks[event].filter((group: unknown) => !containsOurHook(group))
+      : [];
 
-  hooks["SessionStart"].push({
-    hooks: [
-      {
-        command,
-        type: "command",
-      },
-    ],
-  });
+    existing.push({
+      hooks: [
+        {
+          command,
+          type: "command",
+        },
+      ],
+    });
+
+    hooks[event] = existing;
+  }
 
   return next;
 }
