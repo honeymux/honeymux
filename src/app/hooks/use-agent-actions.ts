@@ -22,6 +22,7 @@ import { getResumeArgs } from "../../agents/history-search.ts";
 import { localInstallHost } from "../../agents/install-host.ts";
 import { installOpenCodePlugin, saveOpenCodeConsent, saveOpenCodeIgnored } from "../../agents/opencode/installer.ts";
 import { OpenCodePluginProvider } from "../../agents/opencode/plugin-provider.ts";
+import { AGENT_SUPPORTS_HOOK_DECISIONS } from "../../agents/types.ts";
 import { RemoteInstallHost } from "../../remote/remote-install-host.ts";
 import { log } from "../../util/log.ts";
 
@@ -262,14 +263,24 @@ export function useAgentActions({
 
       // Route to correct provider based on agent type
       const session = storeRef.current?.getSession(sessionId);
+      // Codex and Gemini run their hooks fire-and-forget; honeymux can't
+      // actually decide the request, so we treat allow/deny as no-ops for
+      // those agents (the UI already hides those buttons, but hotkeys can
+      // still fire). Bailing here keeps the local alert visible until the
+      // user answers the agent's own in-pane prompt or explicitly dismisses.
+      if (session && !AGENT_SUPPORTS_HOOK_DECISIONS[session.agentType]) {
+        return;
+      }
       if (session?.isRemote) {
         refs.remoteManagerRef.current?.respondToPermission(sessionId, toolUseId, decision, session.paneId);
         storeRef.current?.markAnswered(sessionId);
         return;
       }
       const agentType = session?.agentType;
-      let provider: ClaudeHookProvider | GeminiHookProvider | OpenCodePluginProvider | undefined;
-      if (agentType === "opencode") {
+      let provider: ClaudeHookProvider | CodexHookProvider | GeminiHookProvider | OpenCodePluginProvider | undefined;
+      if (agentType === "codex") {
+        provider = registry.getProvider("codex-hook") as CodexHookProvider | undefined;
+      } else if (agentType === "opencode") {
         provider = registry.getProvider("opencode-plugin") as OpenCodePluginProvider | undefined;
       } else if (agentType === "gemini") {
         provider = registry.getProvider("gemini-hook") as GeminiHookProvider | undefined;

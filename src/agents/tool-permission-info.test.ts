@@ -177,15 +177,50 @@ describe("getToolPermissionInfo", () => {
 
   // ---- Codex ----
   describe("codex", () => {
-    it("stub returns Permission needed", () => {
+    it("empty input returns Permission needed", () => {
       const info = getToolPermissionInfo("codex", undefined, {});
       expect(info.summary).toBe("Permission needed");
       expect(info.detail).toBe("Permission needed");
     });
 
-    it("with tool name", () => {
-      const info = getToolPermissionInfo("codex", "SomeTool", {});
-      expect(info.summary).toBe("SomeTool: Permission needed");
+    it("tool name only", () => {
+      const info = getToolPermissionInfo("codex", "Bash", {});
+      expect(info.summary).toBe("Bash: Permission needed");
+    });
+
+    it("Bash with command only", () => {
+      const info = getToolPermissionInfo("codex", "Bash", {
+        command: "rm -f /tmp/example",
+      });
+      expect(info.summary).toBe("Bash: rm -f /tmp/example");
+      expect(info.detail).toBe("Bash: rm -f /tmp/example");
+    });
+
+    it("Bash with description leads summary", () => {
+      const info = getToolPermissionInfo("codex", "Bash", {
+        command: "cp /tmp/src.json /Users/alice/export/src.json",
+        description: "Need to copy a generated file outside the workspace",
+      });
+      expect(info.summary).toBe("Bash: Need to copy a generated file outside the workspace");
+      expect(info.detail).toContain("Need to copy a generated file outside the workspace");
+      expect(info.detail).toContain("cp /tmp/src.json /Users/alice/export/src.json");
+    });
+
+    it("multi-line Bash command collapses first line for summary", () => {
+      const info = getToolPermissionInfo("codex", "Bash", {
+        command: "set -e\nnpm install\nnpm run build",
+      });
+      expect(info.summary).toBe("Bash: set -e");
+      expect(info.detail).toContain("npm install");
+      expect(info.detail).toContain("npm run build");
+    });
+
+    it("network approval uses synthetic description", () => {
+      const info = getToolPermissionInfo("codex", "Bash", {
+        command: "curl http://codex-network-test.invalid",
+        description: "network-access http://codex-network-test.invalid",
+      });
+      expect(info.summary).toBe("Bash: network-access http://codex-network-test.invalid");
     });
   });
 

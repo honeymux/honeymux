@@ -124,6 +124,43 @@ describe("muxotron model helpers", () => {
     expect(buttons[3]?.label).toBe("dismiss");
   });
 
+  test("codex permission alert hides approve/deny — only goto/dismiss remain", () => {
+    const buttons = buildMuxotronHintButtons({
+      keybindings: DEFAULT_KEYBINDINGS,
+      permissionAgentType: "codex",
+      selectedSession: null,
+    });
+    expect(buttons).toHaveLength(2);
+    expect(buttons[0]?.label).toBe("goto");
+    expect(buttons[1]?.label).toBe("dismiss");
+  });
+
+  test("gemini permission alert hides approve/deny — only goto/dismiss remain", () => {
+    const buttons = buildMuxotronHintButtons({
+      keybindings: DEFAULT_KEYBINDINGS,
+      permissionAgentType: "gemini",
+      selectedSession: null,
+    });
+    expect(buttons).toHaveLength(2);
+    expect(buttons[0]?.label).toBe("goto");
+    expect(buttons[1]?.label).toBe("dismiss");
+  });
+
+  test("claude and opencode permission alerts keep all four buttons", () => {
+    for (const agentType of ["claude", "opencode"] as const) {
+      const buttons = buildMuxotronHintButtons({
+        keybindings: DEFAULT_KEYBINDINGS,
+        permissionAgentType: agentType,
+        selectedSession: null,
+      });
+      expect(buttons).toHaveLength(4);
+      expect(buttons[0]?.label).toBe("approve");
+      expect(buttons[1]?.label).toBe("deny");
+      expect(buttons[2]?.label).toBe("goto");
+      expect(buttons[3]?.label).toBe("dismiss");
+    }
+  });
+
   test("flips labels to <hotkey>: <action> format for bound actions", () => {
     const buttons = buildMuxotronHintButtons({
       keybindings: { ...DEFAULT_KEYBINDINGS, agentPermDismiss: "ctrl+x" },
