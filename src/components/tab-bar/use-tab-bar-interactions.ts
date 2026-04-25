@@ -67,11 +67,22 @@ interface UseTabBarInteractionsResult {
   handleToolbarMouseDown: (event: MouseEvent) => void;
 }
 
+// Layout constants must mirror muxotron-collapsed.tsx: `1 + hmPad` of padding
+// before the mascot/badge slot, then `hmW` for the slot itself, then a 1-cell
+// gap before the sine wave begins. Typical hmW is 6 (idle/needInput); the
+// 9-cell sleeping mascot is uncommon enough to keep a fixed offset here. The
+// agents zone also claims the 1-cell gap immediately left of the sine wave.
+const MUXOTRON_AGENTS_ZONE_LEFT = 8;
+const MUXOTRON_BADGE_SLOT_LEFT = 2;
+const MUXOTRON_BADGE_SLOT_RIGHT = 8;
+
 export function getMuxotronClickZone(width: number, muxotronWidth: number, x: number): MuxotronClickZone {
   const muxotronLeft = Math.floor((width - muxotronWidth) / 2);
   if (x < muxotronLeft || x >= muxotronLeft + muxotronWidth) return null;
-  const mid = muxotronLeft + Math.floor(muxotronWidth / 2);
-  return x < mid ? "notifications" : "agents";
+  const offset = x - muxotronLeft;
+  if (offset >= MUXOTRON_BADGE_SLOT_LEFT && offset < MUXOTRON_BADGE_SLOT_RIGHT) return "notifications";
+  if (offset >= MUXOTRON_AGENTS_ZONE_LEFT) return "agents";
+  return null;
 }
 
 export function isModifierSecondaryClick(event: Pick<MouseEvent, "button" | "modifiers">): boolean {
