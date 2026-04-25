@@ -49,6 +49,14 @@ type RendererOutputWriter = {
 // Honeymux creates — matching the IPC-permission rule in AGENTS.md.
 process.umask(0o077);
 
+// Force OpenTUI into Unicode (grapheme-cluster width) mode for Honeymux's own
+// renderer. Honeymux already requires a UTF-8 capable terminal, and the
+// alternative wcwidth mode breaks layout for ZWJ sequences, regional-indicator
+// flag pairs, and VS16 emoji. OpenTUI auto-defaults to wcwidth in tmux, Apple
+// Terminal, etc., which we don't want here. Set this BEFORE createCliRenderer.
+// Users can still override by exporting OPENTUI_FORCE_WCWIDTH=1 explicitly.
+process.env["OPENTUI_FORCE_UNICODE"] ??= "1";
+
 const cliArgs = parseCliArgs(process.argv.slice(2));
 
 if (cliArgs.kind === "version") {
