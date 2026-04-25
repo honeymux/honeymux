@@ -24,6 +24,8 @@ const SERIES_FILE = join(PATCHES_DIR, "series.json");
 interface PatchEntry {
   branch: string;
   description: string;
+  /** Defaults to true. Set to false to skip apply/verify without removing the entry. */
+  enabled?: boolean;
   file: string;
   upstream?: string;
 }
@@ -151,6 +153,14 @@ function saveSeries(series: Series): void {
 
 function nextNum(patches: PatchEntry[]): string {
   return String(patches.length + 1).padStart(4, "0");
+}
+
+function isEnabled(p: PatchEntry): boolean {
+  return p.enabled !== false;
+}
+
+function enabledPatches(config: PackageConfig): PatchEntry[] {
+  return config.patches.filter(isEnabled);
 }
 
 function safeName(s: string): string {
@@ -365,9 +375,10 @@ async function cmdExport(pkg: string, branch: string, opts: { name?: string; bas
   writeFileSync(outPath, content);
 
   config.patches.push({
-    file: fileName,
-    description: `Changes from branch '${branch}'`,
     branch,
+    description: `Changes from branch '${branch}'`,
+    enabled: true,
+    file: fileName,
   });
   saveSeries(series);
 
@@ -494,7 +505,7 @@ async function applyCompiled(pkg: string, config: PackageConfig): Promise<boolea
     if (!zigVersionOk) {
       return false;
     }
-    for (const entry of config.patches) {
+    for (const entry of enabledPatches(config)) {
       const patchFile = resolve(join(PATCHES_DIR, pkgDirName(pkg), entry.file));
       if (!existsSync(patchFile)) {
         console.error(`  ✗ ${entry.file}: file not found`);
@@ -592,7 +603,14 @@ async function cmdApply(targetPkg?: string) {
 
   for (const [pkg, config] of Object.entries(series)) {
     if (targetPkg && pkg !== targetPkg) continue;
-    if (config.patches.length === 0) continue;
+    const enabled = enabledPatches(config);
+    const disabledCount = config.patches.length - enabled.length;
+    if (enabled.length === 0) {
+      if (disabledCount > 0) {
+        console.log(`${pkg}: 0 enabled patch(es) (${disabledCount} disabled, skipped)`);
+      }
+      continue;
+    }
 
     const nmDir = join(ROOT, "node_modules", pkg);
     if (!existsSync(nmDir)) {
@@ -600,13 +618,14 @@ async function cmdApply(targetPkg?: string) {
       continue;
     }
 
-    console.log(`${pkg}: applying ${config.patches.length} patch(es)`);
+    const disabledSuffix = disabledCount > 0 ? ` (${disabledCount} disabled, skipped)` : "";
+    console.log(`${pkg}: applying ${enabled.length} patch(es)${disabledSuffix}`);
 
     // Compiled packages: rebuild from patched source
     if (config.buildCmd) {
       const ok = await applyCompiled(pkg, config);
       if (ok) {
-        applied += config.patches.length;
+        applied += enabled.length;
       } else {
         failed = true;
       }
@@ -614,7 +633,7 @@ async function cmdApply(targetPkg?: string) {
     }
 
     // Source packages: apply patches directly to node_modules
-    for (const entry of config.patches) {
+    for (const entry of enabled) {
       const patchFile = resolve(join(PATCHES_DIR, pkgDirName(pkg), entry.file));
       if (!existsSync(patchFile)) {
         console.error(`  ✗ ${entry.file}: file not found`);
@@ -676,7 +695,8 @@ async function cmdVerify(targetPkg?: string) {
 
   for (const [pkg, config] of Object.entries(series)) {
     if (targetPkg && pkg !== targetPkg) continue;
-    if (config.patches.length === 0) continue;
+    const enabled = enabledPatches(config);
+    if (enabled.length === 0) continue;
 
     const nmDir = join(ROOT, "node_modules", pkg);
     if (!existsSync(nmDir)) {
@@ -684,7 +704,7 @@ async function cmdVerify(targetPkg?: string) {
       continue;
     }
 
-    for (const entry of config.patches) {
+    for (const entry of enabled) {
       const patchFile = resolve(join(PATCHES_DIR, pkgDirName(pkg), entry.file));
       if (!existsSync(patchFile)) {
         console.error(`✗ ${pkg} / ${entry.file}: file not found`);
@@ -747,7 +767,8 @@ function cmdStatus() {
     }
     for (const p of config.patches) {
       const up = p.upstream ? ` → ${p.upstream}` : "";
-      console.log(`  ${p.file}: ${p.description} [${p.branch}]${up}`);
+      const disabled = isEnabled(p) ? "" : " [DISABLED]";
+      console.log(`  ${p.file}: ${p.description} [${p.branch}]${up}${disabled}`);
     }
   }
   console.log();

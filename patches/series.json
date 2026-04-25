@@ -10,34 +10,40 @@
     "version": "0.1.97",
     "patches": [
       {
-        "file": "0001-fix-wide-char-alpha-blending.patch",
+        "branch": "fix-wide-char-alpha-blending",
         "description": "Changes from branch 'fix-wide-char-alpha-blending'",
-        "branch": "fix-wide-char-alpha-blending"
+        "enabled": true,
+        "file": "0001-fix-wide-char-alpha-blending.patch"
       },
       {
-        "file": "0002-optimize-clean-render-caching.patch",
+        "branch": "optimize-clean-render-caching",
         "description": "Changes from branch 'optimize-clean-render-caching'",
-        "branch": "optimize-clean-render-caching"
+        "enabled": true,
+        "file": "0002-optimize-clean-render-caching.patch"
       },
       {
-        "file": "0003-switch-to-c-allocator.patch",
+        "branch": "switch-to-c-allocator",
         "description": "Switch global allocator from GPA (page-backed, mmap-per-grow) to libc malloc",
-        "branch": "switch-to-c-allocator"
+        "enabled": true,
+        "file": "0003-switch-to-c-allocator.patch"
       },
       {
-        "file": "0004-cache-perceptual-alpha-curve.patch",
+        "branch": "cache-perceptual-alpha-curve",
         "description": "Thread-local cache for blendColors's perceptual alpha curve to avoid recomputing pow per cell",
-        "branch": "cache-perceptual-alpha-curve"
+        "enabled": true,
+        "file": "0004-cache-perceptual-alpha-curve.patch"
       },
       {
-        "file": "0005-skip-noop-box-render-on-fwcab.patch",
+        "branch": "skip-noop-box-render-on-fwcab",
         "description": "Skip BoxRenderable.renderSelf drawBox call for pure layout containers (rebased on fix-wide-char-alpha-blending)",
-        "branch": "skip-noop-box-render-on-fwcab"
+        "enabled": true,
+        "file": "0005-skip-noop-box-render-on-fwcab.patch"
       },
       {
-        "file": "0006-fix-renderable-id-invariant.patch",
+        "branch": "fix-renderable-id-invariant",
         "description": "Changes from branch 'fix-renderable-id-invariant'",
-        "branch": "fix-renderable-id-invariant"
+        "enabled": true,
+        "file": "0006-fix-renderable-id-invariant.patch"
       }
     ]
   },
@@ -48,14 +54,16 @@
     "version": "0.1.97",
     "patches": [
       {
-        "file": "0001-avoid-duplicate-instance-renders-after-react-commits.patch",
+        "branch": "avoid-duplicate-instance-renders-after-react-commits",
         "description": "Avoid duplicate instance render requests after React commits",
-        "branch": "avoid-duplicate-instance-renders-after-react-commits"
+        "enabled": true,
+        "file": "0001-avoid-duplicate-instance-renders-after-react-commits.patch"
       },
       {
-        "file": "0002-batch-render-requests-during-react-commits.patch",
+        "branch": "batch-render-requests-during-react-commits",
         "description": "Batch render requests during React commits",
-        "branch": "batch-render-requests-during-react-commits"
+        "enabled": true,
+        "file": "0002-batch-render-requests-during-react-commits.patch"
       }
     ]
   },
@@ -67,19 +75,22 @@
     "version": "1.4.10",
     "patches": [
       {
-        "file": "0001-skip-extra-render-for-fixed-size-terminal-feeds.patch",
+        "branch": "skip-extra-render-for-fixed-size-terminal-feeds",
         "description": "Skip redundant post-feed renders for fixed-size terminals",
-        "branch": "skip-extra-render-for-fixed-size-terminal-feeds"
+        "enabled": true,
+        "file": "0001-skip-extra-render-for-fixed-size-terminal-feeds.patch"
       },
       {
-        "file": "0002-fix-opaque-default-background-terminal.patch",
+        "branch": "fix-opaque-default-background-terminal",
         "description": "Render implicit terminal background cells with opaque terminal defaults",
-        "branch": "fix-opaque-default-background-terminal"
+        "enabled": true,
+        "file": "0002-fix-opaque-default-background-terminal.patch"
       },
       {
-        "file": "0003-cache-terminal-renders-between-ansi-updates.patch",
+        "branch": "cache-terminal-renders-between-ansi-updates",
         "description": "Cache terminal text rendering between ANSI updates",
-        "branch": "cache-terminal-renders-between-ansi-updates"
+        "enabled": true,
+        "file": "0003-cache-terminal-renders-between-ansi-updates.patch"
       }
     ]
   }
