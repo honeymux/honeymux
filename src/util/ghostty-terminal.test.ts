@@ -55,7 +55,7 @@ describe("prepareGhosttyTerminalForTmux", () => {
       }
     )._persistentTerminal.getJson();
 
-    expect(feedCalls).toEqual(["\x1b[20l"]);
+    expect(feedCalls).toEqual(["\x1b[20l", "\x1b[?2027h"]);
     expect(getJsonCalls).toEqual([
       { limit: 1, offset: MAX_NATIVE_OFFSET },
       { limit: 24, offset: 96 },

@@ -29,9 +29,19 @@ const MAX_NATIVE_OFFSET = 0xffff_ffff;
  * through large outputs like `git diff`. This wrapper keeps the existing
  * tmux-only behavior of rendering just the visible screen, but does the slice
  * in the native layer instead of serializing the whole backlog to JS first.
+ *
+ * Also enables DEC mode 2027 (Unicode-mode / grapheme-cluster width). Without
+ * this, ghostty-vt expands grapheme clusters such as ZWJ-joined emoji into
+ * multiple wide-emoji cells, while tmux internally treats them as a single
+ * wide cell. The cell-layout disagreement causes tmux's incremental cell
+ * updates to land at the wrong columns, accumulating visible corruption
+ * during heavy redraws (e.g. dragging translucent boxes over wide-grapheme
+ * lines). Tmux does not emit `\x1b[?2027h` itself, so we set it on the
+ * persistent terminal directly.
  */
 export function prepareGhosttyTerminalForTmux(terminal: GhosttyTerminalRenderable): void {
   terminal.feed("\x1b[20l");
+  terminal.feed("\x1b[?2027h");
 
   const internal = terminal as unknown as GhosttyTerminalPatchState;
   const persistentTerminal = internal._persistentTerminal;
