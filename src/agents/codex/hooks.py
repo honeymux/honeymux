@@ -94,6 +94,12 @@ def re_match_remote_hook_socket(path):
     return re.match(REMOTE_HOOK_SOCKET_RE, path) is not None
 
 
+def running_in_honeymux():
+    """Check if we're inside a honeymux-managed tmux session."""
+    tmux = os.environ.get("TMUX", "")
+    return "honeymux" in tmux
+
+
 def normalize_tty(tty_name):
     tty = tty_name.strip()
     if not tty or tty in ("-", "?", "??"):
@@ -128,6 +134,9 @@ def get_tmux_pane_id():
 
 
 def main():
+    if not running_in_honeymux():
+        sys.exit(0)
+
     try:
         raw = sys.stdin.read()
         data = json.loads(raw) if raw.strip() else {}
