@@ -34,10 +34,13 @@ describe("control client bootstrap helpers", () => {
     expect(sendCommand).toHaveBeenNthCalledWith(5, `set-option -g pane-border-style '${borderStyle}'`);
     expect(sendCommand).toHaveBeenNthCalledWith(6, `set-option -g pane-active-border-style '${borderStyle}'`);
     expect(sendCommand).toHaveBeenNthCalledWith(7, "set-option -g window-size smallest");
-    expect(sendCommand).toHaveBeenNthCalledWith(8, "refresh-client -C 120,40");
-    expect(sendCommand).toHaveBeenNthCalledWith(9, "set-option -g window-style 'fg=#ffaa00,bg=terminal'");
-    expect(sendCommand).toHaveBeenNthCalledWith(10, "set-option -g window-active-style 'fg=#ffaa00,bg=terminal'");
-    expect(sendCommand).toHaveBeenNthCalledWith(11, "set-option -g cursor-style underline");
+    expect(sendCommand).toHaveBeenNthCalledWith(8, "bind-key -T prefix c new-window -c '#{pane_current_path}'");
+    expect(sendCommand).toHaveBeenNthCalledWith(9, "bind-key -T prefix '\"' split-window -c '#{pane_current_path}'");
+    expect(sendCommand).toHaveBeenNthCalledWith(10, "bind-key -T prefix % split-window -h -c '#{pane_current_path}'");
+    expect(sendCommand).toHaveBeenNthCalledWith(11, "refresh-client -C 120,40");
+    expect(sendCommand).toHaveBeenNthCalledWith(12, "set-option -g window-style 'fg=#ffaa00,bg=terminal'");
+    expect(sendCommand).toHaveBeenNthCalledWith(13, "set-option -g window-active-style 'fg=#ffaa00,bg=terminal'");
+    expect(sendCommand).toHaveBeenNthCalledWith(14, "set-option -g cursor-style underline");
   });
 
   test("skips the cursor-style command when the terminal style is unknown", async () => {

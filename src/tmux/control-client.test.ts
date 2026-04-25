@@ -223,7 +223,17 @@ describe("TmuxControlClient cwd inheritance", () => {
 
     await client.createSession("mysession", "/home/user");
 
-    expect(runCommandArgs).toHaveBeenCalledWith(["new-session", "-d", "-s", "mysession", "-c", "/home/user"]);
+    expect(runCommandArgs).toHaveBeenCalledWith([
+      "new-session",
+      "-d",
+      "-s",
+      "mysession",
+      "-c",
+      "/home/user",
+      "-P",
+      "-F",
+      "#{session_name}",
+    ]);
   });
 
   test("createPanes passes cwd via -c flag", async () => {

@@ -29,7 +29,9 @@ mock.module("../../agents/history-search.ts", () => ({
 mock.module("../../util/keybindings.ts", () => ({
   MODIFIER_KEY_CODES: {
     57447: "right_shift",
+    57448: "right_ctrl",
   },
+  MODIFIER_KEY_NAMES: new Set(["right_shift", "right_ctrl"]),
   ensureKeybindingsFile: ensureKeybindingsFileMock,
 }));
 

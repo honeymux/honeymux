@@ -18,6 +18,7 @@ class FakePaneTabClient {
   exactResponseQueues = new Map<string, string[]>();
   exactResponses = new Map<string, string>();
   forceSwapPaneError: Error | null = null;
+  getActivePaneCwd = mock(async () => "/home/user");
   getAutomaticRename = mock(async (windowId: string) => this.automaticRenameByWindow.get(windowId) ?? true);
   paneBorderLines = "single";
   getPaneBorderLines = mock(async () => this.paneBorderLines);
@@ -176,7 +177,7 @@ describe("pane tab ops", () => {
     expect(group?.activeIndex).toBe(1);
     expect(group?.tabs.map((tab) => `${tab.paneId}:${tab.label}`)).toEqual(["%1:bash", "%9:htop"]);
     expect(group?.restoreAutomaticRename).toBe(true);
-    expect(client.newDetachedWindow).toHaveBeenCalledWith("_hmx_tab");
+    expect(client.newDetachedWindow).toHaveBeenCalledWith("_hmx_tab", "/home/user");
     expect(client.swapPane).toHaveBeenCalledWith("%1", "%9");
     expect(client.sentCommands).toContain("set-option -w -t %9 pane-border-status off");
     expect(client.sentCommands).toContain("set-option -p -t %9 remain-on-exit on");

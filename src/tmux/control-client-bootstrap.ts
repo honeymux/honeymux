@@ -31,11 +31,30 @@ export async function applyControlClientBootstrap(
   await sendCommand(`set-option -g pane-border-format ${quoteTmuxArg("format", buildDefaultPaneBorderFormat())}`);
   await applyControlClientPaneBorderColors(sendCommand);
   await sendCommand("set-option -g window-size smallest");
+  await applyControlClientCwdBindings(sendCommand);
   await setControlClientSize(sendCommand, size);
   await applyControlClientTerminalColors(sendCommand, fg);
   if (cursorStyle) {
     await sendCommand(`set-option -g cursor-style ${cursorStyle}`);
   }
+}
+
+/**
+ * Rebind tmux's default split-window and new-window keys so that new panes
+ * and windows inherit the active pane's working directory instead of
+ * defaulting to $HOME.  This mirrors the widely-used tmux idiom:
+ *
+ *   bind-key   c new-window  -c '#{pane_current_path}'
+ *   bind-key '"' split-window  -c '#{pane_current_path}'
+ *   bind-key '%' split-window -h -c '#{pane_current_path}'
+ *
+ * Using `-T prefix` scopes the rebinding to the prefix key table so
+ * non-prefix bindings (if any) are left untouched.
+ */
+export async function applyControlClientCwdBindings(sendCommand: SendCommand): Promise<void> {
+  await sendCommand("bind-key -T prefix c new-window -c '#{pane_current_path}'");
+  await sendCommand("bind-key -T prefix '\"' split-window -c '#{pane_current_path}'");
+  await sendCommand("bind-key -T prefix % split-window -h -c '#{pane_current_path}'");
 }
 
 /**
