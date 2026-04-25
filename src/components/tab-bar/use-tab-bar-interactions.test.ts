@@ -15,11 +15,18 @@ describe("tab-bar interactions helpers", () => {
     expect(isModifierSecondaryClick({ button: 2, modifiers: { ctrl: true } } as any)).toBe(false);
   });
 
-  test("splits muxotron clicks into notification and agent halves", () => {
-    expect(getMuxotronClickZone(100, 20, 39)).toBeNull();
-    expect(getMuxotronClickZone(100, 20, 44)).toBe("notifications");
-    expect(getMuxotronClickZone(100, 20, 55)).toBe("agents");
-    expect(getMuxotronClickZone(100, 20, 60)).toBeNull();
+  test("routes muxotron clicks by zone", () => {
+    // Width 100, muxotron 20 wide, so muxotronLeft = 40.
+    expect(getMuxotronClickZone(100, 20, 39)).toBeNull(); // outside left
+    expect(getMuxotronClickZone(100, 20, 40)).toBeNull(); // left vBar
+    expect(getMuxotronClickZone(100, 20, 41)).toBeNull(); // padding before badge
+    expect(getMuxotronClickZone(100, 20, 42)).toBe("notifications"); // badge slot start
+    expect(getMuxotronClickZone(100, 20, 47)).toBe("notifications"); // badge slot end
+    expect(getMuxotronClickZone(100, 20, 48)).toBe("agents"); // padding column left of sine wave
+    expect(getMuxotronClickZone(100, 20, 49)).toBe("agents"); // sine wave left extent
+    expect(getMuxotronClickZone(100, 20, 55)).toBe("agents"); // middle of agents zone
+    expect(getMuxotronClickZone(100, 20, 59)).toBe("agents"); // right vBar (inclusive)
+    expect(getMuxotronClickZone(100, 20, 60)).toBeNull(); // outside right
   });
 
   test("finds the nearest tab when the click lands one column outside the hit box", () => {
