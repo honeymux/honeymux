@@ -2,6 +2,8 @@ import { beforeEach, describe, expect, mock, test } from "bun:test";
 
 import type { SetupTmuxRuntimeContext } from "./runtime-context.ts";
 
+import { MODIFIER_KEY_CODES as REAL_MODIFIER_KEY_CODES } from "../../util/keybindings.ts";
+
 const setupInputRouterMock = mock((..._args: any[]) => {});
 const setupMouseForwardMock = mock((..._args: any[]) => {});
 const historyLoadAsyncMock = mock(async () => {});
@@ -27,9 +29,7 @@ mock.module("../../agents/history-search.ts", () => ({
 }));
 
 mock.module("../../util/keybindings.ts", () => ({
-  MODIFIER_KEY_CODES: {
-    57447: "right_shift",
-  },
+  MODIFIER_KEY_CODES: REAL_MODIFIER_KEY_CODES,
   ensureKeybindingsFile: ensureKeybindingsFileMock,
 }));
 
