@@ -228,6 +228,22 @@ function supportedZigVersions(buildZigSource: string): string[] {
   return [...versions];
 }
 
+/**
+ * Inspect a package's upstream build.zig (if any) and report which Zig
+ * version(s) it accepts. Returns null when the package doesn't use Zig;
+ * a human-readable explanation when the source repo isn't available.
+ */
+function describeRequiredZig(config: PackageConfig, resolvedRepoPath: string): string | null {
+  if (!config.buildCmd) return null;
+  const pkgSrcDir = join(resolvedRepoPath, config.sourceSubdir ?? ".");
+  const buildZigPath = join(pkgSrcDir, "src", "zig", "build.zig");
+  if (!existsSync(resolvedRepoPath)) return "(source repo not cloned — cannot detect)";
+  if (!existsSync(buildZigPath)) return null;
+  const versions = supportedZigVersions(readFileSync(buildZigPath, "utf-8"));
+  if (versions.length === 0) return "(no version constraint found in build.zig)";
+  return versions.join(", ");
+}
+
 /** Map Node's process.platform/arch to zig target directory names */
 function zigTarget(): string {
   const archMap: Record<string, string> = { x64: "x86_64", arm64: "aarch64" };
@@ -724,6 +740,8 @@ function cmdStatus() {
         : `${config.sourceRepo} → ${resolvedRepo}`;
     console.log(`  repo: ${repoLabel}${config.sourceSubdir ? `/${config.sourceSubdir}` : ""}`);
     if (config.buildCmd) console.log(`  build: ${config.buildCmd}`);
+    const zigLine = describeRequiredZig(config, resolvedRepo);
+    if (zigLine) console.log(`  zig: ${zigLine}`);
     if (config.patches.length === 0) {
       console.log("  (no patches)");
     }

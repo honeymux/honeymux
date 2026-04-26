@@ -21,7 +21,9 @@ Export stores a source-level diff (same as source packages). At apply time,
 a worktree is created at the base version tag (e.g. `v0.1.86`), all patches
 are applied to source, the package is rebuilt (`bun run build` — both native
 zig and JS bundle), and the dist output + native `libopentui.so` are copied
-into `node_modules/`. Requires the source repo and zig toolchain locally.
+into `node_modules/`. Requires the source repo and zig toolchain locally —
+run `bun scripts/patches.ts status` to see the exact Zig version each
+package currently expects (parsed live from upstream's `build.zig`).
 
 Options:
 - `--name=descriptive-name` — custom patch filename (default: branch name)
