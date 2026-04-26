@@ -72,7 +72,7 @@
       "src/"
     ],
     "sourceRepo": "~/src/ghostty-opentui",
-    "version": "1.4.10",
+    "version": "1.4.11",
     "patches": [
       {
         "branch": "skip-extra-render-for-fixed-size-terminal-feeds",
