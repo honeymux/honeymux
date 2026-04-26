@@ -1,4 +1,4 @@
-name: release-preflight
+name: Release pre-flight
 
 on:
   pull_request:
@@ -9,6 +9,7 @@ on:
 
 jobs:
   changelog:
+    name: validate changelog
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
