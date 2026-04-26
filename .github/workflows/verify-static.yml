@@ -11,7 +11,7 @@ env:
 
 jobs:
   verify:
-    name: run format, lint, typecheck
+    name: run format, lint, semgrep, typecheck
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -28,6 +28,12 @@ jobs:
 
       - name: Lint
         run: bun run lint
+
+      - name: Semgrep
+        uses: docker://semgrep/semgrep@sha256:326e5f41cc972bb423b764a14febbb62bbad29ee1c01820805d077dd868fea48 # v1.161.0
+        with:
+          entrypoint: semgrep
+          args: scan --config=p/typescript --config=p/security-audit --error --metrics=off src/
 
       - name: Type check
         run: bun run typecheck
