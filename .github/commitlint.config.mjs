@@ -6,6 +6,7 @@ const { types } = JSON.parse(
 
 export default {
   extends: ["@commitlint/config-conventional"],
+  ignores: [(msg) => /^Signed-off-by: dependabot\[bot\]/m.test(msg)],
   rules: {
     "body-empty": [2, "never"],
     "body-leading-blank": [2, "always"],
