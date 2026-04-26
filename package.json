@@ -10,6 +10,7 @@
     "format:check": "prettier --check src/",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
+    "lint:semgrep": "docker run --rm -v \"$PWD:/src\" -w /src semgrep/semgrep@sha256:326e5f41cc972bb423b764a14febbb62bbad29ee1c01820805d077dd868fea48 semgrep scan --config=p/typescript --config=p/security-audit --error --metrics=off src/",
     "postinstall": "bun scripts/patches.ts apply",
     "start": "bun run src/index.tsx",
     "typecheck": "tsc --noEmit"
