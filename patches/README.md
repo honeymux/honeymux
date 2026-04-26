@@ -41,6 +41,19 @@ bun scripts/patches.ts apply ghostty-opentui  # one package
 ```
 Idempotent — detects already-applied patches and skips them.
 
+### Overriding the source-repo location
+By default `series.json` points at repos under `~/src/` (e.g. `~/src/opentui`).
+Set `HMX_PATCH_SRC_DIR` to swap that prefix when your checkouts live elsewhere:
+
+```sh
+HMX_PATCH_SRC_DIR=~/code bun install
+HMX_PATCH_SRC_DIR=/work/repos bun scripts/patches.ts apply
+```
+
+The override only rewrites the `~/src/` prefix; entries that already use
+absolute paths or other prefixes are left unchanged. Run `bun scripts/patches.ts
+status` to confirm the resolved path.
+
 ### Checking patches still apply cleanly
 ```sh
 bun scripts/patches.ts verify

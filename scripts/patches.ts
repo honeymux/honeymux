@@ -161,6 +161,19 @@ function expandHome(p: string): string {
   return p.replace(/^~/, process.env.HOME!);
 }
 
+/**
+ * Resolve a package's sourceRepo to an absolute path, honoring the
+ * HMX_PATCH_SRC_DIR override for the default `~/src/` prefix.
+ */
+function resolveSourceRepo(config: PackageConfig): string {
+  const override = process.env["HMX_PATCH_SRC_DIR"];
+  const PREFIX = "~/src/";
+  if (override && config.sourceRepo.startsWith(PREFIX)) {
+    return join(expandHome(override), config.sourceRepo.slice(PREFIX.length));
+  }
+  return expandHome(config.sourceRepo);
+}
+
 function symlinkDirIfMissing(src: string, dest: string): boolean {
   if (existsSync(dest) || !existsSync(src)) return false;
   mkdirSync(dirname(dest), { recursive: true });
@@ -295,7 +308,7 @@ async function cmdExport(pkg: string, branch: string, opts: { name?: string; bas
     process.exit(1);
   }
 
-  const repoPath = expandHome(config.sourceRepo);
+  const repoPath = resolveSourceRepo(config);
   if (!existsSync(repoPath)) {
     console.error(`Source repo not found: ${repoPath}`);
     process.exit(1);
@@ -378,7 +391,7 @@ async function exportSource(repoPath: string, config: PackageConfig, base: strin
  * builds, and copies the dist output into node_modules.
  */
 async function applyCompiled(pkg: string, config: PackageConfig): Promise<boolean> {
-  const repoPath = expandHome(config.sourceRepo);
+  const repoPath = resolveSourceRepo(config);
   if (!existsSync(repoPath)) {
     console.error(`  ✗ source repo not found: ${repoPath}`);
     console.error(`    compiled packages require the source repo to rebuild`);
@@ -704,7 +717,12 @@ function cmdStatus() {
 
   for (const [pkg, config] of Object.entries(series)) {
     console.log(`\n${pkg} (${config.version})`);
-    console.log(`  repo: ${config.sourceRepo}${config.sourceSubdir ? `/${config.sourceSubdir}` : ""}`);
+    const resolvedRepo = resolveSourceRepo(config);
+    const repoLabel =
+      resolvedRepo === expandHome(config.sourceRepo)
+        ? config.sourceRepo
+        : `${config.sourceRepo} → ${resolvedRepo}`;
+    console.log(`  repo: ${repoLabel}${config.sourceSubdir ? `/${config.sourceSubdir}` : ""}`);
     if (config.buildCmd) console.log(`  build: ${config.buildCmd}`);
     if (config.patches.length === 0) {
       console.log("  (no patches)");
