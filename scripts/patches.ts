@@ -101,6 +101,49 @@ function loadSeries(): Series {
   return applyRuntimeDefaults(JSON.parse(readFileSync(SERIES_FILE, "utf-8")));
 }
 
+/**
+ * Read the version requested for `pkg` in the workspace package.json.
+ * Used to guard against series.json drifting out of sync with the requested dependency:
+ * patches authored against an older version may apply with fuzz (source packages) or be
+ * silently overwritten by a build of the older source (compiled packages), masking real upgrades.
+ *
+ * Reads the workspace package.json — not node_modules/<pkg>/package.json — because applyCompiled
+ * writes through bun's hardlinked cache, so the installed package.json reflects the patched
+ * source's version, not the requested version.
+ */
+function requestedPackageVersion(pkg: string): null | string {
+  try {
+    const json = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf-8"));
+    const declared: unknown = json.dependencies?.[pkg] ?? json.devDependencies?.[pkg];
+    if (typeof declared !== "string") return null;
+    return declared.replace(/^[\^~=]/, "");
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Pre-flight: refuse to do any patch work if series.json's pinned version
+ * disagrees with package.json. Otherwise compiled packages would silently
+ * rebuild the old version and mask the upgrade.
+ */
+function assertSeriesVersionsMatch(series: Series): void {
+  const mismatches: { pkg: string; pinned: string; requested: string }[] = [];
+  for (const [pkg, config] of Object.entries(series)) {
+    const requested = requestedPackageVersion(pkg);
+    if (requested && requested !== config.version) {
+      mismatches.push({ pkg, pinned: config.version, requested });
+    }
+  }
+  if (mismatches.length === 0) return;
+  for (const m of mismatches) {
+    console.error(`✗ ${m.pkg}: version mismatch`);
+    console.error(`  series.json pins ${m.pinned}, but package.json requests ${m.requested}`);
+  }
+  console.error(`bump series.json + re-export patches against the new version, or revert the dep bump`);
+  process.exit(1);
+}
+
 function saveSeries(series: Series): void {
   mkdirSync(PATCHES_DIR, { recursive: true });
   writeFileSync(SERIES_FILE, JSON.stringify(series, null, 2) + "\n");
@@ -514,6 +557,7 @@ async function applyCompiled(pkg: string, config: PackageConfig): Promise<boolea
 
 async function cmdApply(targetPkg?: string) {
   const series = loadSeries();
+  assertSeriesVersionsMatch(series);
   let failed = false;
   let applied = 0;
 
@@ -597,6 +641,7 @@ async function cmdApply(targetPkg?: string) {
 
 async function cmdVerify(targetPkg?: string) {
   const series = loadSeries();
+  assertSeriesVersionsMatch(series);
   let failed = false;
   let count = 0;
 
