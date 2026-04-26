@@ -1,0 +1,22 @@
+name: Check PR
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    uses: ./.github/workflows/build-and-test.yml
+    with:
+      matrix: |
+        [
+          {"name": "darwin-arm64", "runner": "macos-15"},
+          {"name": "linux-x64", "runner": "ubuntu-latest"}
+        ]
+      upload_artifacts: false
+
+  verify-static:
+    uses: ./.github/workflows/verify-static.yml
