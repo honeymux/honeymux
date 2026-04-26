@@ -30,11 +30,11 @@
     "typescript": "^5"
   },
   "dependencies": {
-    "@opentui/core": "0.1.97",
-    "@opentui/react": "0.1.97",
-    "ghostty-opentui": "1.4.10",
+    "@opentui/core": "0.1.103",
+    "@opentui/react": "0.1.103",
+    "ghostty-opentui": "1.4.11",
     "honeyshots": "github:honeymux/honeyshots",
-    "react": "^19.2.4",
+    "react": "^19.2.5",
     "wcwidth": "^1.0.1"
   }
 }
