@@ -4,6 +4,12 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    ignore:
+      # Patched deps — patches/series.json must be bumped in lockstep and patches
+      # re-exported against the new tag. Update manually.
+      - dependency-name: "@opentui/core"
+      - dependency-name: "@opentui/react"
+      - dependency-name: "ghostty-opentui"
     groups:
       dev-dependencies:
         dependency-type: "development"
