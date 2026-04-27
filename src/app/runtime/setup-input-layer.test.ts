@@ -89,6 +89,7 @@ function createContext(overrides?: Partial<SetupTmuxRuntimeContext>): {
       setMainMenuDialogOpen: (_open: boolean) => {},
     },
     input: {
+      extendedKeysActiveRef: { current: false },
       handleActivateMenuRef: { current: () => {} },
       handleApplyFavoriteProfile: () => {},
       handleDismissRef: { current: () => {} },

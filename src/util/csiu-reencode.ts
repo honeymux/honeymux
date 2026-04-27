@@ -1,12 +1,26 @@
 /**
- * CSI u → legacy terminal re-encoder.
+ * CSI u → tmux-friendly terminal re-encoder.
  *
  * When Kitty keyboard flag 8 (all keys as escape codes) is enabled, every
- * keystroke arrives as a CSI u sequence. tmux doesn't understand these, so
- * we re-encode them back to legacy format before forwarding to the PTY.
+ * keystroke arrives as a CSI u sequence. tmux's bare default doesn't
+ * understand these, so we re-encode them before forwarding to the PTY.
+ *
+ * Two modes:
+ * - `"legacy"` (default): emit pure pre-CSI-u terminal sequences (literal
+ *   characters, control chars, classic CSI/SS3 forms). Used when tmux's
+ *   `extended-keys` option is `off` — matches what plain tmux would receive
+ *   from a non-Kitty terminal.
+ * - `"extended-csi-u"`: emit legacy form for unambiguous combinations and
+ *   CSI-u form for combinations where legacy would be lossy (modified
+ *   Enter/Backspace/Escape, Ctrl/Alt+Tab, Ctrl+Shift+letter). Used when
+ *   tmux has `extended-keys on` + `extended-keys-format csi-u` — matches
+ *   what tmux would receive from a Kitty-capable terminal that has
+ *   accepted tmux's `\x1b[>1u` (disambiguate-only) request.
  *
  * Release events (event type 3) and modifier-only keys are dropped (return null).
  */
+
+export type ForwardMode = "extended-csi-u" | "legacy";
 
 // Legacy CSI sequences for special Kitty key codes
 const SPECIAL_KEY_LEGACY: Record<number, string> = {
@@ -44,22 +58,22 @@ const FKEY_LEGACY: Record<number, string> = {
  * and returns the concatenated result for forwarding to the PTY.
  * Dropped events (releases, modifier-only) are silently consumed.
  */
-export function reEncodeChunk(chunk: string): string {
+export function reEncodeChunk(chunk: string, mode: ForwardMode = "legacy"): string {
   const seqs = splitSequences(chunk);
   let result = "";
   for (const seq of seqs) {
-    const encoded = reEncodeCsiU(seq);
+    const encoded = reEncodeCsiU(seq, mode);
     if (encoded !== null) result += encoded;
   }
   return result;
 }
 
 /**
- * Re-encode a single terminal sequence from CSI u to legacy format.
+ * Re-encode a single terminal sequence from CSI u to a tmux-friendly form.
  * Returns null if the event should be dropped (release events, modifier-only keys).
  * Non-CSI-u sequences are returned unchanged.
  */
-export function reEncodeCsiU(sequence: string): null | string {
+export function reEncodeCsiU(sequence: string, mode: ForwardMode = "legacy"): null | string {
   // CSI u with modifiers: ESC [ code (:shifted_code)? (:base_code)? ; mods (:event_type)? u
   // With flag 4 (alternate keys), the shifted key code is in the second field.
   const csiU = sequence.match(/^\x1b\[(\d+)(?::(\d+))?(?::\d+)?;(\d+)(?::(\d+))?u$/);
@@ -72,7 +86,7 @@ export function reEncodeCsiU(sequence: string): null | string {
     if (code >= 57441 && code <= 57452) return null; // modifier-only
     // Use shifted code when available and Shift is pressed (for layout-correct chars)
     const effectiveCode = shiftedCode > 0 && mods & 1 ? shiftedCode : code;
-    return encodeLegacy(effectiveCode, mods);
+    return encodeForward(effectiveCode, mods, mode);
   }
 
   // CSI u without modifiers: ESC [ code (:event_type)? u
@@ -82,7 +96,7 @@ export function reEncodeCsiU(sequence: string): null | string {
     const eventType = plain[2] ? parseInt(plain[2], 10) : 1;
     if (eventType === 3) return null;
     if (code >= 57441 && code <= 57452) return null;
-    return encodeLegacy(code, 0);
+    return encodeForward(code, 0, mode);
   }
 
   // CSI arrow/special with event type: ESC [ num? ; mods :event_type ABCDHF~
@@ -140,10 +154,32 @@ export function splitSequences(str: string): string[] {
   return seqs;
 }
 
-function encodeLegacy(code: number, mods: number): string {
+function encodeForward(code: number, mods: number, mode: ForwardMode): string {
   const hasShift = !!(mods & 1);
   const hasAlt = !!(mods & 2);
   const hasCtrl = !!(mods & 4);
+
+  // In extended-csi-u mode, route lossy modifier combinations through CSI u
+  // so tmux (with extended-keys-format=csi-u) preserves the modifier
+  // information when dispatching to apps that have requested extended keys.
+  // Unmodified keys and combinations whose legacy encoding is unambiguous
+  // (Shift+letter, Ctrl+letter, modified arrows/specials) keep their legacy
+  // form — this matches what a Kitty-capable terminal emits in tmux's
+  // disambiguate-only mode and avoids confusing tmux's CSI-u parser with
+  // sequences it doesn't expect.
+  if (mode === "extended-csi-u" && mods > 0) {
+    const isLetter = code >= 97 && code <= 122;
+    const wouldBeLossy =
+      code === 13 || // Enter
+      code === 8 ||
+      code === 127 || // Backspace / DEL
+      code === 27 || // Escape
+      (code === 9 && (hasCtrl || hasAlt)) || // Ctrl/Alt+Tab (Shift+Tab → \x1b[Z is fine)
+      (hasCtrl && hasShift && isLetter); // Ctrl+Shift+letter
+    if (wouldBeLossy) {
+      return `\x1b[${code};${mods + 1}u`;
+    }
+  }
 
   let result: string;
 

@@ -1,10 +1,15 @@
 /* eslint-disable no-control-regex */
 import type { KeyAction } from "../util/keybindings.ts";
 
-import { reEncodeCsiU } from "../util/csiu-reencode.ts";
+import { type ForwardMode, reEncodeCsiU } from "../util/csiu-reencode.ts";
 import { MODIFIER_KEY_CODES, identifyKeySequence, parseRawKeyEvent } from "../util/keybindings.ts";
 import { allowsGlobalModifierBindings, resolveInputOwner } from "./input-owner.ts";
 import { classifyTerminalResponse } from "./terminal-response-classifier.ts";
+
+function activeForwardMode(callbacks: InputRouterCallbacks): ForwardMode | null {
+  if (!callbacks.isReEncodeActive?.()) return null;
+  return callbacks.isExtendedKeysActive?.() ? "extended-csi-u" : "legacy";
+}
 
 /** Actions that are allowed to fall through the review-preview muxotron-focus
  *  surface's "dismiss on any key" branch, so they can be dispatched via
@@ -28,6 +33,10 @@ export interface InputRouterCallbacks {
   isDialogOpen?: () => boolean;
   /** When true, keys are dispatched to dropdown handler instead of PTY. */
   isDropdownOpen?: () => boolean;
+  /** Whether tmux's `extended-keys` option is on (or always). When true,
+   *  re-encoding emits CSI u for ambiguous modifier combinations so tmux
+   *  can preserve them through dispatch to apps that ask for extended keys. */
+  isExtendedKeysActive?: () => boolean;
   /** True while the focused muxotron view is attached to an agent pane PTY. */
   isInteractiveAgent?: () => boolean;
   isMobileMode?: () => boolean;
@@ -638,14 +647,18 @@ export function routeKeyboardInput(
 function routeDialogInput(sequence: string, callbacks: InputRouterCallbacks): boolean {
   const rawEvent = parseRawKeyEvent(sequence);
   const isModifierOnly = rawEvent?.isModifierOnly;
-  const dialogSeq =
-    callbacks.isReEncodeActive?.() && !isModifierOnly ? (reEncodeCsiU(sequence) ?? undefined) : sequence;
+  // Dialog inputs always read keys in legacy form so dialog handlers don't
+  // need their own CSI-u parser; only skip re-encoding when no Kitty
+  // negotiation took place.
+  const dialogMode = callbacks.isReEncodeActive?.() ? ("legacy" as const) : null;
+  const dialogSeq = dialogMode && !isModifierOnly ? (reEncodeCsiU(sequence, dialogMode) ?? undefined) : sequence;
   if (dialogSeq) callbacks.onDialogInput?.(dialogSeq);
   return true;
 }
 
 function routeDropdownInput(sequence: string, callbacks: InputRouterCallbacks): boolean {
-  const dropdownSeq = callbacks.isReEncodeActive?.() ? (reEncodeCsiU(sequence) ?? undefined) : sequence;
+  const dropdownMode = callbacks.isReEncodeActive?.() ? ("legacy" as const) : null;
+  const dropdownSeq = dropdownMode ? (reEncodeCsiU(sequence, dropdownMode) ?? undefined) : sequence;
   if (dropdownSeq) callbacks.onDropdownInput?.(dropdownSeq);
   return true;
 }
@@ -655,9 +668,10 @@ function writeSequenceToPty(
   callbacks: InputRouterCallbacks,
   writeToPty: (data: string) => void,
 ): void {
-  if (callbacks.isReEncodeActive?.()) {
-    const legacy = reEncodeCsiU(sequence);
-    if (legacy !== null) writeToPty(legacy);
+  const mode = activeForwardMode(callbacks);
+  if (mode) {
+    const encoded = reEncodeCsiU(sequence, mode);
+    if (encoded !== null) writeToPty(encoded);
     return;
   }
   writeToPty(sequence);

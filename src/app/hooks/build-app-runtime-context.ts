@@ -71,6 +71,7 @@ export function buildAppRuntimeContext({
     },
     input: {
       agentPreviewRef: refs.agentPreviewRef,
+      extendedKeysActiveRef: refs.extendedKeysActiveRef,
       handleActivateMenuRef: refs.handleActivateMenuRef,
       handleAgentLatchRef: refs.handleAgentLatchRef,
       handleAgentNextRef: refs.handleAgentNextRef,

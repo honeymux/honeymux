@@ -67,6 +67,17 @@ export function bootstrapConnectedSession({
       const rows = process.stdout.rows ?? 24;
       await client.connect(targetSession, { cols, rows });
 
+      // Honor the user's tmux `extended-keys` setting transparently: when the
+      // user has it enabled, the input forwarder switches to a CSI-u-aware
+      // mode so modifier-rich keys (Shift+Enter, Ctrl+Tab, …) survive the
+      // path to apps under tmux just as they would in plain tmux.
+      client
+        .getExtendedKeysSettings()
+        .then(({ enabled, format }) => {
+          ctx.input.extendedKeysActiveRef.current = enabled && format === "csi-u";
+        })
+        .catch(() => {});
+
       setConnected(true);
 
       // Fetch initial session list (for badge color display).
