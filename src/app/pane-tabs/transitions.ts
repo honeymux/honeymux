@@ -13,6 +13,7 @@ export interface NewTabGroupPlanInput {
   height: number;
   newLabel: string;
   newPaneId: string;
+  newUserLabel?: string;
   restoreAutomaticRename?: boolean;
   slotKey: string;
   width: number;
@@ -121,11 +122,16 @@ export function planNewTabGroup(input: NewTabGroupPlanInput): PaneTabGroup | nul
     height,
     newLabel,
     newPaneId,
+    newUserLabel,
     restoreAutomaticRename,
     slotKey,
     width,
     windowId,
   } = input;
+
+  const newTab: PaneTab = newUserLabel
+    ? { label: newLabel, paneId: newPaneId, userLabel: newUserLabel }
+    : { label: newLabel, paneId: newPaneId };
 
   if (existingGroup) {
     return {
@@ -133,7 +139,7 @@ export function planNewTabGroup(input: NewTabGroupPlanInput): PaneTabGroup | nul
       activeIndex: existingGroup.tabs.length,
       explicitWindowName: existingGroup.explicitWindowName ?? explicitWindowName,
       restoreAutomaticRename: existingGroup.restoreAutomaticRename ?? restoreAutomaticRename,
-      tabs: [...existingGroup.tabs, { label: newLabel, paneId: newPaneId }],
+      tabs: [...existingGroup.tabs, newTab],
       windowId: windowId ?? existingGroup.windowId,
     };
   }
@@ -146,10 +152,7 @@ export function planNewTabGroup(input: NewTabGroupPlanInput): PaneTabGroup | nul
     slotHeight: height,
     slotKey,
     slotWidth: width,
-    tabs: [
-      { label: currentLabel, paneId: currentPaneId },
-      { label: newLabel, paneId: newPaneId },
-    ],
+    tabs: [{ label: currentLabel, paneId: currentPaneId }, newTab],
     windowId,
   };
 }

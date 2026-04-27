@@ -83,4 +83,25 @@ describe("pane tab transitions", () => {
     expect(insertPlan.updatedGroup.tabs.map((tab) => tab.paneId)).toEqual(["%1", "%9", "%2", "%3"]);
     expect(insertPlan.updatedGroup.activeIndex).toBe(1);
   });
+
+  test("planNewTabGroup preserves userLabel when appending to an existing group", () => {
+    const plan = planNewTabGroup({
+      currentLabel: "bash",
+      currentPaneId: "%1",
+      existingGroup: sampleGroup,
+      height: 24,
+      newLabel: "MyAgent",
+      newPaneId: "%9",
+      newUserLabel: "MyAgent",
+      slotKey: "slot-1",
+      width: 80,
+      windowId: "@1",
+    });
+
+    expect(plan?.tabs[plan.tabs.length - 1]).toEqual({
+      label: "MyAgent",
+      paneId: "%9",
+      userLabel: "MyAgent",
+    });
+  });
 });
