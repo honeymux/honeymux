@@ -4,7 +4,7 @@ import type { RemoteConnectionStatus, RemoteServerConfig } from "./types.ts";
 
 import { MIN_CONTROL_CLIENT_SIZE } from "../tmux/control-client-bootstrap.ts";
 import { ControlModeParser } from "../tmux/control-mode-parser.ts";
-import { trackChildPid } from "../util/child-pids.ts";
+import { trackChildPid, untrackChildPid } from "../util/child-pids.ts";
 import { EventEmitter } from "../util/event-emitter.ts";
 import { log } from "../util/log.ts";
 import { cleanEnv } from "../util/pty.ts";
@@ -116,6 +116,10 @@ export class RemoteControlClient extends EventEmitter {
       stdout: "pipe",
     });
     trackChildPid(proc.pid);
+    void proc.exited.then(
+      () => untrackChildPid(proc.pid),
+      () => untrackChildPid(proc.pid),
+    );
 
     // Collect stderr for error reporting
     this.drainStderr(proc);
@@ -142,6 +146,9 @@ export class RemoteControlClient extends EventEmitter {
     // so disable the status bar to avoid it stealing a row from the window area.
     // The local session uses pane-border-status top, so the mirror must match
     // so that pane content heights (pane_height = layout_cell.sy - 1) are equal.
+    // Remote mirror sessions should survive SSH/control-client loss.
+    await this.sendCommand("set-option -g destroy-unattached off");
+    await this.sendCommand("set-option destroy-unattached off");
     await this.sendCommand("set-option detach-on-destroy on");
     await this.sendCommand("set-option -g window-size smallest");
     await this.sendCommand("set-option status off");

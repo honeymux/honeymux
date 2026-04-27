@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { TmuxControlClient } from "../../tmux/control-client.ts";
 import type { PaneTabGroup } from "./types.ts";
 
+import { isTmuxClientClosedError } from "../../tmux/control-client.ts";
 import { log as hmxLog } from "../../util/log.ts";
 import {
   PANE_TAB_STATE_OPTION,
@@ -200,7 +201,14 @@ export function usePaneTabs({
     <T>(op: (paneTabOps: PaneTabOps) => Promise<T>, fallback: T): Promise<T> => {
       const paneTabOps = paneTabOpsRef.current;
       if (!paneTabOps) return Promise.resolve(fallback);
-      return opQueue.enqueue(() => op(paneTabOps));
+      return opQueue
+        .enqueue(() => op(paneTabOps))
+        .catch((error) => {
+          if (!isTmuxClientClosedError(error)) throw error;
+          const message = error instanceof Error ? (error.stack ?? error.message) : String(error);
+          hmxLog("pane-tabs", `ignored operation after tmux client closed error=${message}`);
+          return fallback;
+        });
     },
     [opQueue],
   );

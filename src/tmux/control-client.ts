@@ -1,7 +1,7 @@
 import type { TmuxKeyBindings, TmuxPaneTtyMapping, TmuxSession, TmuxWindow } from "./types.ts";
 
 import { terminalFgRgb } from "../themes/theme.ts";
-import { trackChildPid } from "../util/child-pids.ts";
+import { trackChildPid, untrackChildPid } from "../util/child-pids.ts";
 import { getTerminalCursorStyle } from "../util/cursor.ts";
 import { EventEmitter } from "../util/event-emitter.ts";
 import { cleanEnv } from "../util/pty.ts";
@@ -45,6 +45,10 @@ const USER_OPTION_NAME_RE = /^@\S+$/;
 const SUBSCRIPTION_NAME_RE = /^[^\s:]+$/;
 
 export { unescapeTmuxOutput } from "./control-mode-parser.ts";
+
+export class TmuxClientClosedError extends Error {
+  override name = "TmuxClientClosedError";
+}
 
 /**
  * Client for tmux control mode (-C).
@@ -172,7 +176,7 @@ export class TmuxControlClient extends EventEmitter {
       // ignore
     }
     for (const pending of this.pendingQueue) {
-      pending.reject(new Error("Client destroyed"));
+      pending.reject(new TmuxClientClosedError("Client destroyed"));
     }
     this.pendingQueue = [];
   }
@@ -1021,7 +1025,7 @@ export class TmuxControlClient extends EventEmitter {
   }
 
   private sendCommand(cmd: string): Promise<string> {
-    if (this.closed) return Promise.reject(new Error("Client closed"));
+    if (this.closed) return Promise.reject(new TmuxClientClosedError("Client closed"));
     if (!this.proc) return Promise.reject(new Error("Client not connected"));
     return new Promise((resolve, reject) => {
       this.pendingQueue.push({ reject, resolve });
@@ -1047,6 +1051,10 @@ export class TmuxControlClient extends EventEmitter {
       stdout: "pipe",
     });
     trackChildPid(proc.pid);
+    void proc.exited.then(
+      () => untrackChildPid(proc.pid),
+      () => untrackChildPid(proc.pid),
+    );
 
     this.proc = {
       kill: () => proc.kill(),
@@ -1083,7 +1091,7 @@ export class TmuxControlClient extends EventEmitter {
 
     // Reject any pending command promises — no more responses will arrive.
     for (const pending of this.pendingQueue) {
-      pending.reject(new Error("Connection closed"));
+      pending.reject(new TmuxClientClosedError("Connection closed"));
     }
     this.pendingQueue = [];
 
@@ -1098,6 +1106,14 @@ export class TmuxControlClient extends EventEmitter {
     this.proc.stdin.write(cmd + "\n");
     this.proc.stdin.flush();
   }
+}
+
+export function isTmuxClientClosedError(error: unknown): boolean {
+  if (error instanceof TmuxClientClosedError) return true;
+  if (!(error instanceof Error)) return false;
+  return (
+    error.message === "Client closed" || error.message === "Client destroyed" || error.message === "Connection closed"
+  );
 }
 
 export function listPanePidsByIdSync(): Map<string, number> {
