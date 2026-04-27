@@ -17,6 +17,8 @@
  */
 import type { RGB } from "../themes/theme.ts";
 
+import { OSC_TERMINATOR } from "./terminal-sequences.ts";
+
 export interface ProbeOptions {
   /** Query cursor style via DECRQSS (for non-"auto" themes) */
   queryCursorStyle: boolean;
@@ -263,11 +265,11 @@ export async function probeTerminal(opts: ProbeOptions): Promise<TerminalProbeRe
     phase1.push("\x1b[?u"); // Kitty keyboard query
 
     // Colors (always query fg + bg)
-    phase1.push("\x1b]10;?\x1b\\"); // OSC 10 (fg)
-    phase1.push("\x1b]11;?\x1b\\"); // OSC 11 (bg)
+    phase1.push(`\x1b]10;?${OSC_TERMINATOR}`); // OSC 10 (fg)
+    phase1.push(`\x1b]11;?${OSC_TERMINATOR}`); // OSC 11 (bg)
     if (opts.queryPalette) {
       for (let i = 0; i < 16; i++) {
-        phase1.push(`\x1b]4;${i};?\x1b\\`); // OSC 4;N
+        phase1.push(`\x1b]4;${i};?${OSC_TERMINATOR}`); // OSC 4;N
       }
     }
 

@@ -9,6 +9,7 @@ import { DEFAULT_MAX_SCREENSHOT_PIXEL_HEIGHT } from "../app/hooks/use-screenshot
 import { theme } from "../themes/theme.ts";
 import { identifyKeySequence, isDismissKey } from "../util/keybindings.ts";
 import { writeTerminalOutput } from "../util/terminal-output.ts";
+import { OSC_TERMINATOR } from "../util/terminal-sequences.ts";
 import { midTruncatePath, stringWidth } from "../util/text.ts";
 
 export interface ScreenshotDialogProps {
@@ -459,5 +460,5 @@ export { copyToClipboard };
 function copyToClipboard(text: string): void {
   // OSC 52: set system clipboard via terminal emulator
   const encoded = Buffer.from(text).toString("base64");
-  writeTerminalOutput(`\x1b]52;c;${encoded}\x1b\\`);
+  writeTerminalOutput(`\x1b]52;c;${encoded}${OSC_TERMINATOR}`);
 }
