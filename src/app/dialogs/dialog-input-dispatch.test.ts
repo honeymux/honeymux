@@ -710,6 +710,78 @@ describe("dispatchDialogInput", () => {
     expect(setConfigTmuxPrefixKeyAliasCaptureError).toHaveBeenCalledWith("prefix key alias must be a modifier key");
   });
 
+  test("main menu capture accepts a bare functional key (Home via VTE SS3 form)", () => {
+    // VTE/GNOME Terminal sends Home as `\x1b O H`. Without Kitty keyboard
+    // protocol there is no modifier flag, but Home has no in-band shadow so
+    // it must still be bindable bare from the capture UI.
+    const onMainMenuBindingChange = mock((_action: string, _combo: string) => {});
+    const setMainMenuCapturing = mock((_capturing: boolean) => {});
+    const deps = createDeps({
+      mainMenu: {
+        ...createDeps().mainMenu,
+        getMainMenuActionForSlot: mock(() => "options"),
+        onMainMenuBindingChange,
+      },
+      uiChromeState: {
+        ...createDeps().uiChromeState,
+        mainMenuCapturing: true,
+        mainMenuDialogOpen: true,
+        setMainMenuCapturing,
+      },
+    });
+
+    dispatchDialogInput("\x1bOH", deps);
+
+    expect(onMainMenuBindingChange).toHaveBeenCalledWith("options", "home");
+    expect(setMainMenuCapturing).toHaveBeenCalledWith(false);
+  });
+
+  test("main menu capture accepts a bare F-key (F5 via legacy CSI ~ form)", () => {
+    const onMainMenuBindingChange = mock((_action: string, _combo: string) => {});
+    const setMainMenuCapturing = mock((_capturing: boolean) => {});
+    const deps = createDeps({
+      mainMenu: {
+        ...createDeps().mainMenu,
+        getMainMenuActionForSlot: mock(() => "sessions"),
+        onMainMenuBindingChange,
+      },
+      uiChromeState: {
+        ...createDeps().uiChromeState,
+        mainMenuCapturing: true,
+        mainMenuDialogOpen: true,
+        setMainMenuCapturing,
+      },
+    });
+
+    dispatchDialogInput("\x1b[15~", deps);
+
+    expect(onMainMenuBindingChange).toHaveBeenCalledWith("sessions", "f5");
+    expect(setMainMenuCapturing).toHaveBeenCalledWith(false);
+  });
+
+  test("main menu capture still rejects a bare printable letter", () => {
+    const onMainMenuBindingChange = mock((_action: string, _combo: string) => {});
+    const setMainMenuCapturing = mock((_capturing: boolean) => {});
+    const deps = createDeps({
+      mainMenu: {
+        ...createDeps().mainMenu,
+        getMainMenuActionForSlot: mock(() => "options"),
+        onMainMenuBindingChange,
+      },
+      uiChromeState: {
+        ...createDeps().uiChromeState,
+        mainMenuCapturing: true,
+        mainMenuDialogOpen: true,
+        setMainMenuCapturing,
+      },
+    });
+
+    dispatchDialogInput("a", deps);
+
+    expect(onMainMenuBindingChange).not.toHaveBeenCalled();
+    expect(setMainMenuCapturing).not.toHaveBeenCalledWith(false);
+  });
+
   test("main menu capture rejects a modifier already reserved as the tmux prefix key alias", () => {
     const setMainMenuCaptureError = mock((_value: string) => {});
     const onMainMenuBindingChange = mock((_action: string, _combo: string) => {});
