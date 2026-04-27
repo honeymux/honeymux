@@ -31,12 +31,70 @@ export async function applyControlClientBootstrap(
   await sendCommand(`set-option -g pane-border-format ${quoteTmuxArg("format", buildDefaultPaneBorderFormat())}`);
   await applyControlClientPaneBorderColors(sendCommand);
   await sendCommand("set-option -g window-size smallest");
+  await applyControlClientCwdBindings(sendCommand);
   await setControlClientSize(sendCommand, size);
   await applyControlClientTerminalColors(sendCommand, fg);
   if (cursorStyle) {
     await sendCommand(`set-option -g cursor-style ${cursorStyle}`);
   }
 }
+
+/**
+ * For each of tmux's default new-window/split-window prefix bindings, if the
+ * user hasn't customized it, rebind it to inherit cwd from the active pane.
+ *
+ * We query the current binding first and only rewrite when the action body
+ * exactly matches tmux's default — anything else (custom command, existing
+ * `-c`, removed binding) is left alone so users with non-default tmux configs
+ * are not surprised.
+ */
+export async function applyControlClientCwdBindings(sendCommand: SendCommand): Promise<void> {
+  for (const { defaultAction, keyArg, keyMarker, rebind } of DEFAULT_PREFIX_BINDINGS) {
+    let current = "";
+    try {
+      const raw = await sendCommand(`list-keys -T prefix ${keyArg}`);
+      if (typeof raw === "string") current = raw.trim();
+    } catch {
+      // tmux refused (e.g., key not bound) — skip rebind.
+      continue;
+    }
+    const match = keyMarker.exec(current);
+    if (!match) continue;
+    const action = current.slice(match.index + match[0].length).trim();
+    if (action === defaultAction) {
+      await sendCommand(rebind);
+    }
+  }
+}
+
+/**
+ * tmux's three default prefix bindings that we want to upgrade to inherit
+ * cwd from the active pane. `keyArg` is what we send to `list-keys`/`bind-key`
+ * on the command line; `keyMarker` matches how that key appears in tmux's
+ * `list-keys` output. tmux escapes some keys with a leading backslash (`\"`,
+ * `\%`) and the exact behavior varies by version, so the markers tolerate an
+ * optional `\`.
+ */
+const DEFAULT_PREFIX_BINDINGS = [
+  {
+    defaultAction: "new-window",
+    keyArg: "c",
+    keyMarker: / -T prefix c /,
+    rebind: "bind-key -T prefix c new-window -c '#{pane_current_path}'",
+  },
+  {
+    defaultAction: "split-window",
+    keyArg: `'"'`,
+    keyMarker: / -T prefix \\?" /,
+    rebind: `bind-key -T prefix '"' split-window -c '#{pane_current_path}'`,
+  },
+  {
+    defaultAction: "split-window -h",
+    keyArg: "%",
+    keyMarker: / -T prefix \\?% /,
+    rebind: "bind-key -T prefix % split-window -h -c '#{pane_current_path}'",
+  },
+] as const;
 
 /**
  * Push uniform pane-border styling so every tmux-drawn border char (the

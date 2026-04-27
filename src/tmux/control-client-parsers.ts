@@ -227,7 +227,7 @@ export function parseKeyBindingsOutput(prefixOut: string, keysOut: string): Tmux
     closePane: find(/^(?:confirm-before\s.*)?kill-pane/),
     detach: find(/^(?:confirm-before\s.*)?detach-client/),
     killWindow: find(/^(?:confirm-before\s.*)?kill-window/),
-    newWindow: find(/^new-window$/),
+    newWindow: find(/^new-window\b/),
     prefix,
     selectWindow,
     splitHorizontal: find(/^split-window\b(?!\s+-h)/),

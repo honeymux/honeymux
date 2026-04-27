@@ -151,6 +151,21 @@ describe("control client parsers", () => {
     expect(bindings.selectWindow[1]).toBe("ctrl+b + 1");
   });
 
+  test("parses cwd-inheriting key bindings (with -c flag)", () => {
+    const bindings = parseKeyBindingsOutput(
+      "C-b\n",
+      [
+        String.raw`bind-key -T prefix % split-window -h -c '#{pane_current_path}'`,
+        String.raw`bind-key -T prefix \" split-window -c '#{pane_current_path}'`,
+        String.raw`bind-key -T prefix c new-window -c '#{pane_current_path}'`,
+      ].join("\n"),
+    );
+
+    expect(bindings.splitVertical).toBe("ctrl+b + %");
+    expect(bindings.splitHorizontal).toBe('ctrl+b + "');
+    expect(bindings.newWindow).toBe("ctrl+b + c");
+  });
+
   test("parses status bar info", () => {
     expect(parseStatusBarInfoOutput("off", "top")).toBeNull();
     expect(parseStatusBarInfoOutput("3", "top")).toEqual({ lines: 3, position: "top" });
