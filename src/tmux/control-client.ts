@@ -132,6 +132,7 @@ export class TmuxControlClient extends EventEmitter {
   async createDetachedSession(name: string, targetSession?: string): Promise<void> {
     const args = ["new-session", "-d", "-s", name];
     if (targetSession) args.push("-t", targetSession);
+    args.push("-c", "#{pane_current_path}");
     await this.runCommandArgs(args);
   }
 
@@ -143,7 +144,7 @@ export class TmuxControlClient extends EventEmitter {
    */
   async createPanes(n: number): Promise<void> {
     for (let i = 0; i < n; i++) {
-      await this.sendCommand("split-window -fh");
+      await this.sendCommand("split-window -fh -c '#{pane_current_path}'");
     }
   }
 
@@ -594,7 +595,9 @@ export class TmuxControlClient extends EventEmitter {
    */
   async newDetachedWindow(windowName?: string): Promise<{ paneId: string; windowId: string }> {
     const nameArg = windowName ? ` -n ${quoteTmuxArg("windowName", windowName)}` : "";
-    const output = await this.sendCommand(`new-window -d${nameArg} -P -F ' #{window_id} #{pane_id}'`);
+    const output = await this.sendCommand(
+      `new-window -d${nameArg} -c '#{pane_current_path}' -P -F ' #{window_id} #{pane_id}'`,
+    );
     const parts = output.trim().split(" ");
     return { paneId: parts[1]!, windowId: parts[0]! };
   }
@@ -603,7 +606,7 @@ export class TmuxControlClient extends EventEmitter {
    * Create a new window in the current session.
    */
   async newWindow(): Promise<void> {
-    await this.sendCommand("new-window");
+    await this.sendCommand("new-window -c '#{pane_current_path}'");
   }
 
   /**
@@ -882,7 +885,7 @@ export class TmuxControlClient extends EventEmitter {
   async splitHorizontal(paneId?: string): Promise<void> {
     const targetFlag = paneId ? ` -t ${quoteTmuxArg("paneId", paneId)}` : "";
     if (paneId) assertPaneId(paneId);
-    await this.sendCommand(`split-window -v${targetFlag}`);
+    await this.sendCommand(`split-window -v${targetFlag} -c '#{pane_current_path}'`);
   }
 
   /**
@@ -891,7 +894,7 @@ export class TmuxControlClient extends EventEmitter {
   async splitVertical(paneId?: string): Promise<void> {
     const targetFlag = paneId ? ` -t ${quoteTmuxArg("paneId", paneId)}` : "";
     if (paneId) assertPaneId(paneId);
-    await this.sendCommand(`split-window -h${targetFlag}`);
+    await this.sendCommand(`split-window -h${targetFlag} -c '#{pane_current_path}'`);
   }
 
   /**

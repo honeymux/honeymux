@@ -22,7 +22,12 @@ describe("control client bootstrap helpers", () => {
   });
 
   test("applies the bootstrap command sequence using the requested size", async () => {
-    const sendCommand = mock(async (_command: string) => "");
+    const sendCommand = mock(async (cmd: string) => {
+      if (cmd === "list-keys -T prefix c") return "bind-key -T prefix c new-window";
+      if (cmd === `list-keys -T prefix '"'`) return String.raw`bind-key -T prefix \" split-window`;
+      if (cmd === "list-keys -T prefix %") return String.raw`bind-key -T prefix \% split-window -h`;
+      return "";
+    });
 
     await applyControlClientBootstrap(sendCommand, [255, 170, 0], "underline", { cols: 120, rows: 40 });
 
@@ -34,10 +39,46 @@ describe("control client bootstrap helpers", () => {
     expect(sendCommand).toHaveBeenNthCalledWith(5, `set-option -g pane-border-style '${borderStyle}'`);
     expect(sendCommand).toHaveBeenNthCalledWith(6, `set-option -g pane-active-border-style '${borderStyle}'`);
     expect(sendCommand).toHaveBeenNthCalledWith(7, "set-option -g window-size smallest");
-    expect(sendCommand).toHaveBeenNthCalledWith(8, "refresh-client -C 120,40");
-    expect(sendCommand).toHaveBeenNthCalledWith(9, "set-option -g window-style 'fg=#ffaa00,bg=terminal'");
-    expect(sendCommand).toHaveBeenNthCalledWith(10, "set-option -g window-active-style 'fg=#ffaa00,bg=terminal'");
-    expect(sendCommand).toHaveBeenNthCalledWith(11, "set-option -g cursor-style underline");
+    expect(sendCommand).toHaveBeenNthCalledWith(8, "list-keys -T prefix c");
+    expect(sendCommand).toHaveBeenNthCalledWith(9, "bind-key -T prefix c new-window -c '#{pane_current_path}'");
+    expect(sendCommand).toHaveBeenNthCalledWith(10, `list-keys -T prefix '"'`);
+    expect(sendCommand).toHaveBeenNthCalledWith(11, `bind-key -T prefix '"' split-window -c '#{pane_current_path}'`);
+    expect(sendCommand).toHaveBeenNthCalledWith(12, "list-keys -T prefix %");
+    expect(sendCommand).toHaveBeenNthCalledWith(13, "bind-key -T prefix % split-window -h -c '#{pane_current_path}'");
+    expect(sendCommand).toHaveBeenNthCalledWith(14, "refresh-client -C 120,40");
+    expect(sendCommand).toHaveBeenNthCalledWith(15, "set-option -g window-style 'fg=#ffaa00,bg=terminal'");
+    expect(sendCommand).toHaveBeenNthCalledWith(16, "set-option -g window-active-style 'fg=#ffaa00,bg=terminal'");
+    expect(sendCommand).toHaveBeenNthCalledWith(17, "set-option -g cursor-style underline");
+  });
+
+  test("rebinds % when tmux reports it escaped as \\%", async () => {
+    const sendCommand = mock(async (cmd: string) => {
+      if (cmd === "list-keys -T prefix c") return "";
+      if (cmd === `list-keys -T prefix '"'`) return "";
+      if (cmd === "list-keys -T prefix %") return String.raw`bind-key -T prefix \% split-window -h`;
+      return "";
+    });
+
+    await applyControlClientBootstrap(sendCommand, [255, 170, 0], null, MIN_CONTROL_CLIENT_SIZE);
+
+    const sent = sendCommand.mock.calls.map(([c]) => c);
+    expect(sent).toContain("bind-key -T prefix % split-window -h -c '#{pane_current_path}'");
+  });
+
+  test("preserves user-customized prefix bindings (does not rebind for cwd)", async () => {
+    const sendCommand = mock(async (cmd: string) => {
+      if (cmd === "list-keys -T prefix c") return `bind-key -T prefix c new-window -c '~/projects'`;
+      if (cmd === `list-keys -T prefix '"'`) return String.raw`bind-key -T prefix \" split-window`;
+      if (cmd === "list-keys -T prefix %") return "";
+      return "";
+    });
+
+    await applyControlClientBootstrap(sendCommand, [255, 170, 0], null, MIN_CONTROL_CLIENT_SIZE);
+
+    const sent = sendCommand.mock.calls.map(([c]) => c);
+    expect(sent.some((c) => c.startsWith("bind-key -T prefix c "))).toBe(false);
+    expect(sent).toContain(`bind-key -T prefix '"' split-window -c '#{pane_current_path}'`);
+    expect(sent.some((c) => c.startsWith("bind-key -T prefix % "))).toBe(false);
   });
 
   test("skips the cursor-style command when the terminal style is unknown", async () => {

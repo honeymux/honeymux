@@ -138,7 +138,9 @@ describe("TmuxControlClient split targeting", () => {
 
     await client.splitHorizontal("%7");
 
-    expect(sendCommand).toHaveBeenCalledWith(`split-window -v -t ${quoteTmuxArg("paneId", "%7")}`);
+    expect(sendCommand).toHaveBeenCalledWith(
+      `split-window -v -t ${quoteTmuxArg("paneId", "%7")} -c '#{pane_current_path}'`,
+    );
   });
 
   test("targets vertical splits to an explicit pane when provided", async () => {
@@ -149,7 +151,100 @@ describe("TmuxControlClient split targeting", () => {
 
     await client.splitVertical("%9");
 
-    expect(sendCommand).toHaveBeenCalledWith(`split-window -h -t ${quoteTmuxArg("paneId", "%9")}`);
+    expect(sendCommand).toHaveBeenCalledWith(
+      `split-window -h -t ${quoteTmuxArg("paneId", "%9")} -c '#{pane_current_path}'`,
+    );
+  });
+
+  test("inherits cwd from the current pane when no target is provided", async () => {
+    const client = new TmuxControlClient();
+    const sendCommand = mock(async (_command: string) => "");
+
+    (client as unknown as { sendCommand: typeof sendCommand }).sendCommand = sendCommand;
+
+    await client.splitHorizontal();
+    await client.splitVertical();
+
+    expect(sendCommand).toHaveBeenNthCalledWith(1, `split-window -v -c '#{pane_current_path}'`);
+    expect(sendCommand).toHaveBeenNthCalledWith(2, `split-window -h -c '#{pane_current_path}'`);
+  });
+});
+
+describe("TmuxControlClient new-window cwd inheritance", () => {
+  test("newWindow inherits cwd from the active pane", async () => {
+    const client = new TmuxControlClient();
+    const sendCommand = mock(async (_command: string) => "");
+
+    (client as unknown as { sendCommand: typeof sendCommand }).sendCommand = sendCommand;
+
+    await client.newWindow();
+
+    expect(sendCommand).toHaveBeenCalledWith(`new-window -c '#{pane_current_path}'`);
+  });
+
+  test("newDetachedWindow inherits cwd from the active pane", async () => {
+    const client = new TmuxControlClient();
+    const sendCommand = mock(async (_command: string) => "@1 %2");
+
+    (client as unknown as { sendCommand: typeof sendCommand }).sendCommand = sendCommand;
+
+    await client.newDetachedWindow("_hmx_tab");
+
+    expect(sendCommand).toHaveBeenCalledWith(
+      `new-window -d -n ${quoteTmuxArg("windowName", "_hmx_tab")} -c '#{pane_current_path}' -P -F ' #{window_id} #{pane_id}'`,
+    );
+  });
+
+  test("createDetachedSession inherits cwd from the active pane", async () => {
+    const client = new TmuxControlClient();
+    const runCommandArgs = mock(async (_args: string[]) => "");
+
+    (client as unknown as { runCommandArgs: typeof runCommandArgs }).runCommandArgs = runCommandArgs;
+
+    await client.createDetachedSession("hmx_qt_demo");
+
+    expect(runCommandArgs).toHaveBeenCalledWith([
+      "new-session",
+      "-d",
+      "-s",
+      "hmx_qt_demo",
+      "-c",
+      "#{pane_current_path}",
+    ]);
+  });
+
+  test("createPanes inherits cwd from the active pane on each split", async () => {
+    const client = new TmuxControlClient();
+    const sendCommand = mock(async (_command: string) => "");
+
+    (client as unknown as { sendCommand: typeof sendCommand }).sendCommand = sendCommand;
+
+    await client.createPanes(3);
+
+    expect(sendCommand).toHaveBeenCalledTimes(3);
+    expect(sendCommand).toHaveBeenNthCalledWith(1, "split-window -fh -c '#{pane_current_path}'");
+    expect(sendCommand).toHaveBeenNthCalledWith(2, "split-window -fh -c '#{pane_current_path}'");
+    expect(sendCommand).toHaveBeenNthCalledWith(3, "split-window -fh -c '#{pane_current_path}'");
+  });
+
+  test("createDetachedSession includes -t before -c when grouping", async () => {
+    const client = new TmuxControlClient();
+    const runCommandArgs = mock(async (_args: string[]) => "");
+
+    (client as unknown as { runCommandArgs: typeof runCommandArgs }).runCommandArgs = runCommandArgs;
+
+    await client.createDetachedSession("group_member", "alpha");
+
+    expect(runCommandArgs).toHaveBeenCalledWith([
+      "new-session",
+      "-d",
+      "-s",
+      "group_member",
+      "-t",
+      "alpha",
+      "-c",
+      "#{pane_current_path}",
+    ]);
   });
 });
 
