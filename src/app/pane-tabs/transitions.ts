@@ -11,6 +11,7 @@ export interface NewTabGroupPlanInput {
   existingGroup?: PaneTabGroup;
   explicitWindowName?: string;
   height: number;
+  insertIndex?: number;
   newLabel: string;
   newPaneId: string;
   newUserLabel?: string;
@@ -120,6 +121,7 @@ export function planNewTabGroup(input: NewTabGroupPlanInput): PaneTabGroup | nul
     existingGroup,
     explicitWindowName,
     height,
+    insertIndex,
     newLabel,
     newPaneId,
     newUserLabel,
@@ -134,12 +136,15 @@ export function planNewTabGroup(input: NewTabGroupPlanInput): PaneTabGroup | nul
     : { label: newLabel, paneId: newPaneId };
 
   if (existingGroup) {
+    const insertAt = Math.max(0, Math.min(insertIndex ?? existingGroup.tabs.length, existingGroup.tabs.length));
+    const newTabs = [...existingGroup.tabs];
+    newTabs.splice(insertAt, 0, newTab);
     return {
       ...existingGroup,
-      activeIndex: existingGroup.tabs.length,
+      activeIndex: insertAt,
       explicitWindowName: existingGroup.explicitWindowName ?? explicitWindowName,
       restoreAutomaticRename: existingGroup.restoreAutomaticRename ?? restoreAutomaticRename,
-      tabs: [...existingGroup.tabs, newTab],
+      tabs: newTabs,
       windowId: windowId ?? existingGroup.windowId,
     };
   }

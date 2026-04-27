@@ -73,7 +73,12 @@ export interface PaneTabOps {
    */
   doEvictPaneFromGroup: (paneId: string) => Promise<void>;
   doMovePaneTab: (fromSlotKey: string, fromTabIndex: number, toSlotKey: string, toInsertIndex: number) => Promise<void>;
-  doMoveToUngroupedPane: (fromSlotKey: string, fromTabIndex: number, targetPaneId: string) => Promise<void>;
+  doMoveToUngroupedPane: (
+    fromSlotKey: string,
+    fromTabIndex: number,
+    targetPaneId: string,
+    insertIndex: number,
+  ) => Promise<void>;
   doNewTab: () => Promise<void>;
   doRefreshLabels: () => Promise<void>;
   doRenameManagedWindow: (windowId: string, newName: string) => Promise<boolean>;
@@ -747,13 +752,18 @@ export function createPaneTabOps({
     await commitActiveGroupChange(client, previousGroups, nextGroups, targetInsertPlan.updatedGroup);
   }
 
-  async function doMoveToUngroupedPane(fromSlotKey: string, fromTabIndex: number, targetPaneId: string): Promise<void> {
+  async function doMoveToUngroupedPane(
+    fromSlotKey: string,
+    fromTabIndex: number,
+    targetPaneId: string,
+    insertIndex: number,
+  ): Promise<void> {
     const client = clientRef.current;
     if (!client) return;
 
     const existingGroup = findPaneTabGroupByPaneId(groupsRef.current, targetPaneId);
     if (existingGroup && existingGroup.tabs.length > 1) {
-      await doMovePaneTab(fromSlotKey, fromTabIndex, existingGroup.slotKey, existingGroup.tabs.length);
+      await doMovePaneTab(fromSlotKey, fromTabIndex, existingGroup.slotKey, insertIndex);
       return;
     }
     const existingSingleGroup = existingGroup && existingGroup.tabs.length === 1 ? existingGroup : undefined;
@@ -801,6 +811,7 @@ export function createPaneTabOps({
       groups: groupsRef.current,
       height: targetHeight,
       hostWindowId,
+      insertIndex,
       newLabel: movingTab.userLabel ?? movingTab.label,
       newPaneId: movingTab.paneId,
       newUserLabel: movingTab.userLabel,
