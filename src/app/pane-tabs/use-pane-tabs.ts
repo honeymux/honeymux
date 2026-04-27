@@ -329,8 +329,10 @@ export function usePaneTabs({
   );
 
   const queueMoveToUngroupedPane = useCallback(
-    (fromSlotKey: string, fromTabIndex: number, targetPaneId: string) => {
-      queuePaneTabOp((paneTabOps) => paneTabOps.doMoveToUngroupedPane(fromSlotKey, fromTabIndex, targetPaneId));
+    (fromSlotKey: string, fromTabIndex: number, targetPaneId: string, insertIndex: number) => {
+      queuePaneTabOp((paneTabOps) =>
+        paneTabOps.doMoveToUngroupedPane(fromSlotKey, fromTabIndex, targetPaneId, insertIndex),
+      );
     },
     [queuePaneTabOp],
   );

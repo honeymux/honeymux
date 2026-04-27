@@ -90,7 +90,7 @@ interface UsePaneTabInteractionsOptions {
   getPaneTabGroup: (paneId: string) => PaneTabGroup | undefined;
   groupsRef: MutableRefObject<Map<string, PaneTabGroup>>;
   movePaneTab: (fromSlotKey: string, fromTabIndex: number, toSlotKey: string, toInsertIndex: number) => void;
-  moveToUngroupedPane: (fromSlotKey: string, fromTabIndex: number, targetPaneId: string) => void;
+  moveToUngroupedPane: (fromSlotKey: string, fromTabIndex: number, targetPaneId: string, insertIndex: number) => void;
   reorderPaneTab: (slotKey: string, fromIndex: number, toIndex: number) => void;
   switchPaneTab: (slotKey: string, tabIndex: number) => void;
 }
@@ -209,7 +209,7 @@ export function usePaneTabInteractions({
   function resolveDragTarget(paneId: null | string, xOffset: number): DragTarget | null {
     if (!paneId) return null;
     const group = getPaneTabGroup(paneId);
-    if (group && group.tabs.length > 1) {
+    if (group) {
       return {
         slotKey: group.slotKey,
         tabIndex: computePaneTabInsertIndex(group.tabs, xOffset),
@@ -427,7 +427,7 @@ export function usePaneTabInteractions({
           if (targetGroup && targetGroup.tabs.length > 1) {
             movePaneTab(source.slotKey, source.tabIndex, target.slotKey, target.tabIndex);
           } else {
-            moveToUngroupedPane(source.slotKey, source.tabIndex, target.slotKey);
+            moveToUngroupedPane(source.slotKey, source.tabIndex, target.slotKey, target.tabIndex);
           }
           return;
         }

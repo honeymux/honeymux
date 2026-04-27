@@ -47,6 +47,7 @@ export interface BuildHostedTabGroupOptions {
   groups: Map<string, PaneTabGroup>;
   height: number;
   hostWindowId: string;
+  insertIndex?: number;
   newLabel: string;
   newPaneId: string;
   newUserLabel?: string;
@@ -236,6 +237,7 @@ export async function buildHostedTabGroup({
   groups,
   height,
   hostWindowId,
+  insertIndex,
   newLabel,
   newPaneId,
   newUserLabel,
@@ -253,6 +255,7 @@ export async function buildHostedTabGroup({
     existingGroup,
     explicitWindowName,
     height,
+    insertIndex,
     newLabel,
     newPaneId,
     newUserLabel,

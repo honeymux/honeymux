@@ -684,7 +684,7 @@ describe("pane tab ops", () => {
     client.listPanesByWindow.set("@9", [{ active: false, height: 40, id: "%7", width: 100 }]);
     client.paneCommands.set("%7", "htop");
 
-    await ops.doMoveToUngroupedPane("slot-1", 0, "%7");
+    await ops.doMoveToUngroupedPane("slot-1", 0, "%7", 1);
 
     expect(groupsRef.current.get("slot-1")?.tabs.map((tab) => tab.paneId)).toEqual(["%2"]);
     expect(groupsRef.current.get("%7")?.tabs).toEqual([
@@ -735,7 +735,7 @@ describe("pane tab ops", () => {
     client.listPanesByWindow.set("@9", [{ active: false, height: 40, id: "%7", width: 100 }]);
     client.respond("list-panes -a -F ' #{pane_id} #{window_id}'", " %1 @9\n %2 @1\n %7 @20");
 
-    await ops.doMoveToUngroupedPane("slot-1", 0, "%7");
+    await ops.doMoveToUngroupedPane("slot-1", 0, "%7", 1);
 
     expect(groupsRef.current.get("slot-1")?.tabs.map((tab) => tab.paneId)).toEqual(["%2"]);
     expect(groupsRef.current.has("%7")).toBe(false);
@@ -755,6 +755,48 @@ describe("pane tab ops", () => {
     expect(client.renameWindow).toHaveBeenCalledWith("@20", "_hmx_tab");
     expect(client.disableAutomaticRename).toHaveBeenCalledWith("@20");
     expect(client.sentCommands).toContain("set-option -w -t @20 window-status-format ''");
+  });
+
+  test("doMoveToUngroupedPane inserts at the requested index when dropping before the existing tab", async () => {
+    const groups = new Map<string, PaneTabGroup>([
+      [
+        "slot-1",
+        {
+          activeIndex: 0,
+          slotHeight: 24,
+          slotKey: "slot-1",
+          slotWidth: 80,
+          tabs: [
+            { label: "bash", paneId: "%1" },
+            { label: "logs", paneId: "%2" },
+          ],
+          windowId: "@1",
+        },
+      ],
+      [
+        "slot-target",
+        {
+          activeIndex: 0,
+          slotHeight: 40,
+          slotKey: "slot-target",
+          slotWidth: 100,
+          tabs: [{ label: "Claude", paneId: "%7", userLabel: "Claude" }],
+          windowId: "@9",
+        },
+      ],
+    ]);
+    const { groupsRef, ops } = createHarness({
+      activeWindowId: "@9",
+      groups,
+    });
+
+    await ops.doMoveToUngroupedPane("slot-1", 0, "%7", 0);
+
+    expect(groupsRef.current.get("slot-target")?.tabs).toEqual([
+      { label: "bash", paneId: "%1" },
+      { label: "Claude", paneId: "%7", userLabel: "Claude" },
+    ]);
+    expect(groupsRef.current.get("slot-target")?.activeIndex).toBe(0);
   });
 
   test("doRestore filters dead panes, reinstalls hooks, and restores border lines", async () => {
