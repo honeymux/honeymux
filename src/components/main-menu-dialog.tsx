@@ -451,17 +451,22 @@ export function MainMenuDialog({
     const isZoomRow = selectedRow === ZOOM_ROW_IDX;
     const leftStickySelected = isZoomRow && selectedCol === "left-sticky";
     const rightStickySelected = isZoomRow && selectedCol === "right-sticky";
-    // Sticky toggle only applies to modifier-only bindings (combos have no release)
-    const leftIsModifier = MODIFIER_KEY_NAMES.has(keybindings.zoomAgentsView ?? "");
-    const rightIsModifier = MODIFIER_KEY_NAMES.has(keybindings.zoomServerView ?? "");
-    const leftStickyFg = !leftIsModifier
+    // Sticky toggle only applies to modifier-only bindings (combos have no
+    // release event), and modifier-only key codes are only emitted when the
+    // kitty keyboard protocol is active. Without it the toggle has no effect.
+    const hasKittyKbd = hasCap("KittyKbd");
+    const leftCanToggle = MODIFIER_KEY_NAMES.has(keybindings.zoomAgentsView ?? "") && hasKittyKbd;
+    const rightCanToggle = MODIFIER_KEY_NAMES.has(keybindings.zoomServerView ?? "") && hasKittyKbd;
+    const leftStickyChar = leftCanToggle ? "⊙" : "-";
+    const rightStickyChar = rightCanToggle ? "⊙" : "-";
+    const leftStickyFg = !leftCanToggle
       ? theme.textDim
       : leftStickySelected
         ? theme.bgSurface
         : zoomAgentsViewStickyKey
           ? theme.statusSuccess
           : theme.statusError;
-    const rightStickyFg = !rightIsModifier
+    const rightStickyFg = !rightCanToggle
       ? theme.textDim
       : rightStickySelected
         ? theme.bgSurface
@@ -477,19 +482,19 @@ export function MainMenuDialog({
         <text content="  " />
         <text
           bg={leftStickySelected ? theme.accent : undefined}
-          content="⊙"
+          content={leftStickyChar}
           fg={leftStickyFg}
           onMouseDown={(event: MouseEvent) => {
-            if (event.button === 0 && leftIsModifier) onToggleZoomSticky?.("zoomAgentsView");
+            if (event.button === 0 && leftCanToggle) onToggleZoomSticky?.("zoomAgentsView");
           }}
         />
         <text content=" │ " fg={theme.textDim} />
         <text
           bg={rightStickySelected ? theme.accent : undefined}
-          content="⊙"
+          content={rightStickyChar}
           fg={rightStickyFg}
           onMouseDown={(event: MouseEvent) => {
-            if (event.button === 0 && rightIsModifier) onToggleZoomSticky?.("zoomServerView");
+            if (event.button === 0 && rightCanToggle) onToggleZoomSticky?.("zoomServerView");
           }}
         />
         <text content="  " />
