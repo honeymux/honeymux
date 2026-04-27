@@ -337,8 +337,8 @@ export function QuickTerminalOverlay({
   const borderTitleLeft = overlayLeft + Math.floor(overlayWidth / 2) - Math.floor(borderTitle.length / 2);
 
   // Hamburger menu icon — includes ╮ to restore the corner
-  const hamburgerLabel = " \u2630 \u256E";
-  const hamburgerDisplayWidth = hamburgerLabel.length + 1; // ☰ is double-width
+  const hamburgerLabel = " \u2261 \u256E";
+  const hamburgerDisplayWidth = hamburgerLabel.length;
   const hamburgerLeft = overlayLeft + overlayWidth - hamburgerDisplayWidth;
 
   // Menu dropdown dimensions
@@ -455,7 +455,7 @@ export function QuickTerminalOverlay({
       {/* Resize handle at bottom-right corner with 1-char padding on each border */}
       <text
         bg={theme.bgChrome}
-        content="⤡"
+        content="↘"
         fg={theme.accent}
         left={overlayLeft + overlayWidth - 1}
         onMouseDown={() => {
@@ -466,7 +466,7 @@ export function QuickTerminalOverlay({
         top={overlayTop + overlayHeight - 1}
         zIndex={16}
       />
-      {/* Clear the border segment to the left of ⤡ */}
+      {/* Clear the border segment to the left of ↘ */}
       <text
         bg={theme.bgChrome}
         content=" "
