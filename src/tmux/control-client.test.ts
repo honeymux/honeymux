@@ -1,6 +1,11 @@
 import { describe, expect, mock, test } from "bun:test";
 
-import { TmuxControlClient, quoteSessionTarget } from "./control-client.ts";
+import {
+  TmuxClientClosedError,
+  TmuxControlClient,
+  isTmuxClientClosedError,
+  quoteSessionTarget,
+} from "./control-client.ts";
 import { quoteTmuxArg } from "./escape.ts";
 
 describe("TmuxControlClient connection guards", () => {
@@ -8,6 +13,20 @@ describe("TmuxControlClient connection guards", () => {
     const client = new TmuxControlClient();
 
     await expect(client.getActiveMouseAnyFlag()).rejects.toThrow("Client not connected");
+  });
+
+  test("marks closed-client command failures as recoverable shutdown races", async () => {
+    const client = new TmuxControlClient();
+
+    client.destroy();
+
+    try {
+      await client.getActiveMouseAnyFlag();
+      throw new Error("expected getActiveMouseAnyFlag to reject");
+    } catch (error) {
+      expect(error).toBeInstanceOf(TmuxClientClosedError);
+      expect(isTmuxClientClosedError(error)).toBe(true);
+    }
   });
 });
 

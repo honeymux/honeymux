@@ -32,23 +32,25 @@ describe("control client bootstrap helpers", () => {
     await applyControlClientBootstrap(sendCommand, [255, 170, 0], "underline", { cols: 120, rows: 40 });
 
     const borderStyle = `fg=${theme.textDim}`;
-    expect(sendCommand).toHaveBeenNthCalledWith(1, "set-option detach-on-destroy on");
-    expect(sendCommand).toHaveBeenNthCalledWith(2, "set-option -g mouse on");
-    expect(sendCommand).toHaveBeenNthCalledWith(3, "set-option -g pane-border-status top");
-    expect(sendCommand.mock.calls[3]?.[0]).toContain("set-option -g pane-border-format ");
-    expect(sendCommand).toHaveBeenNthCalledWith(5, `set-option -g pane-border-style '${borderStyle}'`);
-    expect(sendCommand).toHaveBeenNthCalledWith(6, `set-option -g pane-active-border-style '${borderStyle}'`);
-    expect(sendCommand).toHaveBeenNthCalledWith(7, "set-option -g window-size smallest");
-    expect(sendCommand).toHaveBeenNthCalledWith(8, "list-keys -T prefix c");
-    expect(sendCommand).toHaveBeenNthCalledWith(9, "bind-key -T prefix c new-window -c '#{pane_current_path}'");
-    expect(sendCommand).toHaveBeenNthCalledWith(10, `list-keys -T prefix '"'`);
-    expect(sendCommand).toHaveBeenNthCalledWith(11, `bind-key -T prefix '"' split-window -c '#{pane_current_path}'`);
-    expect(sendCommand).toHaveBeenNthCalledWith(12, "list-keys -T prefix %");
-    expect(sendCommand).toHaveBeenNthCalledWith(13, "bind-key -T prefix % split-window -h -c '#{pane_current_path}'");
-    expect(sendCommand).toHaveBeenNthCalledWith(14, "refresh-client -C 120,40");
-    expect(sendCommand).toHaveBeenNthCalledWith(15, "set-option -g window-style 'fg=#ffaa00,bg=terminal'");
-    expect(sendCommand).toHaveBeenNthCalledWith(16, "set-option -g window-active-style 'fg=#ffaa00,bg=terminal'");
-    expect(sendCommand).toHaveBeenNthCalledWith(17, "set-option -g cursor-style underline");
+    expect(sendCommand).toHaveBeenNthCalledWith(1, "set-option -g destroy-unattached off");
+    expect(sendCommand).toHaveBeenNthCalledWith(2, "set-option destroy-unattached off");
+    expect(sendCommand).toHaveBeenNthCalledWith(3, "set-option detach-on-destroy on");
+    expect(sendCommand).toHaveBeenNthCalledWith(4, "set-option -g mouse on");
+    expect(sendCommand).toHaveBeenNthCalledWith(5, "set-option -g pane-border-status top");
+    expect(sendCommand.mock.calls[5]?.[0]).toContain("set-option -g pane-border-format ");
+    expect(sendCommand).toHaveBeenNthCalledWith(7, `set-option -g pane-border-style '${borderStyle}'`);
+    expect(sendCommand).toHaveBeenNthCalledWith(8, `set-option -g pane-active-border-style '${borderStyle}'`);
+    expect(sendCommand).toHaveBeenNthCalledWith(9, "set-option -g window-size smallest");
+    expect(sendCommand).toHaveBeenNthCalledWith(10, "list-keys -T prefix c");
+    expect(sendCommand).toHaveBeenNthCalledWith(11, "bind-key -T prefix c new-window -c '#{pane_current_path}'");
+    expect(sendCommand).toHaveBeenNthCalledWith(12, `list-keys -T prefix '"'`);
+    expect(sendCommand).toHaveBeenNthCalledWith(13, `bind-key -T prefix '"' split-window -c '#{pane_current_path}'`);
+    expect(sendCommand).toHaveBeenNthCalledWith(14, "list-keys -T prefix %");
+    expect(sendCommand).toHaveBeenNthCalledWith(15, "bind-key -T prefix % split-window -h -c '#{pane_current_path}'");
+    expect(sendCommand).toHaveBeenNthCalledWith(16, "refresh-client -C 120,40");
+    expect(sendCommand).toHaveBeenNthCalledWith(17, "set-option -g window-style 'fg=#ffaa00,bg=terminal'");
+    expect(sendCommand).toHaveBeenNthCalledWith(18, "set-option -g window-active-style 'fg=#ffaa00,bg=terminal'");
+    expect(sendCommand).toHaveBeenNthCalledWith(19, "set-option -g cursor-style underline");
   });
 
   test("rebinds % when tmux reports it escaped as \\%", async () => {

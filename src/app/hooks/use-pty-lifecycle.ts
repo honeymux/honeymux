@@ -9,7 +9,7 @@ import type { Osc52Passthrough, OtherOscPassthrough } from "../../util/config.ts
 import type { PtyBridge } from "../../util/pty.ts";
 import type { RuntimeDims } from "../runtime/runtime-context.ts";
 
-import { trackChildPid } from "../../util/child-pids.ts";
+import { trackChildPid, untrackChildPid } from "../../util/child-pids.ts";
 import { createPassthroughForwarder, spawnPty } from "../../util/pty.ts";
 import { disableInputModesBeforeShutdown, shutdownRenderer } from "../../util/shutdown-renderer.ts";
 import { tmuxCmd } from "../../util/tmux-server.ts";
@@ -89,6 +89,10 @@ export function usePtyLifecycle({
       });
       ptyRef.current = pty;
       trackChildPid(pty.pid);
+      void pty.exited.then(
+        () => untrackChildPid(pty.pid),
+        () => untrackChildPid(pty.pid),
+      );
 
       // Handle PTY exit. The control client's exit handler owns shutdown /
       // session-switch when tmux sends %exit — it nulls ptyRef synchronously,

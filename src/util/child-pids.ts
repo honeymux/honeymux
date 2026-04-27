@@ -2,8 +2,8 @@
  * Lightweight registry of child process PIDs so cleanup() can kill
  * them without querying tmux or threading refs through the React tree.
  *
- * PIDs are never removed — at exit we just SIGTERM everything.  Dead
- * PIDs get ESRCH which the catch swallows.
+ * Callers untrack PIDs when children exit so shutdown never signals an
+ * unrelated process after PID reuse.
  */
 
 const pids = new Set<number>();
@@ -19,4 +19,8 @@ export function killTrackedChildren(): void {
 
 export function trackChildPid(pid: number): void {
   pids.add(pid);
+}
+
+export function untrackChildPid(pid: number): void {
+  pids.delete(pid);
 }

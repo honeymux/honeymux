@@ -25,6 +25,10 @@ export async function applyControlClientBootstrap(
   cursorStyle: TmuxCursorStyle | null,
   size: ControlClientSize,
 ): Promise<void> {
+  // Honeymux crashes should detach clients, not destroy the user's sessions,
+  // even if a user tmux.conf enabled destroy-unattached globally.
+  await sendCommand("set-option -g destroy-unattached off");
+  await sendCommand("set-option destroy-unattached off");
   await sendCommand("set-option detach-on-destroy on");
   await sendCommand("set-option -g mouse on");
   await sendCommand("set-option -g pane-border-status top");
