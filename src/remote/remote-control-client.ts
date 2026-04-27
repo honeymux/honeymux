@@ -4,6 +4,7 @@ import type { RemoteConnectionStatus, RemoteServerConfig } from "./types.ts";
 
 import { MIN_CONTROL_CLIENT_SIZE } from "../tmux/control-client-bootstrap.ts";
 import { ControlModeParser } from "../tmux/control-mode-parser.ts";
+import { trackChildPid } from "../util/child-pids.ts";
 import { EventEmitter } from "../util/event-emitter.ts";
 import { log } from "../util/log.ts";
 import { cleanEnv } from "../util/pty.ts";
@@ -114,6 +115,7 @@ export class RemoteControlClient extends EventEmitter {
       stdin: "pipe",
       stdout: "pipe",
     });
+    trackChildPid(proc.pid);
 
     // Collect stderr for error reporting
     this.drainStderr(proc);
