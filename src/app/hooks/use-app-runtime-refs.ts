@@ -33,6 +33,10 @@ export interface AppRuntimeRefs {
   dialogMenuToggleRef: MutableRefObject<(() => void) | null>;
   dimsRef: MutableRefObject<RuntimeDims>;
   dropdownInputRef: MutableRefObject<((data: string) => boolean) | null>;
+  /** True when tmux's `extended-keys` option is on (or always). When set,
+   * the input forwarder uses extended-csi-u mode so modifier-rich keys
+   * (Shift+Enter, Ctrl+Tab, etc.) survive the path to apps under tmux. */
+  extendedKeysActiveRef: MutableRefObject<boolean>;
   handleActivateMenuRef: MutableRefObject<() => void>;
   /** Context-sensitive agent latch binding (agentLatch): latches/unlatches
    * the tree-selected review session, or falls through to a muxotron zoom
@@ -298,6 +302,7 @@ export function useAppRuntimeRefs({ sequenceMap }: UseAppRuntimeRefsOptions): Ap
   const zoomActionRef = useRef<KeyAction | null>(null);
   const zoomStickyRef = useRef({ zoomAgentsView: false, zoomServerView: false });
   const reEncodeActiveRef = useRef(false);
+  const extendedKeysActiveRef = useRef(false);
   const muxotronExpandedRef = useRef(false);
   const handleDismissRef = useRef<() => void>(() => {});
   const handleNewPaneTabRef = useRef<() => void>(() => {});
@@ -324,6 +329,7 @@ export function useAppRuntimeRefs({ sequenceMap }: UseAppRuntimeRefsOptions): Ap
     dialogMenuToggleRef,
     dimsRef,
     dropdownInputRef,
+    extendedKeysActiveRef,
     handleActivateMenuRef,
     handleAgentLatchRef,
     handleAgentNextRef,

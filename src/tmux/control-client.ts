@@ -296,6 +296,38 @@ export class TmuxControlClient extends EventEmitter {
   }
 
   /**
+   * Query tmux's `extended-keys` and `extended-keys-format` global options.
+   *
+   * Returned `enabled` is true when the user has set `extended-keys` to either
+   * `on` or `always` — meaning tmux requests extended keys from its terminal
+   * and forwards them to apps that ask. `format` reflects the encoding tmux
+   * negotiates with its terminal (`csi-u` or `xterm`); when missing or
+   * unrecognized, `unknown` is returned so callers can fall back to
+   * legacy-only forwarding.
+   *
+   * Used at startup to decide whether honeymux should re-encode CSI-u keys
+   * to legacy form (the default, when extended-keys is off) or pass through
+   * extended keys so tmux can dispatch them to apps unchanged.
+   */
+  async getExtendedKeysSettings(): Promise<{ enabled: boolean; format: "csi-u" | "unknown" | "xterm" }> {
+    try {
+      const [keysOut, formatOut] = await Promise.all([
+        this.sendCommand("show-options -gv extended-keys"),
+        this.sendCommand("show-options -gv extended-keys-format"),
+      ]);
+      const keysVal = String(keysOut).trim();
+      const formatVal = String(formatOut).trim();
+      const format = formatVal === "csi-u" ? "csi-u" : formatVal === "xterm" ? "xterm" : "unknown";
+      return {
+        enabled: keysVal === "always" || keysVal === "on",
+        format,
+      };
+    } catch {
+      return { enabled: false, format: "unknown" };
+    }
+  }
+
+  /**
    * Get the full tmux tree: all sessions, their windows, and their panes.
    * Used by the tmux tree sidebar view.
    */

@@ -229,3 +229,78 @@ describe("reEncodeChunk", () => {
     expect(reEncodeChunk("abc")).toBe("abc");
   });
 });
+
+describe("reEncodeCsiU extended-csi-u mode", () => {
+  // Unmodified keys should match legacy mode exactly — tmux receives
+  // plain literals just like a Kitty terminal in disambiguate-only mode.
+  test("plain 'a' → 'a' (no CSI-u escalation)", () => {
+    expect(reEncodeCsiU("\x1b[97;1:1u", "extended-csi-u")).toBe("a");
+  });
+
+  test("Shift+a → 'A' (legacy literal, not CSI-u)", () => {
+    expect(reEncodeCsiU("\x1b[97;2:1u", "extended-csi-u")).toBe("A");
+  });
+
+  test("Ctrl+a → 0x01 (legacy control char, not CSI-u)", () => {
+    expect(reEncodeCsiU("\x1b[97;5:1u", "extended-csi-u")).toBe("\x01");
+  });
+
+  test("Alt+a → ESC+a (legacy, not CSI-u)", () => {
+    expect(reEncodeCsiU("\x1b[97;3:1u", "extended-csi-u")).toBe("\x1ba");
+  });
+
+  test("Up arrow → \\x1b[A (legacy, not CSI-u)", () => {
+    expect(reEncodeCsiU("\x1b[57416;1:1u", "extended-csi-u")).toBe("\x1b[A");
+  });
+
+  test("Ctrl+Up → \\x1b[1;5A (legacy CSI form)", () => {
+    expect(reEncodeCsiU("\x1b[57416;5:1u", "extended-csi-u")).toBe("\x1b[1;5A");
+  });
+
+  test("Shift+Tab → \\x1b[Z (legacy is unambiguous)", () => {
+    expect(reEncodeCsiU("\x1b[9;2:1u", "extended-csi-u")).toBe("\x1b[Z");
+  });
+
+  // Lossy combinations should escalate to CSI-u in extended mode so tmux
+  // can preserve modifier information for apps that requested extended keys.
+  test("Shift+Enter → CSI-u (legacy would lose Shift)", () => {
+    expect(reEncodeCsiU("\x1b[13;2:1u", "extended-csi-u")).toBe("\x1b[13;2u");
+  });
+
+  test("Ctrl+Enter → CSI-u", () => {
+    expect(reEncodeCsiU("\x1b[13;5:1u", "extended-csi-u")).toBe("\x1b[13;5u");
+  });
+
+  test("Ctrl+Shift+Enter → CSI-u", () => {
+    expect(reEncodeCsiU("\x1b[13;6:1u", "extended-csi-u")).toBe("\x1b[13;6u");
+  });
+
+  test("Shift+Backspace → CSI-u", () => {
+    expect(reEncodeCsiU("\x1b[127;2:1u", "extended-csi-u")).toBe("\x1b[127;2u");
+  });
+
+  test("Ctrl+Tab → CSI-u (legacy would collapse to \\t)", () => {
+    expect(reEncodeCsiU("\x1b[9;5:1u", "extended-csi-u")).toBe("\x1b[9;5u");
+  });
+
+  test("Alt+Tab → CSI-u", () => {
+    expect(reEncodeCsiU("\x1b[9;3:1u", "extended-csi-u")).toBe("\x1b[9;3u");
+  });
+
+  test("Ctrl+Shift+a → CSI-u (legacy would lose Shift)", () => {
+    expect(reEncodeCsiU("\x1b[97;6:1u", "extended-csi-u")).toBe("\x1b[97;6u");
+  });
+
+  test("modified Escape → CSI-u", () => {
+    expect(reEncodeCsiU("\x1b[27;5:1u", "extended-csi-u")).toBe("\x1b[27;5u");
+  });
+
+  // Drops still apply identically.
+  test("release event still dropped", () => {
+    expect(reEncodeCsiU("\x1b[13;2:3u", "extended-csi-u")).toBe(null);
+  });
+
+  test("modifier-only key still dropped", () => {
+    expect(reEncodeCsiU("\x1b[57447;2:1u", "extended-csi-u")).toBe(null);
+  });
+});

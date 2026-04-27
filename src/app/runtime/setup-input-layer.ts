@@ -26,6 +26,7 @@ export function setupInputLayer(ctx: SetupTmuxRuntimeContext): () => void {
     },
     input: {
       agentPreviewRef,
+      extendedKeysActiveRef,
       handleActivateMenuRef,
       handleAgentLatchRef,
       handleAgentNextRef,
@@ -133,6 +134,7 @@ export function setupInputLayer(ctx: SetupTmuxRuntimeContext): () => void {
         isDialogCapturing: () => mainMenuCapturingRef.current || optionsDialogCapturingRef.current,
         isDialogOpen: () => agentInstallDialogRef.current,
         isDropdownOpen: () => dropdownInputRef.current !== null,
+        isExtendedKeysActive: () => extendedKeysActiveRef.current,
         isInteractiveAgent: () => interactiveAgentRef.current !== null,
         isMobileMode: () => mobileModeRef.current,
         isMuxotronFocusActive: () => muxotronFocusActiveRef.current,

@@ -65,6 +65,7 @@ export interface SetupTmuxRuntimeDialogsContext {
 
 export interface SetupTmuxRuntimeInputContext {
   agentPreviewRef: MutableRefObject<boolean>;
+  extendedKeysActiveRef: MutableRefObject<boolean>;
   handleActivateMenuRef: MutableRefObject<() => void>;
   // --- Agent tree navigation ---
   handleAgentLatchRef: MutableRefObject<() => void>;
