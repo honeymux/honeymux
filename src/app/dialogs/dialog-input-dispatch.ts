@@ -479,8 +479,14 @@ export function dispatchDialogInput(data: string, deps: DialogInputDispatchDeps)
         setMainMenuCaptureError("");
         return;
       }
-      // Require at least one modifier for non-modifier keys
-      if (!combo || !/\b(ctrl|alt|shift)\b/.test(combo)) return;
+      // Plain ASCII printables (single-char combos like "a" or "1") require a
+      // modifier — binding them bare would shadow normal terminal input. Named
+      // keys ("home", "end", "f1", "page_up", "caps_lock", …) are allowed
+      // standalone since they have no in-band representation to collide with.
+      if (!combo) return;
+      const hasModifier = /\b(ctrl|alt|shift)\b/.test(combo);
+      const isNamedKey = combo.length > 1;
+      if (!hasModifier && !isNamedKey) return;
       // Check for conflict with another action
       const existingAction = sequenceMapRef.current.get(combo);
       if (existingAction && existingAction !== action) {
