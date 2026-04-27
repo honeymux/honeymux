@@ -49,6 +49,7 @@ export interface BuildHostedTabGroupOptions {
   hostWindowId: string;
   newLabel: string;
   newPaneId: string;
+  newUserLabel?: string;
   slotKey: string;
   width: number;
 }
@@ -237,6 +238,7 @@ export async function buildHostedTabGroup({
   hostWindowId,
   newLabel,
   newPaneId,
+  newUserLabel,
   slotKey,
   width,
 }: BuildHostedTabGroupOptions): Promise<PaneTabGroup | null> {
@@ -253,6 +255,7 @@ export async function buildHostedTabGroup({
     height,
     newLabel,
     newPaneId,
+    newUserLabel,
     restoreAutomaticRename,
     slotKey,
     width,

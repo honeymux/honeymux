@@ -801,8 +801,9 @@ export function createPaneTabOps({
       groups: groupsRef.current,
       height: targetHeight,
       hostWindowId,
-      newLabel: movingTab.label,
+      newLabel: movingTab.userLabel ?? movingTab.label,
       newPaneId: movingTab.paneId,
+      newUserLabel: movingTab.userLabel,
       slotKey: targetGroup?.slotKey ?? targetPaneId,
       width: targetWidth,
     });
