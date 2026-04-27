@@ -11,6 +11,7 @@ import type { CursorAlertShape } from "./config.ts";
 
 import { hexToRgb, terminalCursorParam } from "../themes/theme.ts";
 import { writeTerminalOutput } from "./terminal-output.ts";
+import { OSC_TERMINATOR } from "./terminal-sequences.ts";
 
 let active = false;
 let activeColor = "#ff0000";
@@ -24,7 +25,7 @@ export function cursorAlertPostRender(): void {
   if (active) {
     writeTerminalOutput(colorSeq(activeColor));
   } else {
-    writeTerminalOutput("\x1b]112\x1b\\");
+    writeTerminalOutput(`\x1b]112${OSC_TERMINATOR}`);
   }
 }
 
@@ -46,7 +47,7 @@ export function setCursorAlertActive(
     writeTerminalOutput(colorSeq(color));
     writeTerminalOutput(`\x1b[${cursorParam(shape, blink)} q`);
   } else {
-    writeTerminalOutput("\x1b]112\x1b\\");
+    writeTerminalOutput(`\x1b]112${OSC_TERMINATOR}`);
     const param = terminalCursorParam ?? 0;
     writeTerminalOutput(`\x1b[${param} q`);
   }
@@ -55,7 +56,7 @@ export function setCursorAlertActive(
 function colorSeq(hex: string): string {
   const [r, g, b] = hexToRgb(hex);
   const h = (n: number) => n.toString(16).padStart(2, "0");
-  return `\x1b]12;rgb:${h(r)}/${h(g)}/${h(b)}\x1b\\`;
+  return `\x1b]12;rgb:${h(r)}/${h(g)}/${h(b)}${OSC_TERMINATOR}`;
 }
 
 /**

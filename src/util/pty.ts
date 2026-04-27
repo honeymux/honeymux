@@ -2,6 +2,7 @@ import type { Osc52Passthrough, OtherOscPassthrough } from "./config.ts";
 
 import { DEFAULT_LOCAL_OSC52_PASSTHROUGH, DEFAULT_LOCAL_OTHER_OSC_PASSTHROUGH } from "./config.ts";
 import { writeTerminalOutput } from "./terminal-output.ts";
+import { OSC_TERMINATOR } from "./terminal-sequences.ts";
 
 export type CleanEnv = {
   HOME?: string;
@@ -55,7 +56,7 @@ interface OscStreamProcessorOptions {
   copyPlainBytes?: boolean;
   forwardStandaloneBell?: boolean;
   maxBufferedOscBytes: number;
-  rewriteOscBellTerminatorToSt?: boolean;
+  normalizeOscTerminatorToBel?: boolean;
   shouldWriteOsc: (data: ArrayLike<number>) => boolean;
   write: (data: Uint8Array | string) => void;
 }
@@ -82,7 +83,7 @@ export function createPassthroughForwarder(options: PassthroughForwarderOptions 
   return createOscStreamProcessor({
     forwardStandaloneBell: true,
     maxBufferedOscBytes,
-    rewriteOscBellTerminatorToSt: true,
+    normalizeOscTerminatorToBel: true,
     shouldWriteOsc: (data) => shouldForwardOsc(data, policy),
     write,
   });
@@ -104,10 +105,10 @@ function createOscStreamProcessor(options: OscStreamProcessorOptions): (data: Bu
   const writeOsc = (osc: ArrayLike<number>) => {
     if (!options.shouldWriteOsc(osc)) return;
     const end = osc.length;
-    const hasBelTerminator = end >= 1 && osc[end - 1] === 0x07;
-    if (options.rewriteOscBellTerminatorToSt && hasBelTerminator) {
-      options.write(Buffer.from(Array.from(osc).slice(0, -1)));
-      options.write("\x1b\\");
+    const hasStTerminator = end >= 2 && osc[end - 2] === 0x1b && osc[end - 1] === 0x5c;
+    if (options.normalizeOscTerminatorToBel && hasStTerminator) {
+      options.write(Buffer.from(Array.from(osc).slice(0, -2)));
+      options.write(OSC_TERMINATOR);
       return;
     }
     options.write(Buffer.from(Array.from(osc)));
