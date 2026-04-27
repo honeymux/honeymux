@@ -91,6 +91,33 @@ describe("identifyKeySequence", () => {
     expect(identifyKeySequence("\x1bOS")).toBe("f4");
   });
 
+  test("parses Ghostty F1/F2/F4 in CSI letter form (Kitty event-type suffix)", () => {
+    // Ghostty with Kitty flag 2 (report event types) emits F1-F4 as
+    // ESC [ 1 ; <mod> : <evt> <letter> rather than the Kitty CSI u high
+    // codes. F3 (letter R) collides with CPR responses and stays Kitty-only.
+    expect(identifyKeySequence("\x1b[1;1:1P")).toBe("f1");
+    expect(identifyKeySequence("\x1b[1;1:1Q")).toBe("f2");
+    expect(identifyKeySequence("\x1b[1;1:1S")).toBe("f4");
+    expect(identifyKeySequence("\x1b[1;5:1P")).toBe("ctrl+f1");
+    expect(identifyKeySequence("\x1b[1;6:1Q")).toBe("ctrl+shift+f2");
+    expect(identifyKeySequence("\x1b[1;3:1S")).toBe("alt+f4");
+  });
+
+  test("parses F1/F2/F4 in CSI letter form without event-type suffix", () => {
+    expect(identifyKeySequence("\x1b[1;5P")).toBe("ctrl+f1");
+    expect(identifyKeySequence("\x1b[1;3Q")).toBe("alt+f2");
+    expect(identifyKeySequence("\x1b[1;6S")).toBe("ctrl+shift+f4");
+  });
+
+  test("does not parse \\x1b[1;<n>R as F3 (CPR collision)", () => {
+    // CPR response \x1b[<row>;<col>R is structurally identical to F3 in
+    // the CSI letter form. We refuse to parse R so probe responses are
+    // never misclassified as a key event. F3 unmodified still works via
+    // SS3 (\x1bOR) and modified F3 via Kitty CSI u (57366).
+    expect(identifyKeySequence("\x1b[1;5R")).toBeNull();
+    expect(identifyKeySequence("\x1b[1;1:1R")).toBeNull();
+  });
+
   test("parses SS3 home and end (VTE default form)", () => {
     // VTE/GNOME Terminal sends Home/End in SS3 form even with DECCKM off,
     // so binding "home" or "end" must work without Kitty keyboard support.
@@ -199,6 +226,31 @@ describe("parseRawKeyEvent", () => {
     expect(evt).not.toBeNull();
     expect(evt!.eventType).toBe(3);
     expect(evt!.isModifierOnly).toBe(false);
+  });
+
+  test("parses CSI letter F-keys (P/Q/S) with event type", () => {
+    // Ghostty emits F1/F2/F4 with kitty flag 2 as ESC [ 1 ; mod : evt letter.
+    // The router needs press/release recognition for these so it doesn't
+    // double-fire on release.
+    const f1Press = parseRawKeyEvent("\x1b[1;1:1P");
+    expect(f1Press).not.toBeNull();
+    expect(f1Press!.specialKey).toBe("P");
+    expect(f1Press!.eventType).toBe(1);
+    expect(f1Press!.isModifierOnly).toBe(false);
+
+    const f1Release = parseRawKeyEvent("\x1b[1;1:3P");
+    expect(f1Release).not.toBeNull();
+    expect(f1Release!.specialKey).toBe("P");
+    expect(f1Release!.eventType).toBe(3);
+
+    const f2Press = parseRawKeyEvent("\x1b[1;5:1Q");
+    expect(f2Press).not.toBeNull();
+    expect(f2Press!.specialKey).toBe("Q");
+    expect(f2Press!.mods).toBe(4);
+
+    const f4Press = parseRawKeyEvent("\x1b[1;1:1S");
+    expect(f4Press).not.toBeNull();
+    expect(f4Press!.specialKey).toBe("S");
   });
 
   test("returns null for non-CSI-u sequences", () => {

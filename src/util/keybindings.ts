@@ -267,10 +267,18 @@ function filterActions(obj: Record<string, unknown>): Partial<KeybindingConfig> 
 
 /**
  * CSI sequences that end in a letter (no `~` and no `u` terminator).
- * Covers arrows (A-D), home (H), and end (F). F1-F4 via `CSI 1;mod P/Q/R/S`
- * is intentionally omitted because `R` collides with cursor-position-report
- * responses; modified F1-F4 arrives via the Kitty CSI u functional codes
- * (57364-57367) when "report all keys as escape codes" is enabled.
+ * Covers arrows (A-D), home (H), end (F), and F1/F2/F4 (P/Q/S).
+ *
+ * Ghostty (and other Kitty-protocol terminals running with the "report
+ * event types" flag but not the "report all keys" flag) emits F1-F4 in
+ * this CSI letter form rather than the Kitty CSI u high-code form, so
+ * we have to parse it here for those keys to bind at all.
+ *
+ * F3 (letter R) is intentionally omitted because CPR responses
+ * (`\x1b[<row>;<col>R`) are structurally identical to F3-with-modifier
+ * in this form. Unmodified F3 still arrives via SS3 (`\x1bOR`); modified
+ * F3 still arrives via the Kitty CSI u functional code (57366) when
+ * "report all keys as escape codes" is enabled.
  */
 const CSI_LETTER_NAMES: Record<string, string> = {
   A: "up",
@@ -279,6 +287,9 @@ const CSI_LETTER_NAMES: Record<string, string> = {
   D: "left",
   F: "end",
   H: "home",
+  P: "f1",
+  Q: "f2",
+  S: "f4",
 };
 
 /**
@@ -348,10 +359,11 @@ export function identifyKeySequence(seq: string): null | string {
   if (!seq) return null;
 
   // CSI letter with modifiers: ESC [ 1 ; <mod> <letter>  or  ESC [ <mod> <letter>
-  // Covers arrows (A-D), home (H), end (F). Kitty keyboard may append
-  // :<event-type> after the modifier (e.g. 5:1 for ctrl+press). Modifier
-  // value is (flags + 1), so subtract 1 before checking bits.
-  const csiLetter = seq.match(/^\x1b\[(?:1;)?(\d+)(?::\d+)?([ABCDFH])$/);
+  // Covers arrows (A-D), home (H), end (F), and F1/F2/F4 (P/Q/S). Kitty
+  // keyboard may append :<event-type> after the modifier (e.g. 5:1 for
+  // ctrl+press). Modifier value is (flags + 1), so subtract 1 before
+  // checking bits. Letter R is excluded — see CSI_LETTER_NAMES.
+  const csiLetter = seq.match(/^\x1b\[(?:1;)?(\d+)(?::\d+)?([ABCDFHPQS])$/);
   if (csiLetter) {
     const mods = parseInt(csiLetter[1]!, 10) - 1;
     const name = CSI_LETTER_NAMES[csiLetter[2]!];
@@ -726,8 +738,11 @@ export function parseRawKeyEvent(seq: string): RawKeyEvent | null {
     return { code, eventType, isModifierOnly: code >= 57441 && code <= 57454, mods: 0 };
   }
 
-  // CSI arrow/special with event type: ESC [ (num)? ; mods (:event_type)? ABCDHF~
-  const csiSpecial = seq.match(/^\x1b\[(\d+)?;(\d+)(?::(\d+))?([ABCDHF~])$/);
+  // CSI arrow/special with event type: ESC [ (num)? ; mods (:event_type)? ABCDFHPQS~
+  // Includes F1/F2/F4 (P/Q/S) so press/release events from Ghostty's CSI
+  // letter form aren't mistaken for normal keys. R excluded — see
+  // CSI_LETTER_NAMES.
+  const csiSpecial = seq.match(/^\x1b\[(\d+)?;(\d+)(?::(\d+))?([ABCDFHPQS~])$/);
   if (csiSpecial) {
     const mods = parseInt(csiSpecial[2]!, 10) - 1;
     const eventType = csiSpecial[3] ? parseInt(csiSpecial[3], 10) : 1;
