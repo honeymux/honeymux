@@ -1,7 +1,7 @@
 /* eslint-disable no-control-regex */
 import type { KeyAction } from "../util/keybindings.ts";
 
-import { type ForwardMode, reEncodeCsiU } from "../util/csiu-reencode.ts";
+import { type ForwardMode, reEncodeChunk, reEncodeCsiU } from "../util/csiu-reencode.ts";
 import { MODIFIER_KEY_CODES, identifyKeySequence, parseRawKeyEvent } from "../util/keybindings.ts";
 import { allowsGlobalModifierBindings, resolveInputOwner } from "./input-owner.ts";
 import { classifyTerminalResponse } from "./terminal-response-classifier.ts";
@@ -670,8 +670,8 @@ function writeSequenceToPty(
 ): void {
   const mode = activeForwardMode(callbacks);
   if (mode) {
-    const encoded = reEncodeCsiU(sequence, mode);
-    if (encoded !== null) writeToPty(encoded);
+    const encoded = reEncodeChunk(sequence, mode);
+    if (encoded.length > 0) writeToPty(encoded);
     return;
   }
   writeToPty(sequence);
