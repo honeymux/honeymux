@@ -182,7 +182,7 @@ export function TmuxPaneMarqueeMode({
           absolute overlay. Without this, the overlay's subtree reuses its prior
           render cache and leaves stale cells at its old anchor (top vs
           bottom-anchored) during the switch. */}
-      {muxotronExpanded && <Muxotron {...muxotronProps} key={`expanded-${uiMode}`} muxotronExpanded={true} />}
+      {muxotronExpanded && <Muxotron key={`expanded-${uiMode}`} {...muxotronProps} muxotronExpanded={true} />}
       {rootOverlayNode}
       {agentsDialogNode}
       {overlayLayer}
