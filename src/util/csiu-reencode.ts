@@ -158,6 +158,7 @@ function encodeForward(code: number, mods: number, mode: ForwardMode): string {
   const hasShift = !!(mods & 1);
   const hasAlt = !!(mods & 2);
   const hasCtrl = !!(mods & 4);
+  const isTextOnlyMods = mods === 0 || mods === 1;
 
   // In extended-csi-u mode, route lossy modifier combinations through CSI u
   // so tmux (with extended-keys-format=csi-u) preserves the modifier
@@ -242,6 +243,11 @@ function encodeForward(code: number, mods: number, mode: ForwardMode): string {
     const ch = hasShift && code >= 97 && code <= 122 ? code - 32 : code;
     result = String.fromCharCode(ch);
   }
+  // Printable Unicode text. Keep modified non-ASCII keys in CSI u form so
+  // shortcuts and terminal-specific modifier semantics are not widened here.
+  else if (isTextOnlyMods && isUnicodeTextCodePoint(code)) {
+    result = String.fromCodePoint(code);
+  }
   // Unknown — forward as CSI u (best effort)
   else {
     return mods > 0 ? `\x1b[${code};${mods + 1}u` : `\x1b[${code}u`;
@@ -249,4 +255,20 @@ function encodeForward(code: number, mods: number, mode: ForwardMode): string {
 
   if (hasAlt) result = "\x1b" + result;
   return result;
+}
+
+function isUnicodeTextCodePoint(code: number): boolean {
+  // Kitty uses Unicode PUA code points for non-text functional keys, so
+  // treat PUA as ambiguous unless explicitly mapped above:
+  // https://sw.kovidgoyal.net/kitty/keyboard-protocol/#functional-key-definitions
+  // Unicode reserves PUA for private agreements and noncharacters for
+  // internal use, not ordinary text: https://www.unicode.org/faq/private_use.html
+  // U+FDD0..U+FDEF and the final two code points of each plane.
+  if (code < 0xa0 || code > 0x10ffff) return false;
+  if (code >= 0xd800 && code <= 0xdfff) return false;
+  if (code >= 0xe000 && code <= 0xf8ff) return false;
+  if (code >= 0xf0000 && code <= 0xffffd) return false;
+  if (code >= 0x100000 && code <= 0x10fffd) return false;
+  if (code >= 0xfdd0 && code <= 0xfdef) return false;
+  return (code & 0xfffe) !== 0xfffe;
 }

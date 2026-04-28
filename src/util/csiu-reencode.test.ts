@@ -20,6 +20,28 @@ describe("reEncodeCsiU", () => {
     expect(reEncodeCsiU("\x1b[32;1:1u")).toBe(" ");
   });
 
+  // --- Unicode text input ---
+  test("Korean syllable press → UTF-8 text", () => {
+    expect(reEncodeCsiU("\x1b[54620;1:1u")).toBe("한");
+  });
+
+  test("emoji press → UTF-8 text", () => {
+    expect(reEncodeCsiU("\x1b[128578;1:1u")).toBe("🙂");
+  });
+
+  test("shifted Cyrillic key uses alternate shifted code", () => {
+    expect(reEncodeCsiU("\x1b[1072:1040;2:1u")).toBe("А");
+  });
+
+  test("Kitty F13 PUA code stays in CSI u form", () => {
+    expect(reEncodeCsiU("\x1b[57376;1:1u")).toBe("\x1b[57376u");
+  });
+
+  test("Ctrl-modified Korean text stays in CSI u form", () => {
+    expect(reEncodeCsiU("\x1b[54620;5:1u")).toBe("\x1b[54620;5u");
+  });
+
+  // --- Printable ASCII with modifiers ---
   test("Shift+a → 'A'", () => {
     expect(reEncodeCsiU("\x1b[97;2:1u")).toBe("A");
   });
@@ -221,6 +243,22 @@ describe("reEncodeChunk", () => {
     expect(reEncodeChunk("\x1b[97;1:1u\x1b[97;1:3u\x1b[98;1:1u\x1b[98;1:3u")).toBe("ab");
   });
 
+  test("multi-codepoint emoji in one chunk", () => {
+    expect(reEncodeChunk("\x1b[10084;1:1u\x1b[65039;1:1u")).toBe("❤️");
+  });
+
+  test("Japanese IME commit in one chunk", () => {
+    expect(reEncodeChunk("\x1b[26085;1:1u\x1b[26412;1:1u\x1b[35486;1:1u")).toBe("日本語");
+  });
+
+  test("ZWJ emoji sequence in one chunk", () => {
+    expect(
+      reEncodeChunk(
+        "\x1b[128104;1:1u\x1b[8205;1:1u\x1b[128105;1:1u\x1b[8205;1:1u\x1b[128103;1:1u\x1b[8205;1:1u\x1b[128102;1:1u",
+      ),
+    ).toBe("👨‍👩‍👧‍👦");
+  });
+
   test("modifier-only keys in chunk → empty string", () => {
     expect(reEncodeChunk("\x1b[57447;2:1u\x1b[57447;2:3u")).toBe("");
   });
@@ -235,6 +273,10 @@ describe("reEncodeCsiU extended-csi-u mode", () => {
   // plain literals just like a Kitty terminal in disambiguate-only mode.
   test("plain 'a' → 'a' (no CSI-u escalation)", () => {
     expect(reEncodeCsiU("\x1b[97;1:1u", "extended-csi-u")).toBe("a");
+  });
+
+  test("Korean syllable stays UTF-8 text", () => {
+    expect(reEncodeCsiU("\x1b[54620;1:1u", "extended-csi-u")).toBe("한");
   });
 
   test("Shift+a → 'A' (legacy literal, not CSI-u)", () => {

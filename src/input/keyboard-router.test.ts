@@ -398,6 +398,92 @@ describe("agent review workflow shortcuts", () => {
   });
 });
 
+describe("Unicode CSI u input", () => {
+  test("forwards Korean text as UTF-8 when re-encoding is active", () => {
+    const writeToPty = mock((_data: string) => {});
+    const callbacks = createCallbacks({
+      isReEncodeActive: () => true,
+    });
+
+    routeKeyboardInput("\x1b[54620;1:1u", writeToPty, callbacks, new Map());
+
+    expect(writeToPty).toHaveBeenCalledWith("한");
+  });
+
+  test("forwards Korean text as UTF-8 when extended keys are active", () => {
+    const writeToPty = mock((_data: string) => {});
+    const callbacks = createCallbacks({
+      isExtendedKeysActive: () => true,
+      isReEncodeActive: () => true,
+    });
+
+    routeKeyboardInput("\x1b[54620;1:1u", writeToPty, callbacks, new Map());
+
+    expect(writeToPty).toHaveBeenCalledWith("한");
+  });
+
+  test("preserves lossy modified keys when extended keys are active", () => {
+    const writeToPty = mock((_data: string) => {});
+    const callbacks = createCallbacks({
+      isExtendedKeysActive: () => true,
+      isReEncodeActive: () => true,
+    });
+
+    routeKeyboardInput("\x1b[13;2:1u", writeToPty, callbacks, new Map());
+
+    expect(writeToPty).toHaveBeenCalledWith("\x1b[13;2u");
+  });
+
+  test("forwards Shift-only Korean text as UTF-8 when re-encoding is active", () => {
+    const writeToPty = mock((_data: string) => {});
+    const callbacks = createCallbacks({
+      isReEncodeActive: () => true,
+    });
+
+    routeKeyboardInput("\x1b[54620;2:1u", writeToPty, callbacks, new Map());
+
+    expect(writeToPty).toHaveBeenCalledWith("한");
+  });
+
+  test("forwards emoji text as UTF-8 when re-encoding is active", () => {
+    const writeToPty = mock((_data: string) => {});
+    const callbacks = createCallbacks({
+      isReEncodeActive: () => true,
+    });
+
+    routeKeyboardInput("\x1b[128578;1:1u", writeToPty, callbacks, new Map());
+
+    expect(writeToPty).toHaveBeenCalledWith("🙂");
+  });
+
+  test("forwards Japanese IME commit chunks as UTF-8 when re-encoding is active", () => {
+    const writeToPty = mock((_data: string) => {});
+    const callbacks = createCallbacks({
+      isReEncodeActive: () => true,
+    });
+
+    routeKeyboardInput("\x1b[26085;1:1u\x1b[26412;1:1u\x1b[35486;1:1u", writeToPty, callbacks, new Map());
+
+    expect(writeToPty).toHaveBeenCalledWith("日本語");
+  });
+
+  test("forwards ZWJ emoji chunks as UTF-8 when re-encoding is active", () => {
+    const writeToPty = mock((_data: string) => {});
+    const callbacks = createCallbacks({
+      isReEncodeActive: () => true,
+    });
+
+    routeKeyboardInput(
+      "\x1b[128104;1:1u\x1b[8205;1:1u\x1b[128105;1:1u\x1b[8205;1:1u\x1b[128103;1:1u\x1b[8205;1:1u\x1b[128102;1:1u",
+      writeToPty,
+      callbacks,
+      new Map(),
+    );
+
+    expect(writeToPty).toHaveBeenCalledWith("👨‍👩‍👧‍👦");
+  });
+});
+
 describe("zoom overlay input", () => {
   test("ignores modifier-only presses while zoom is active", () => {
     const onZoomEnd = mock(() => {});
