@@ -11,6 +11,7 @@ import { identifyKeySequence, isDismissKey } from "../util/keybindings.ts";
 import { writeTerminalOutput } from "../util/terminal-output.ts";
 import { OSC_TERMINATOR } from "../util/terminal-sequences.ts";
 import { midTruncatePath, stringWidth } from "../util/text.ts";
+import { wrapText } from "./ssh-error-dialog.tsx";
 
 export interface ScreenshotDialogProps {
   buttonCol: number; // 0=Viewport, 1=Scrollback, 2=Cancel
@@ -30,6 +31,13 @@ export interface ScreenshotDoneDialogProps {
   filePath: string;
   onCopy: () => void;
   onDismiss: () => void;
+}
+
+export interface ScreenshotErrorDialogProps {
+  height: number;
+  message: string;
+  onDismiss: () => void;
+  width: number;
 }
 
 export interface ScreenshotLargeDialogProps {
@@ -266,6 +274,81 @@ export function ScreenshotDoneDialog({ buttonCol, filePath, onCopy, onDismiss }:
   );
 }
 
+export function ScreenshotErrorDialog({ height, message, onDismiss, width }: ScreenshotErrorDialogProps) {
+  const innerWidth = 54;
+  const messageLines = wrapText(message, innerWidth);
+  // 1 (title) + 1 (blank) + messageLines + 1 (blank) + 1 (button)
+  const contentRows = 4 + messageLines.length;
+  const boxHeight = contentRows + 2; // +2 for border
+  const boxWidth = innerWidth + 4; // +4 for border + padding
+  const dialogLeft = Math.floor((width - boxWidth) / 2);
+  const dialogTop = Math.floor((height - boxHeight) / 2);
+
+  const borderTitle = " Screenshot Failed ";
+  const borderTitleLeft = dialogLeft + Math.floor((boxWidth - borderTitle.length) / 2);
+
+  return (
+    <>
+      {/* Backdrop */}
+      <box
+        height="100%"
+        left={0}
+        onMouseDown={(event: MouseEvent) => {
+          if (event.button === 0) onDismiss();
+        }}
+        position="absolute"
+        top={0}
+        width="100%"
+        zIndex={19}
+      />
+      {/* Dialog */}
+      <box
+        alignItems="center"
+        backgroundColor={theme.bgSurface}
+        border={true}
+        borderColor={theme.statusError}
+        borderStyle="rounded"
+        flexDirection="column"
+        height={boxHeight}
+        id="honeyshots:screenshot-error-dialog"
+        justifyContent="center"
+        left={dialogLeft}
+        position="absolute"
+        top={dialogTop}
+        width={boxWidth}
+        zIndex={20}
+      >
+        <text content="" />
+        {messageLines.map((line, i) => (
+          <text content={line} fg={theme.text} key={i} />
+        ))}
+        <text content="" />
+        <box
+          alignItems="center"
+          height={1}
+          justifyContent="center"
+          onMouseDown={(event: MouseEvent) => {
+            if (event.button === 0) onDismiss();
+          }}
+          width={10}
+        >
+          <text content="▸ [ OK ]" fg={theme.text} />
+        </box>
+      </box>
+      {/* Border title overlay */}
+      <text
+        bg={theme.bgSurface}
+        content={borderTitle}
+        fg={theme.statusError}
+        left={borderTitleLeft}
+        position="absolute"
+        top={dialogTop}
+        zIndex={21}
+      />
+    </>
+  );
+}
+
 export function ScreenshotLargeDialog({ height, onDismiss, width }: ScreenshotLargeDialogProps) {
   const boxWidth = 56;
   const boxHeight = 8;
@@ -428,6 +511,18 @@ export function handleScreenshotDoneDialogInput(
     return "handled";
   }
 
+  return null;
+}
+
+/**
+ * Handle keyboard input for the screenshot error dialog.
+ * Any of Esc, Enter, or Space dismisses.
+ */
+export function handleScreenshotErrorDialogInput(data: string, onDismiss: () => void): "handled" | null {
+  if (isDismissKey(data) || data === "\r" || data === "\n" || data === " ") {
+    onDismiss();
+    return "handled";
+  }
   return null;
 }
 

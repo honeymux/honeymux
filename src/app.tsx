@@ -50,6 +50,7 @@ import { PaneTabOverflowDropdown } from "./components/pane-tab-overflow-dropdown
 import {
   ScreenshotDialog,
   ScreenshotDoneDialog,
+  ScreenshotErrorDialog,
   ScreenshotLargeDialog,
   copyToClipboard,
 } from "./components/screenshot-dialog.tsx";
@@ -184,6 +185,7 @@ export function App({ sessionName }: AppProps) {
   });
   const {
     dismissScreenshotDone,
+    dismissScreenshotError,
     dismissScreenshotLargeDialog,
     handleScreenshotCapture,
     openScreenshotDialog,
@@ -191,6 +193,7 @@ export function App({ sessionName }: AppProps) {
     screenshotDialogOpen,
     screenshotDoneButtonCol,
     screenshotDonePath,
+    screenshotError,
     screenshotLargeDialogOpen,
     screenshotPreview,
     setScreenshotButtonCol,
@@ -481,6 +484,7 @@ export function App({ sessionName }: AppProps) {
     conversationsDialogOpen ||
     historyConsentDialogOpen ||
     screenshotDialogOpen ||
+    screenshotError !== null ||
     screenshotLargeDialogOpen ||
     screenshotDonePath !== null ||
     sshErrorDialogServer !== null ||
@@ -752,9 +756,11 @@ export function App({ sessionName }: AppProps) {
     screenshots: {
       buttonCol: screenshotButtonCol,
       dialogOpen: screenshotDialogOpen,
+      dismissError: dismissScreenshotError,
       dismissLargeDialog: dismissScreenshotLargeDialog,
       doneButtonCol: screenshotDoneButtonCol,
       donePath: screenshotDonePath,
+      error: screenshotError,
       handleCapture: handleScreenshotCapture,
       largeDialogOpen: screenshotLargeDialogOpen,
       scrollbackDisabled: isScrollbackTooTall(screenshotPreview, config.screenshotMaxHeightPixels),
@@ -958,6 +964,14 @@ export function App({ sessionName }: AppProps) {
       )}
       {screenshotLargeDialogOpen && (
         <ScreenshotLargeDialog height={height} onDismiss={dismissScreenshotLargeDialog} width={width} />
+      )}
+      {screenshotError !== null && (
+        <ScreenshotErrorDialog
+          height={height}
+          message={screenshotError}
+          onDismiss={dismissScreenshotError}
+          width={width}
+        />
       )}
       <OptionsPreviewOverlays
         height={height}

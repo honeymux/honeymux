@@ -1,6 +1,7 @@
 import type { TerminalLine } from "ghostty-opentui";
 import type { GhosttyTerminalRenderable } from "ghostty-opentui/terminal-buffer";
 
+import takumiNativePath from "@hmx/takumi-native-path";
 import { StyleFlags } from "ghostty-opentui";
 import { mkdirSync } from "node:fs";
 import { useCallback, useRef, useState } from "react";
@@ -26,6 +27,7 @@ export interface ScreenshotPreview {
 
 export interface ScreenshotWorkflowApi {
   dismissScreenshotDone: () => void;
+  dismissScreenshotError: () => void;
   dismissScreenshotLargeDialog: () => void;
   handleScreenshotCapture: (mode: ScreenshotMode) => Promise<void>;
   openScreenshotDialog: () => void;
@@ -33,6 +35,7 @@ export interface ScreenshotWorkflowApi {
   screenshotDialogOpen: boolean;
   screenshotDoneButtonCol: number;
   screenshotDonePath: null | string;
+  screenshotError: null | string;
   screenshotLargeDialogOpen: boolean;
   screenshotPreview: ScreenshotPreview | null;
   setScreenshotButtonCol: (col: number) => void;
@@ -58,14 +61,7 @@ interface UseScreenshotWorkflowOptions {
   configScreenshotFlash: boolean;
   refs: Pick<
     AppRuntimeRefs,
-    | "addInfoRef"
-    | "clientRef"
-    | "dimsRef"
-    | "handleRedrawRef"
-    | "showHintRef"
-    | "sidebarOpenRef"
-    | "sidebarWidthRef"
-    | "terminalRef"
+    "addInfoRef" | "clientRef" | "dimsRef" | "handleRedrawRef" | "sidebarOpenRef" | "sidebarWidthRef" | "terminalRef"
   >;
 }
 
@@ -154,12 +150,12 @@ export function useScreenshotWorkflow({
   configScreenshotFlash,
   refs,
 }: UseScreenshotWorkflowOptions): ScreenshotWorkflowApi {
-  const { addInfoRef, clientRef, dimsRef, handleRedrawRef, showHintRef, sidebarOpenRef, sidebarWidthRef, terminalRef } =
-    refs;
+  const { addInfoRef, clientRef, dimsRef, handleRedrawRef, sidebarOpenRef, sidebarWidthRef, terminalRef } = refs;
   const [screenshotDialogOpen, setScreenshotDialogOpen] = useState(false);
   const [screenshotButtonCol, setScreenshotButtonCol] = useState(0);
   const [screenshotDonePath, setScreenshotDonePath] = useState<null | string>(null);
   const [screenshotDoneButtonCol, setScreenshotDoneButtonCol] = useState(1);
+  const [screenshotError, setScreenshotError] = useState<null | string>(null);
   const [screenshotPreview, setScreenshotPreview] = useState<ScreenshotPreview | null>(null);
   const [screenshotLargeDialogOpen, setScreenshotLargeDialogOpen] = useState(false);
   const previewVersionRef = useRef(0);
@@ -218,6 +214,10 @@ export function useScreenshotWorkflow({
     setScreenshotDonePath(null);
   }, []);
 
+  const dismissScreenshotError = useCallback(() => {
+    setScreenshotError(null);
+  }, []);
+
   const dismissScreenshotLargeDialog = useCallback(() => {
     setScreenshotLargeDialogOpen(false);
   }, []);
@@ -269,6 +269,11 @@ export function useScreenshotWorkflow({
           void flashPromise.then(() => handleRedrawRef.current()).catch(() => {});
         }
 
+        // In the compiled binary, point takumi's NAPI loader at the .node
+        // asset that bun --compile embedded via takumi-native-path.ts. In dev
+        // mode the shim resolves to undefined and takumi's normal dispatch
+        // finds the binding in node_modules.
+        if (takumiNativePath) process.env["NAPI_RS_NATIVE_LIBRARY_PATH"] ??= takumiNativePath;
         const { renderTerminalToImage } = await import("ghostty-opentui/image");
         let data: import("ghostty-opentui").TerminalData;
 
@@ -338,7 +343,7 @@ export function useScreenshotWorkflow({
       } catch (error) {
         clearLargeDialogTimer();
         setScreenshotLargeDialogOpen(false);
-        showHintRef.current?.(`Screenshot failed: ${error instanceof Error ? error.message : String(error)}`);
+        setScreenshotError(error instanceof Error ? error.message : String(error));
       }
     },
     [
@@ -348,7 +353,6 @@ export function useScreenshotWorkflow({
       configScreenshotFlash,
       dimsRef,
       handleRedrawRef,
-      showHintRef,
       sidebarOpenRef,
       sidebarWidthRef,
       terminalRef,
@@ -357,6 +361,7 @@ export function useScreenshotWorkflow({
 
   return {
     dismissScreenshotDone,
+    dismissScreenshotError,
     dismissScreenshotLargeDialog,
     handleScreenshotCapture,
     openScreenshotDialog,
@@ -364,6 +369,7 @@ export function useScreenshotWorkflow({
     screenshotDialogOpen,
     screenshotDoneButtonCol,
     screenshotDonePath,
+    screenshotError,
     screenshotLargeDialogOpen,
     screenshotPreview,
     setScreenshotButtonCol,
