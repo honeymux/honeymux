@@ -7,8 +7,11 @@
 </p>
 </h1>
 <p align="center">
-  A new UX layer for the terminal, built on tmux
+  Reach terminal velocity.
   <br />
+  All of your agents, shells, and TUIs in one durable<a href="#durable">*</a> terminal workspace.
+</p>
+<p align="center">
   <strong><a href="https://hmx.dev">https://hmx.dev</a></strong>
 </p>
 
@@ -37,7 +40,7 @@ These features include:
 
 Try the interactive demo in a browser terminal at [https://hmx.dev](https://hmx.dev) !
 
-Honeymux is base16-themed and has a zero-config bootstrap. Most functionality (e.g. key bindings) are configured through the [Main Menu](https://docs.hmx.dev/main-menu/) and [Options](https://docs.hmx.dev/options/) dialogs.
+Honeymux is base16-themed and has a zero-config bootstrap. Most user preferences (e.g. key bindings) are configured through the [Main Menu](https://docs.hmx.dev/main-menu/) and [Options](https://docs.hmx.dev/options/) dialogs.
 
 Give it a try if one or more of the following describes you:
 
@@ -48,6 +51,12 @@ Give it a try if one or more of the following describes you:
 - You would like to merge your local and remote tmux panes into a single portable view
 
 Please also check out [OpenTUI](https://github.com/anomalyco/opentui), [libghostty-vt](https://github.com/ghostty-org/ghostty/tree/main/include/ghostty/vt), and [ghostty-opentui](https://github.com/remorses/ghostty-opentui) -- this software would not exist without these in combination.
+
+<a name="durable"></a>
+
+## Durability
+
+Honeymux is powered by tmux, a terminal multiplexer first released in 2007 and battle-tested across nearly two decades of production use on every Unix system that matters. It's about as solid a foundation as software gets. That durability flows through. Your sessions survive dropped SSH connections and crashed clients — long-running agents and shells keep running. Reattach from anywhere and pick up exactly where you left off.
 
 ## Install or upgrade
 
