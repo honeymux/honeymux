@@ -81,12 +81,6 @@
         "file": "0001-skip-extra-render-for-fixed-size-terminal-feeds.patch"
       },
       {
-        "branch": "fix-opaque-default-background-terminal",
-        "description": "Render implicit terminal background cells with opaque terminal defaults",
-        "enabled": true,
-        "file": "0002-fix-opaque-default-background-terminal.patch"
-      },
-      {
         "branch": "cache-terminal-renders-between-ansi-updates",
         "description": "Cache terminal text rendering between ANSI updates",
         "enabled": true,
