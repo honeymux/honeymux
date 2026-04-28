@@ -12,6 +12,7 @@ import {
   copyToClipboard,
   handleScreenshotDialogInput,
   handleScreenshotDoneDialogInput,
+  handleScreenshotErrorDialogInput,
   handleScreenshotLargeDialogInput,
 } from "../../components/screenshot-dialog.tsx";
 import {
@@ -74,9 +75,11 @@ interface DialogInputPaneTabs {
 interface DialogInputScreenshots {
   buttonCol: number;
   dialogOpen: boolean;
+  dismissError: () => void;
   dismissLargeDialog: () => void;
   doneButtonCol: number;
   donePath: null | string;
+  error: null | string;
   handleCapture: (mode: "scrollback" | "viewport") => void;
   largeDialogOpen: boolean;
   scrollbackDisabled: boolean;
@@ -198,9 +201,11 @@ export function dispatchDialogInput(data: string, deps: DialogInputDispatchDeps)
   const {
     buttonCol: screenshotButtonCol,
     dialogOpen: screenshotDialogOpen,
+    dismissError: dismissScreenshotError,
     dismissLargeDialog: dismissScreenshotLargeDialog,
     doneButtonCol: screenshotDoneButtonCol,
     donePath: screenshotDonePath,
+    error: screenshotError,
     handleCapture: handleScreenshotCapture,
     largeDialogOpen: screenshotLargeDialogOpen,
     scrollbackDisabled: screenshotScrollbackDisabled,
@@ -613,6 +618,14 @@ export function dispatchDialogInput(data: string, deps: DialogInputDispatchDeps)
         return;
       }
     }
+    return;
+  }
+
+  // Screenshot error dialog (highest priority among the screenshot overlays —
+  // the capture failed and the user must acknowledge before doing anything
+  // else with the workflow).
+  if (screenshotError !== null) {
+    handleScreenshotErrorDialogInput(data, dismissScreenshotError);
     return;
   }
 

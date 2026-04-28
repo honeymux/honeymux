@@ -25,6 +25,16 @@
     // Some stricter flags
     "noUnusedLocals": true,
     "noUnusedParameters": true,
-    "noPropertyAccessFromIndexSignature": true
+    "noPropertyAccessFromIndexSignature": true,
+
+    // Generated build-shim alias. The shim is produced by
+    // scripts/generate-takumi-shim.ts under node_modules/.cache (the
+    // find-cache-dir convention). package.json "imports" can't target paths
+    // inside node_modules per Node ESM spec, and Node-style "#"-prefixed
+    // names are intercepted by Bun's runtime before tsconfig paths take
+    // effect, so we use an "@hmx/" scoped tsconfig alias instead.
+    "paths": {
+      "@hmx/takumi-native-path": ["./node_modules/.cache/honeymux/takumi-native-path.ts"]
+    }
   }
 }

@@ -192,9 +192,11 @@ function createDeps(overrides?: any): any {
     screenshots: {
       buttonCol: 0,
       dialogOpen: false,
+      dismissError: mock(() => {}),
       dismissLargeDialog: mock(() => {}),
       doneButtonCol: 0,
       donePath: null,
+      error: null,
       handleCapture: mock((_mode: string) => {}),
       largeDialogOpen: false,
       scrollbackDisabled: false,
