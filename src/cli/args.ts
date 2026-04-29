@@ -20,7 +20,7 @@ const USAGE = [
   "",
   "Options:",
   "  -h, --help       Show this help message",
-  "  -V               Show version",
+  "  -V, --version    Show version",
   "  --server <name>  Use a specific tmux server name",
 ].join("\n");
 
@@ -50,7 +50,7 @@ export function parseCliArgs(args: string[]): CliParseResult {
       return { kind: "help" };
     }
 
-    if (parsingOptions && arg === "-V") {
+    if (parsingOptions && (arg === "-V" || arg === "--version")) {
       return { kind: "version" };
     }
 
