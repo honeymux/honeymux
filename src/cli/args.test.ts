@@ -39,8 +39,9 @@ describe("parseCliArgs", () => {
     expect(parseCliArgs(["--help"])).toEqual({ kind: "help" });
   });
 
-  test("returns version for -V", () => {
+  test("returns version for version flags", () => {
     expect(parseCliArgs(["-V"])).toEqual({ kind: "version" });
+    expect(parseCliArgs(["--version"])).toEqual({ kind: "version" });
   });
 
   test("parses the internal remote proxy mode", () => {
@@ -66,9 +67,9 @@ describe("parseCliArgs", () => {
   });
 
   test("rejects an unknown long option", () => {
-    expect(parseCliArgs(["--version"])).toEqual({
+    expect(parseCliArgs(["--bogus"])).toEqual({
       kind: "error",
-      message: "honeymux: unknown option '--version'",
+      message: "honeymux: unknown option '--bogus'",
     });
   });
 
