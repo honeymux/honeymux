@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## v0.103.1 - 2026-04-29
+
+- Accept --version flag as an alias for -V
+- Drop an outdated/unnecessary custom ghostty-opentui patch
+- Fix Unicode character input (CJK, accented letters, emoji) in tmux panes (thanks @zenyr)
+- Fix double-rendering overlay issue and expand mux-o-tron mouse click hit zone in marquee UI modes
+- Fix layout math to allow more room for window tabs when the mux-o-tron is disabled
+- Fix rapid terminal cursor flashing when Codex is thinking
+- Fix screenshots feature by embedding the takumi NAPI binding into distribution binaries
+
 ## v0.103.0 - 2026-04-27
 
 - Add support for Codex PermissionRequest hooks
