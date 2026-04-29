@@ -91,6 +91,12 @@
         "description": "Cache terminal text rendering between ANSI updates",
         "enabled": true,
         "file": "0003-cache-terminal-renders-between-ansi-updates.patch"
+      },
+      {
+        "branch": "honor-bundled-font-env-overrides",
+        "description": "Honor GHOSTTY_OPENTUI_FONT_PATH and GHOSTTY_OPENTUI_FALLBACK_FONT_PATH env vars so callers can redirect bundled font lookups (needed for bun --compile, where import.meta.dirname bakes the build-host path)",
+        "enabled": true,
+        "file": "0004-honor-bundled-font-env-overrides.patch"
       }
     ]
   }
