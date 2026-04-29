@@ -27,10 +27,14 @@ export function useDimInactivePanes({ clientRef, connected, enabled, targetSessi
   const lastActiveJsonRef = useRef("null");
 
   useEffect(() => {
-    if (!connected || !enabled) {
+    if (!connected) {
       if (lastJsonRef.current !== "[]") {
         lastJsonRef.current = "[]";
         setInactivePaneRects([]);
+      }
+      if (lastActiveJsonRef.current !== "null") {
+        lastActiveJsonRef.current = "null";
+        setActivePaneRect(null);
       }
       return;
     }
@@ -45,9 +49,14 @@ export function useDimInactivePanes({ clientRef, connected, enabled, targetSessi
         const panes = await client.getAllPaneInfo(targetSession);
         if (cancelled) return;
 
-        const rects: DimPaneRect[] = panes
-          .filter((p) => !p.active)
-          .map((p) => ({ height: p.height, left: p.left, top: p.top, width: p.width }));
+        // `inactivePaneRects` is consumed by the dim-inactive-panes overlay
+        // and is gated by the `enabled` flag. `activePaneRect` is always
+        // tracked because the cursor position-filter inside
+        // `prepareGhosttyTerminalForTmux` needs it regardless of whether
+        // dimming is enabled.
+        const rects: DimPaneRect[] = enabled
+          ? panes.filter((p) => !p.active).map((p) => ({ height: p.height, left: p.left, top: p.top, width: p.width }))
+          : [];
 
         const activePane = panes.find((p) => p.active);
         const activeRect: DimPaneRect | null = activePane

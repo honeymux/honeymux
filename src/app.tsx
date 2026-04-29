@@ -380,6 +380,14 @@ export function App({ sessionName }: AppProps) {
     targetSession: dimTargetSession,
   });
 
+  // Mirror the active pane rect into a ref so the ghostty buffer's cursor
+  // filter (installed once in handleTerminalReady) can read the latest
+  // value on every getJson() call without re-running prepareGhosttyTerminalForTmux.
+  const activePaneRectRef = useRef<typeof activePaneRect>(null);
+  useEffect(() => {
+    activePaneRectRef.current = activePaneRect;
+  }, [activePaneRect]);
+
   const effectiveUIMode = configUIMode;
   const activePaneId = activePaneIdRef.current;
   const muxotronFocusState = useMuxotronFocusAndAgentSelection({
@@ -688,7 +696,7 @@ export function App({ sessionName }: AppProps) {
   const handleTerminalReady = useCallback(
     (terminal: GhosttyTerminalRenderable) => {
       terminalRef.current = terminal;
-      prepareGhosttyTerminalForTmux(terminal);
+      prepareGhosttyTerminalForTmux(terminal, { activePaneRectRef });
       applyTerminalCursorVisibility(terminal, {
         dialogOpen: agentInstallDialogOpen,
         interactiveAgent: attachedAgent,
