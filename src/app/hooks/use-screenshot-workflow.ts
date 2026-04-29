@@ -8,6 +8,8 @@ import { useCallback, useRef, useState } from "react";
 
 import type { AppRuntimeRefs } from "./use-app-runtime-refs.ts";
 
+import jetbrainsMonoFontPath from "../../../node_modules/ghostty-opentui/public/jetbrains-mono-nerd.ttf" with { type: "file" };
+import symbolsFallbackFontPath from "../../../node_modules/ghostty-opentui/public/symbols-nerd-font-mono-regular.ttf" with { type: "file" };
 import { theme } from "../../themes/theme.ts";
 import { computeHoneybeamOffsets } from "../../util/honeybeam-animation.ts";
 import { log } from "../../util/log.ts";
@@ -274,6 +276,14 @@ export function useScreenshotWorkflow({
         // mode the shim resolves to undefined and takumi's normal dispatch
         // finds the binding in node_modules.
         if (takumiNativePath) process.env["NAPI_RS_NATIVE_LIBRARY_PATH"] ??= takumiNativePath;
+        // Same idea for ghostty-opentui's bundled fonts: bun --compile
+        // resolves their `import.meta.dirname`-derived paths to the build
+        // host's absolute path, which doesn't exist on user machines.
+        // The two TTFs are embedded as file assets at module top, and we
+        // redirect ghostty-opentui's lookups via the env-var overrides
+        // added in patches/ghostty-opentui/0004-*.patch.
+        process.env["GHOSTTY_OPENTUI_FONT_PATH"] ??= jetbrainsMonoFontPath;
+        process.env["GHOSTTY_OPENTUI_FALLBACK_FONT_PATH"] ??= symbolsFallbackFontPath;
         const { renderTerminalToImage } = await import("ghostty-opentui/image");
         let data: import("ghostty-opentui").TerminalData;
 
