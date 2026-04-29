@@ -44,6 +44,12 @@
         "description": "Changes from branch 'fix-renderable-id-invariant'",
         "enabled": true,
         "file": "0006-fix-renderable-id-invariant.patch"
+      },
+      {
+        "branch": "dedupe-cursor-emit-when-sync",
+        "description": "Skip the per-frame hideCursor/showCursor envelope when the terminal supports synchronized output (DEC 2026). Re-issuing ?25l + ?25h every render at ~50Hz resets blink-phase timers and produces visible flicker on otherwise stable cursors, most apparent when a rapidly-rendering pane (e.g. Codex while 'thinking') keeps the renderer dirty",
+        "enabled": true,
+        "file": "0007-dedupe-cursor-emit-when-sync.patch"
       }
     ]
   },
