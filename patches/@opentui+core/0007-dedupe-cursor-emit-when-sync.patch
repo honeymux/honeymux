@@ -1,0 +1,70 @@
+diff --git a/src/zig/renderer.zig b/src/zig/renderer.zig
+index bc739e81..f91f0467 100644
+--- a/src/zig/renderer.zig
++++ b/src/zig/renderer.zig
+@@ -127,6 +127,13 @@ pub const CliRenderer = struct {
+     lastCursorStyleTag: ?u8 = null,
+     lastCursorBlinking: ?bool = null,
+     lastCursorColorRGB: ?[3]u8 = null,
++    // Last logical cursor visibility we emitted to the terminal. Used to skip
++    // redundant ?25h / ?25l bytes when nothing has changed across frames.
++    // Without this, a steady cursor still receives hide+show every render
++    // (~50Hz), which resets the terminal's blink-phase timer and produces
++    // visible flicker. Most pronounced when a separate process (e.g. a
++    // React Ink TUI like Codex while "thinking") keeps the renderer dirty.
++    lastCursorVisible: ?bool = null,
+     lastMousePointerStyle: Terminal.MousePointerStyle = .default,
+ 
+     // Preallocated output buffer
+@@ -618,8 +625,18 @@ pub const CliRenderer = struct {
+ 
+         var writer = OutputBufferWriter.writer();
+ 
++        const caps = self.terminal.getCapabilities();
++
+         writer.writeAll(ansi.ANSI.syncSet) catch {};
+-        writer.writeAll(ansi.ANSI.hideCursor) catch {};
++        // Hide the cursor while cells are being painted so it does not visibly
++        // jump through intermediate positions. With synchronized output mode
++        // (DEC 2026) the terminal already buffers the entire frame, so this
++        // hide/show idiom is unnecessary — and on terminals that reset
++        // cursor blink-phase on visibility changes, emitting ?25l/?25h every
++        // frame produces a visible flicker. Skip it when sync is supported.
++        if (!caps.sync) {
++            writer.writeAll(ansi.ANSI.hideCursor) catch {};
++        }
+ 
+         var currentFg: ?RGBA = null;
+         var currentBg: ?RGBA = null;
+@@ -819,9 +836,29 @@ pub const CliRenderer = struct {
+                 self.lastCursorBlinking = cursorStyle.blinking;
+             }
+             ansi.ANSI.moveToOutput(writer, cursorPos.x, cursorPos.y + self.renderOffset) catch {};
+-            writer.writeAll(ansi.ANSI.showCursor) catch {};
++            // Emit ?25h only when needed: either we hid the cursor at frame
++            // begin (no sync support) and must restore it, or visibility is
++            // transitioning from hidden to visible. With sync support and a
++            // steady-visible cursor, we never hid in the first place — so
++            // re-asserting ?25h every frame is wasted bytes that resets the
++            // outer terminal's blink-phase timer.
++            const visibilityChanged = self.lastCursorVisible == null or !self.lastCursorVisible.?;
++            if (!caps.sync or visibilityChanged) {
++                writer.writeAll(ansi.ANSI.showCursor) catch {};
++            }
++            self.lastCursorVisible = true;
+         } else {
+-            writer.writeAll(ansi.ANSI.hideCursor) catch {};
++            // Emit ?25l only when needed: either we did not hide at frame
++            // begin (sync support) and the cursor is transitioning to
++            // hidden, or we are running without sync support (in which case
++            // the cursor was hidden at frame begin and we just keep it
++            // hidden — but emitting again is harmless and matches the
++            // pre-fix behaviour).
++            const visibilityChanged = self.lastCursorVisible == null or self.lastCursorVisible.?;
++            if (!caps.sync or visibilityChanged) {
++                writer.writeAll(ansi.ANSI.hideCursor) catch {};
++            }
++            self.lastCursorVisible = false;
+             self.lastCursorStyleTag = null;
+             self.lastCursorBlinking = null;
+             self.lastCursorColorRGB = null;
