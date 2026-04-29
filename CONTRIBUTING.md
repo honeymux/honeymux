@@ -77,7 +77,7 @@ To start Honeymux under `bun --watch`:
 bun run dev
 ```
 
-In this mode, the process will restart automnatically when source files change. For a one-shot run without the watcher, use `bun run start` instead.
+In this mode, the process will restart automatically when source files change. For a one-shot run without the watcher, use `bun run start` instead.
 
 ### Tests
 
