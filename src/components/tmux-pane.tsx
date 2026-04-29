@@ -112,6 +112,7 @@ export const TmuxPane = memo(function TmuxPane({
     agent,
     core,
     expandedMuxotronWidth,
+    layout,
     shared,
     toolbar,
   });

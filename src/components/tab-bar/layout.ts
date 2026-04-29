@@ -130,11 +130,15 @@ export function computeOverflow(
   muxotronEnabledWidthOverride?: number,
   activeIndex = -1,
   activeWindowIdDisplayEnabled = false,
+  rightReserve = 0,
 ): { overflowStartX: number; visibleCount: number } {
   // When an explicit muxotronEnabled width is provided (e.g. the actual expanded width),
   // use it instead of the default collapsed width.
   const muxotronEnabledW = muxotronEnabledWidthOverride ?? getMuxotronWidth(width, uiMode, muxotronEnabled);
-  const muxotronEnabledLeft = Math.floor((width - muxotronEnabledW) / 2);
+  // When the muxotron is hidden the tab area extends to where the session badge
+  // begins; otherwise the muxotron sits centered and the tab area ends at its left edge.
+  const muxotronEnabledLeft =
+    muxotronEnabledW > 0 ? Math.floor((width - muxotronEnabledW) / 2) : Math.max(0, width - rightReserve);
 
   let visibleCount = windows.length;
   let overflowStartX = -1;

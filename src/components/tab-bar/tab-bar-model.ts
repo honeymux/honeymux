@@ -95,13 +95,12 @@ export function buildTabBarModel({
   const toolbarIconReserve = hasToolbarToggle ? 3 : 0;
   const profileReserve = hasLayoutProfileClick ? 3 : 0;
   const toolbarReserve = toolbarIconReserve + profileReserve;
-  const badgeReserve = (badgeWidth > 0 && !ptyDragging ? badgeWidth + 2 : 0) + toolbarReserve;
+  const badgeReserve = computeTabBarBadgeReserve({ hasLayoutProfileClick, hasToolbarToggle, ptyDragging, sessionName });
 
   const muxotronEnabled = muxotronEnabledProp !== false;
   const muxotronWidth = getMuxotronWidth(width, uiMode, muxotronEnabled, false);
   const muxotronRight = Math.floor((width - muxotronWidth) / 2) + muxotronWidth;
   const badgeLeft = width - toolbarReserve - 1 - badgeWidth;
-  const hintGap = badgeLeft - muxotronRight;
 
   const isDragging = dragFrom !== null && dragX !== null;
   const badgeRightReserve = badgeWidth > 0 ? badgeWidth + toolbarReserve + 4 : toolbarReserve;
@@ -124,6 +123,7 @@ export function buildTabBarModel({
     muxotronWidthOverride,
     activeIndex,
     showId,
+    badgeReserve,
   );
 
   const visibleWindows = visibleCount < windows.length ? windows.slice(0, visibleCount) : windows;
@@ -143,7 +143,11 @@ export function buildTabBarModel({
   });
 
   const effectiveMuxotronWidth = muxotronWidthOverride ?? getMuxotronWidth(width, uiMode, muxotronEnabled, false);
-  const tabAreaWidth = Math.floor((width - effectiveMuxotronWidth) / 2) - sidebarReserve;
+  // When the muxotron is hidden, the tab area extends past the screen center
+  // to where the session badge starts. Otherwise it ends at the muxotron's left edge.
+  const tabAreaRightEdge =
+    effectiveMuxotronWidth > 0 ? Math.floor((width - effectiveMuxotronWidth) / 2) : Math.max(0, width - badgeReserve);
+  const tabAreaWidth = tabAreaRightEdge - sidebarReserve;
   const overflowLabel = `+${overflowWindows.length}`;
   const overflowIndicatorWidth = stringWidth(overflowLabel) + 4;
   const plusCost = hasNewWindow && !hasOverflow ? 5 : 0;
@@ -224,6 +228,8 @@ export function buildTabBarModel({
     }
   }
 
+  const hintGap = badgeLeft - muxotronRight;
+
   return {
     activeHiddenInOverflow,
     activeIdOverlay: buildActiveIdOverlay(displayWindows, displayActiveIndex, sidebarReserve, showId, displayNames),
@@ -259,6 +265,27 @@ export function buildTabBarModel({
     visibleWindows,
     windowDisplayNames,
   };
+}
+
+/**
+ * Width reserved on the right for the session badge + toolbar icons. Used as
+ * the right edge of the tab area when the muxotron is hidden so tabs can
+ * extend across the screen instead of being capped at the centered slot.
+ */
+export function computeTabBarBadgeReserve(opts: {
+  hasLayoutProfileClick: boolean;
+  hasToolbarToggle: boolean;
+  ptyDragging: boolean;
+  sessionName?: string;
+}): number {
+  const { hasLayoutProfileClick, hasToolbarToggle, ptyDragging, sessionName } = opts;
+  const displayName = sessionName ? truncateName(stripNonPrintingControlChars(sessionName), MAX_SESSION_DISPLAY) : null;
+  const badgeLabel = displayName ? ` ${displayName} ▾ ` : null;
+  const badgeWidth = badgeLabel != null ? stringWidth(badgeLabel) : 0;
+  const toolbarIconReserve = hasToolbarToggle ? 3 : 0;
+  const profileReserve = hasLayoutProfileClick ? 3 : 0;
+  const toolbarReserve = toolbarIconReserve + profileReserve;
+  return (badgeWidth > 0 && !ptyDragging ? badgeWidth + 2 : 0) + toolbarReserve;
 }
 
 function buildActiveIdOverlay(

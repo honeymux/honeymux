@@ -29,6 +29,7 @@ interface UsePaneOverflowOptions {
   onNewWindow: TmuxPaneCoreProps["onNewWindow"];
   onTabClick: TmuxPaneCoreProps["onTabClick"];
   overflowOpenRef: TmuxPaneSharedProps["overflowOpenRef"];
+  rightReserve?: number;
   tabDragging: boolean;
   uiMode?: UIMode;
   width: number;
@@ -77,6 +78,7 @@ export function usePaneOverflow({
   onNewWindow,
   onTabClick,
   overflowOpenRef,
+  rightReserve,
   tabDragging,
   uiMode,
   width,
@@ -106,6 +108,7 @@ export function usePaneOverflow({
     muxotronEnabledWidthOverride,
     activeIndex,
     activeWindowIdDisplayEnabled,
+    rightReserve,
   );
   const overflowWindows = visibleCount < windows.length ? windows.slice(visibleCount) : [];
   const hasOverflow = overflowWindows.length > 0;
