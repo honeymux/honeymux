@@ -2,12 +2,19 @@ import { useCallback, useMemo, useState } from "react";
 
 import type { UIMode } from "../../util/config.ts";
 import type { TerminalMetrics } from "../../util/pane-layout.ts";
-import type { TmuxPaneAgentProps, TmuxPaneCoreProps, TmuxPaneSharedProps, TmuxPaneToolbarProps } from "./types.ts";
+import type {
+  TmuxPaneAgentProps,
+  TmuxPaneCoreProps,
+  TmuxPaneLayoutProps,
+  TmuxPaneSharedProps,
+  TmuxPaneToolbarProps,
+} from "./types.ts";
 import type { TmuxPaneAgentsDialogProps } from "./use-pane-agents-dialog.ts";
 
 import { theme } from "../../themes/theme.ts";
 import { computeTerminalMetrics } from "../../util/pane-layout.ts";
 import { useHotkeyHint } from "../hotkey-hint.tsx";
+import { computeTabBarBadgeReserve } from "../tab-bar/tab-bar-model.ts";
 import { TOOLBAR_WIDTH } from "../toolbar.tsx";
 import { usePaneAgentsDialog } from "./use-pane-agents-dialog.ts";
 import { usePaneOverflow } from "./use-pane-overflow.ts";
@@ -45,6 +52,7 @@ interface UseTmuxPaneViewModelOptions {
   agent: TmuxPaneAgentProps;
   core: TmuxPaneCoreProps;
   expandedMuxotronWidth?: number;
+  layout: TmuxPaneLayoutProps;
   shared: TmuxPaneSharedProps;
   toolbar: TmuxPaneToolbarProps;
 }
@@ -71,11 +79,22 @@ export function useTmuxPaneViewModel({
   agent,
   core,
   expandedMuxotronWidth,
+  layout,
   shared,
   toolbar,
 }: UseTmuxPaneViewModelOptions): TmuxPaneViewModel {
-  const { activeIndex, focused, height, onCloseWindow, onNewWindow, onTabClick, onTabDragChange, width, windows } =
-    core;
+  const {
+    activeIndex,
+    focused,
+    height,
+    onCloseWindow,
+    onNewWindow,
+    onTabClick,
+    onTabDragChange,
+    sessionName,
+    width,
+    windows,
+  } = core;
   const {
     agentNavNextRef,
     agentNavPrevRef,
@@ -164,6 +183,12 @@ export function useTmuxPaneViewModel({
   }, [keyBindings, onNewWindow, showTmuxKeyBindingHint, tmuxKeyBindingHints]);
 
   const sidebarReserve = toolbar.onSidebarToggle ? 2 : 0;
+  const rightReserve = computeTabBarBadgeReserve({
+    hasLayoutProfileClick: !!layout.onLayoutProfileClick,
+    hasToolbarToggle: !!toolbar.onToolbarToggle,
+    ptyDragging,
+    sessionName,
+  });
   const overflow = usePaneOverflow({
     activeIndex,
     activeWindowIdDisplayEnabled,
@@ -175,6 +200,7 @@ export function useTmuxPaneViewModel({
     onNewWindow,
     onTabClick,
     overflowOpenRef,
+    rightReserve,
     tabDragging,
     uiMode,
     width,

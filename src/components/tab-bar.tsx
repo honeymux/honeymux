@@ -589,6 +589,12 @@ export function TabBar({
           !muxotronExpanded &&
           (() => {
             const idleContent = `${mainMenuBindingLabel || "ctrl+g"} = main menu`;
+            // The HotkeyHint box spans [muxotronRight, muxotronRight + hintGap),
+            // but the text is centered inside it — only the centered text is opaque.
+            // Tabs may freely overlap the empty padding to either side of the text,
+            // so hide the hint only once tabs would actually reach the text glyphs.
+            const hintTextLeft = muxotronRight + Math.floor((hintGap - stringWidth(idleContent)) / 2);
+            if (tabsEndX > hintTextLeft) return null;
             const idleFg = undefined;
             const idleBg = undefined;
             return (
