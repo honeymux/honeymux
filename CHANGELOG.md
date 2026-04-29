@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## v0.103.2 - 2026-04-29
+
+- Fix screenshots feature by bundling the required fonts into distribution binaries
+
 ## v0.103.1 - 2026-04-29
 
 - Accept --version flag as an alias for -V
