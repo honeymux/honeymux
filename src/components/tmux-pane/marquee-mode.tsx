@@ -6,6 +6,7 @@ import type { AgentSession } from "../../agents/types.ts";
 import type { UIMode } from "../../util/config.ts";
 
 import { Muxotron } from "../tab-bar.tsx";
+import { getMuxotronClickZone } from "../tab-bar/use-tab-bar-interactions.ts";
 
 interface TmuxPaneMarqueeModeProps {
   activePaneId?: null | string;
@@ -20,7 +21,6 @@ interface TmuxPaneMarqueeModeProps {
   agentTermCols?: number;
   agentTermRows?: number;
   agentTerminalNode?: ReactNode;
-  agentsDialogNode: ReactNode;
   agentsDialogOpen?: boolean;
   capturedPaneLines?: null | string[];
   codingAgentActivity?: CodingAgentPaneActivity;
@@ -42,7 +42,6 @@ interface TmuxPaneMarqueeModeProps {
   onReviewLatchToggle?: () => void;
   overlayLayer?: ReactNode;
   reviewLatched?: boolean;
-  rootOverlayNode?: ReactNode;
   selectedSession?: AgentSession | null;
   sidebarOpen?: boolean;
   sidebarWidth?: number;
@@ -71,7 +70,6 @@ export function TmuxPaneMarqueeMode({
   agentTermCols,
   agentTermRows,
   agentTerminalNode,
-  agentsDialogNode,
   agentsDialogOpen,
   capturedPaneLines,
   codingAgentActivity,
@@ -93,7 +91,6 @@ export function TmuxPaneMarqueeMode({
   onReviewLatchToggle,
   overlayLayer,
   reviewLatched,
-  rootOverlayNode,
   selectedSession,
   sidebarOpen,
   sidebarWidth,
@@ -152,10 +149,10 @@ export function TmuxPaneMarqueeMode({
       key="muxotron"
       onMouseDown={(event: MouseEvent) => {
         if (event.button !== 0) return;
-        const mid = Math.floor(width / 2);
-        if (event.x < mid) {
+        const zone = getMuxotronClickZone(width, width, event.x);
+        if (zone === "notifications") {
           if ((warningCount && warningCount > 0) || (infoCount && infoCount > 0)) onNotificationsClick?.();
-        } else {
+        } else if (zone === "agents") {
           onMuxotronClick?.();
         }
       }}
@@ -183,8 +180,6 @@ export function TmuxPaneMarqueeMode({
           render cache and leaves stale cells at its old anchor (top vs
           bottom-anchored) during the switch. */}
       {muxotronExpanded && <Muxotron key={`expanded-${uiMode}`} {...muxotronProps} muxotronExpanded={true} />}
-      {rootOverlayNode}
-      {agentsDialogNode}
       {overlayLayer}
     </box>
   );
