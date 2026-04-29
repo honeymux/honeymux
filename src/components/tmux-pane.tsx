@@ -188,8 +188,6 @@ export const TmuxPane = memo(function TmuxPane({
           {terminalNode}
         </box>
         {chromeMaskNode}
-        {rootOverlayNode}
-        {agentsDialogNode}
         {overlayLayer}
       </box>
     );
@@ -210,7 +208,6 @@ export const TmuxPane = memo(function TmuxPane({
         agentTermCols={agentTermCols}
         agentTermRows={agentTermRows}
         agentTerminalNode={agentTerminalNode}
-        agentsDialogNode={agentsDialogNode}
         agentsDialogOpen={agentsDialogOpen}
         capturedPaneLines={capturedPaneLines}
         codingAgentActivity={codingAgentActivity}
@@ -237,7 +234,6 @@ export const TmuxPane = memo(function TmuxPane({
           </>
         }
         reviewLatched={reviewLatched}
-        rootOverlayNode={rootOverlayNode}
         selectedSession={selectedSession}
         sidebarOpen={sidebarOpen}
         sidebarWidth={sidebarWidth}
