@@ -24,6 +24,20 @@ import {
   truncateToWidth,
 } from "../util/text.ts";
 
+interface CurrentPath {
+  hostPaneId: string | undefined;
+  /** Row index of the current pane row in the rows array (-1 when not present). */
+  paneRowIndex: number;
+  sessionName: string;
+  /** Row index of the current session row in the rows array (-1 when not present). */
+  sessionRowIndex: number;
+  /** Row index of the current pane-tab row in the rows array (-1 when not present). */
+  tabRowIndex: number;
+  windowId: string | undefined;
+  /** Row index of the current window row in the rows array (-1 when not present). */
+  windowRowIndex: number;
+}
+
 interface ServerTreeProps {
   /** Ref set by ServerTree so external code can activate a row by index. */
   activateRef?: MutableRefObject<((index: number) => void) | null>;
@@ -482,6 +496,10 @@ export function ServerTree({
     }
   };
 
+  // Compute the current path once so per-row prefix segments can highlight
+  // the line-drawing characters that lead up to the current item.
+  const currentPath = computeCurrentTreePath(treeData, currentSessionName, rows, paneTabGroups);
+
   // Build data lines
   const lines: Array<{ fg: string; left: string; right: string; row: TreeRow | null }> = [];
   const [headerLeft, headerRight] = splitAtColumn(headerLine, nodeZoneW);
@@ -524,28 +542,33 @@ export function ServerTree({
       </box>
       {/* Data rows */}
       {lines.map((l, i) => {
-        const isFocused = focusedRow >= 0 && clampedOffset + i === focusedRow;
+        const rowIndex = clampedOffset + i;
+        const isFocused = focusedRow >= 0 && rowIndex === focusedRow;
+        const prefixLen = l.row?.prefix.length ?? 0;
+        const cursorChar = isFocused ? "\u25B8" : (l.left[0] ?? " ");
+        const restText = l.left.slice(1 + prefixLen);
+        const accentFg = isFocused ? theme.textBright : l.fg;
+        const bg = isFocused ? theme.bgFocused : undefined;
+        const segments = l.row
+          ? computeTreePrefixSegments(l.row, rowIndex, currentPath, l.fg, isFocused ? theme.textBright : undefined)
+          : [];
         return (
           <box
-            backgroundColor={isFocused ? theme.bgFocused : undefined}
+            backgroundColor={bg}
             flexDirection="row"
             height={1}
-            key={clampedOffset + i}
+            key={rowIndex}
             onMouseDown={(event: MouseEvent) => {
               if (event.button === 0 && l.row) handleClick(l.row);
             }}
             width={width}
           >
-            <text
-              bg={isFocused ? theme.bgFocused : undefined}
-              content={isFocused ? "\u25B8" + l.left.slice(1) : l.left}
-              fg={isFocused ? theme.textBright : l.fg}
-            />
-            <text
-              bg={isFocused ? theme.bgFocused : undefined}
-              content={l.right}
-              fg={isFocused ? theme.textBright : theme.textDim}
-            />
+            <text bg={bg} content={cursorChar} fg={accentFg} />
+            {segments.map((seg, idx) => (
+              <text bg={bg} content={seg.text} fg={seg.fg} key={idx} />
+            ))}
+            <text bg={bg} content={restText} fg={accentFg} />
+            <text bg={bg} content={l.right} fg={isFocused ? theme.textBright : theme.textDim} />
           </box>
         );
       })}
@@ -688,8 +711,8 @@ export function buildTreeRows(
             const isActiveTab = ti === tabGroup.activeIndex;
 
             rows.push({
-              active: isCurrent && win.active && isActiveTab,
-              current: isCurrent && win.active && isActiveTab,
+              active: isCurrent && win.active && pane.active && isActiveTab,
+              current: isCurrent && win.active && pane.active && isActiveTab,
               label: "\u02AD " + stripNonPrintingControlChars(tab.label),
               navigatePaneId: pane.id,
               paneId: tab.paneId,
@@ -716,6 +739,100 @@ export function coalesceTreeData(previous: TreeData | null, next: TreeData): Tre
   return next;
 }
 
+export function computeCurrentTreePath(
+  data: TreeData | null,
+  currentSessionName: string,
+  rows: TreeRow[],
+  paneTabGroups: Map<string, PaneTabGroup>,
+): CurrentPath {
+  const empty: CurrentPath = {
+    hostPaneId: undefined,
+    paneRowIndex: -1,
+    sessionName: currentSessionName,
+    sessionRowIndex: -1,
+    tabRowIndex: -1,
+    windowId: undefined,
+    windowRowIndex: -1,
+  };
+  if (!data) return empty;
+  const window = data.windows.find((w) => w.sessionName === currentSessionName && w.active);
+  const pane = window
+    ? data.panes.find((p) => p.sessionName === currentSessionName && p.windowId === window.id && p.active)
+    : undefined;
+  const sessionRowIndex = rows.findIndex((r) => r.type === "session" && r.sessionName === currentSessionName);
+  const windowRowIndex = window
+    ? rows.findIndex((r) => r.type === "window" && r.sessionName === currentSessionName && r.windowId === window.id)
+    : -1;
+  const paneRowIndex = pane
+    ? rows.findIndex((r) => r.type === "pane" && r.sessionName === currentSessionName && r.paneId === pane.id)
+    : -1;
+  let tabRowIndex = -1;
+  if (pane) {
+    const tabGroup = findTabGroupForPane(pane.id, paneTabGroups);
+    if (tabGroup) {
+      tabRowIndex = rows.findIndex(
+        (r) =>
+          r.type === "pane-tab" &&
+          r.sessionName === currentSessionName &&
+          r.navigatePaneId === pane.id &&
+          r.tabIndex === tabGroup.activeIndex,
+      );
+    }
+  }
+  return {
+    hostPaneId: pane?.id,
+    paneRowIndex,
+    sessionName: currentSessionName,
+    sessionRowIndex,
+    tabRowIndex,
+    windowId: window?.id,
+    windowRowIndex,
+  };
+}
+
+/**
+ * Split a row's prefix into colored parts. Each 3-cell tree-drawing segment
+ * at depth d represents the visual at column (3·d + 1) on this row. The
+ * corner char (`├`/`└`/`│`) is the vertical-trunk piece and is rendered in
+ * `theme.textSecondary` when it sits on the trunk leading from the root
+ * down to the current item (see `isSegmentOnVisualPath`); otherwise it
+ * inherits `rowFg`. The trailing `─ ` of an own-branch segment is the
+ * horizontal arrow into the row's (dim) label, so it always takes `rowFg`
+ * — only an actually-current/active row colors the arrow with its accent.
+ * When `forceFg` is provided, every part uses it (keyboard-focused row).
+ */
+export function computeTreePrefixSegments(
+  row: TreeRow,
+  rowIndex: number,
+  currentPath: CurrentPath,
+  rowFg: string,
+  forceFg?: string,
+): Array<{ fg: string; text: string }> {
+  const prefix = row.prefix;
+  if (prefix.length === 0) return [];
+  const segCount = prefix.length / 3;
+  const parts: Array<{ fg: string; text: string }> = [];
+  for (let d = 0; d < segCount; d++) {
+    const text = prefix.slice(d * 3, d * 3 + 3);
+    if (forceFg !== undefined) {
+      parts.push({ fg: forceFg, text });
+      continue;
+    }
+    const onPath = isSegmentOnVisualPath(row, d, rowIndex, currentPath);
+    const cornerFg = onPath ? theme.textSecondary : rowFg;
+    const isOwnBranch = d === segCount - 1;
+    if (isOwnBranch) {
+      // The corner connects to the trunk; the trailing `─ ` is the arrow
+      // into the row's label and must follow the row's own dim/accent.
+      parts.push({ fg: cornerFg, text: text[0]! });
+      parts.push({ fg: rowFg, text: text.slice(1) });
+    } else {
+      parts.push({ fg: cornerFg, text });
+    }
+  }
+  return parts;
+}
+
 export function fitTreeLabel(prefix: string, label: string, nodeZoneW: number): string {
   const availForLabel = Math.max(0, nodeZoneW - 1 - stringWidth(prefix) - 1);
   return truncateToWidth(label, availForLabel);
@@ -732,4 +849,48 @@ function findTabGroupForPane(paneId: string, paneTabGroups: Map<string, PaneTabG
     if (group.tabs.some((t) => t.paneId === paneId)) return group;
   }
   return undefined;
+}
+
+/**
+ * Decide whether the prefix segment at `depth` on `row` is part of the
+ * visual trunk leading from the root down to the current item. Returns
+ * true for segments on rows that are at or above the current ancestor at
+ * that depth (sibling order via row index), plus descendants of the
+ * current ancestor at that depth.
+ */
+function isSegmentOnVisualPath(row: TreeRow, depth: number, rowIndex: number, currentPath: CurrentPath): boolean {
+  if (row.sessionName == null) return false;
+
+  if (depth === 0) {
+    if (currentPath.sessionRowIndex < 0) return false;
+    if (rowIndex <= currentPath.sessionRowIndex) return true;
+    return row.sessionName === currentPath.sessionName;
+  }
+
+  // Deeper segments belong to the current session's own subtree only.
+  if (row.sessionName !== currentPath.sessionName) return false;
+
+  if (depth === 1) {
+    if (currentPath.windowRowIndex < 0) return false;
+    if (rowIndex <= currentPath.windowRowIndex) return true;
+    return row.windowId != null && row.windowId === currentPath.windowId;
+  }
+
+  if (depth === 2) {
+    if (row.windowId == null || row.windowId !== currentPath.windowId) return false;
+    if (currentPath.paneRowIndex < 0) return false;
+    if (rowIndex <= currentPath.paneRowIndex) return true;
+    // Pane-tab rows that descend from the current pane stay on path even
+    // though they sit below the current pane row in row order.
+    return row.type === "pane-tab" && row.navigatePaneId != null && row.navigatePaneId === currentPath.hostPaneId;
+  }
+
+  if (depth === 3) {
+    if (row.windowId == null || row.windowId !== currentPath.windowId) return false;
+    if (row.navigatePaneId == null || row.navigatePaneId !== currentPath.hostPaneId) return false;
+    if (currentPath.tabRowIndex < 0) return false;
+    return rowIndex <= currentPath.tabRowIndex;
+  }
+
+  return false;
 }
