@@ -1,8 +1,17 @@
 diff --git a/src/Renderable.ts b/src/Renderable.ts
-index 2584019e..ea007fd4 100644
+index f20d4be4..f936a701 100644
 --- a/src/Renderable.ts
 +++ b/src/Renderable.ts
-@@ -248,6 +248,9 @@ export abstract class Renderable extends BaseRenderable {
+@@ -231,6 +231,8 @@ export abstract class Renderable extends BaseRenderable {
+ 
+   private _live: boolean = false
+   protected _liveCount: number = 0
++  private readonly hasCustomUpdateHook: boolean
++  protected _customUpdateHookCount: number = 0
+ 
+   private _sizeChangeListener: (() => void) | undefined = undefined
+   private _mouseListener: ((event: MouseEvent) => void) | null = null
+@@ -254,6 +256,9 @@ export abstract class Renderable extends BaseRenderable {
    private childrenPrimarySortDirty: boolean = true
    private childrenSortedByPrimaryAxis: Renderable[] = []
    private _shouldUpdateBefore: Set<Renderable> = new Set()
@@ -10,9 +19,30 @@ index 2584019e..ea007fd4 100644
 +  private cachedRenderCommandsValid: boolean = false
 +  private subtreeDirty: boolean = true
  
-   public onLifecyclePass: (() => void) | null = null
+   // Frame id of the last updateFromLayout(); -1 ensures the first call runs.
+   private _lastLayoutFrame: number = -1
+@@ -289,6 +294,8 @@ export abstract class Renderable extends BaseRenderable {
+     this.buffered = options.buffered ?? false
+     this._live = options.live ?? false
+     this._liveCount = this._live && this._visible ? 1 : 0
++    this.hasCustomUpdateHook = this.onUpdate !== Renderable.prototype.onUpdate
++    this._customUpdateHookCount = this.hasCustomUpdateHook ? 1 : 0
+     this._opacity = options.opacity !== undefined ? Math.max(0, Math.min(1, options.opacity)) : 1.0
  
-@@ -473,9 +476,19 @@ export abstract class Renderable extends BaseRenderable {
+     // TODO: use a global yoga config
+@@ -486,6 +493,11 @@ export abstract class Renderable extends BaseRenderable {
+     this.parent?.propagateLiveCount(delta)
+   }
+ 
++  protected propagateCustomUpdateHookCount(delta: number): void {
++    this._customUpdateHookCount += delta
++    this.parent?.propagateCustomUpdateHookCount(delta)
++  }
++
+   public handleKeyPress?(key: KeyEvent): boolean
+   public handlePaste?(event: PasteEvent): void
+ 
+@@ -502,9 +514,19 @@ export abstract class Renderable extends BaseRenderable {
  
    public requestRender() {
      this.markDirty()
@@ -32,7 +62,52 @@ index 2584019e..ea007fd4 100644
    public get translateX(): number {
      return this._translateX
    }
-@@ -1290,9 +1303,18 @@ export abstract class Renderable extends BaseRenderable {
+@@ -536,12 +558,12 @@ export abstract class Renderable extends BaseRenderable {
+   // Use the cached parent screen position plus this node's current local offset.
+   // That keeps culling/sorting in sync even before this node refreshes _screenX/Y.
+   public get screenX(): number {
+-    const parentScreenX = this.parent ? this.parent._screenX : 0
++    const parentScreenX = this.parent ? this.parent.screenX : 0
+     return parentScreenX + this._x + this._translateX
+   }
+ 
+   public get screenY(): number {
+-    const parentScreenY = this.parent ? this.parent._screenY : 0
++    const parentScreenY = this.parent ? this.parent.screenY : 0
+     return parentScreenY + this._y + this._translateY
+   }
+ 
+@@ -1205,6 +1227,9 @@ export abstract class Renderable extends BaseRenderable {
+       if (renderable._liveCount > 0) {
+         this.propagateLiveCount(renderable._liveCount)
+       }
++      if (renderable._customUpdateHookCount > 0) {
++        this.propagateCustomUpdateHookCount(renderable._customUpdateHookCount)
++      }
+     }
+ 
+     const childLayoutNode = renderable.getLayoutNode()
+@@ -1282,6 +1307,9 @@ export abstract class Renderable extends BaseRenderable {
+       if (renderable._liveCount > 0) {
+         this.propagateLiveCount(renderable._liveCount)
+       }
++      if (renderable._customUpdateHookCount > 0) {
++        this.propagateCustomUpdateHookCount(renderable._customUpdateHookCount)
++      }
+     }
+ 
+     this.childrenPrimarySortDirty = true
+@@ -1315,6 +1343,9 @@ export abstract class Renderable extends BaseRenderable {
+         if (obj._liveCount > 0) {
+           this.propagateLiveCount(-obj._liveCount)
+         }
++        if (obj._customUpdateHookCount > 0) {
++          this.propagateCustomUpdateHookCount(-obj._customUpdateHookCount)
++        }
+ 
+         const childLayoutNode = obj.getLayoutNode()
+         this.yogaNode.removeChild(childLayoutNode)
+@@ -1353,9 +1384,18 @@ export abstract class Renderable extends BaseRenderable {
      return this._childrenInLayoutOrder.length
    }
  
@@ -52,7 +127,7 @@ index 2584019e..ea007fd4 100644
      this.onUpdate(deltaTime)
  
      // If destroyed during onUpdate, don't add to render list
-@@ -1323,6 +1345,8 @@ export abstract class Renderable extends BaseRenderable {
+@@ -1386,6 +1426,8 @@ export abstract class Renderable extends BaseRenderable {
  
      // Push opacity BEFORE rendering this element so it affects this element and all children
      const shouldPushOpacity = this._opacity < 1.0
@@ -61,23 +136,25 @@ index 2584019e..ea007fd4 100644
      if (shouldPushOpacity) {
        renderList.push({ action: "pushOpacity", opacity: this._opacity })
      }
-@@ -1345,12 +1369,13 @@ export abstract class Renderable extends BaseRenderable {
-       })
-     }
-     const visibleChildren = this._getVisibleChildren()
-+    const visibleChildrenSet = visibleChildren ? new Set(visibleChildren) : null
-     for (const child of this._childrenInZIndexOrder) {
--      if (!visibleChildren.includes(child.num)) {
-+      if (visibleChildrenSet && !visibleChildrenSet.has(child.num)) {
-         child.updateFromLayout()
-         continue
+@@ -1411,7 +1453,7 @@ export abstract class Renderable extends BaseRenderable {
+     // unless a subclass actually performs viewport/style-based child filtering.
+     if (!this._hasVisibleChildFilter()) {
+       for (const child of this._childrenInZIndexOrder) {
+-        child.updateLayout(deltaTime, renderList)
++        child.updateLayout(deltaTime, renderList, ancestorLayoutChanged)
        }
--      child.updateLayout(deltaTime, renderList)
-+      child.updateLayout(deltaTime, renderList, ancestorLayoutChanged)
+     } else {
+       // Refresh every child's layout before culling reads their screen
+@@ -1426,7 +1468,7 @@ export abstract class Renderable extends BaseRenderable {
+       const visibleChildSet = new Set(visibleChildren)
+       for (const child of this._childrenInZIndexOrder) {
+         if (!visibleChildSet.has(child.num)) continue
+-        child.updateLayout(deltaTime, renderList)
++        child.updateLayout(deltaTime, renderList, ancestorLayoutChanged)
+       }
      }
  
-     if (shouldPushScissor) {
-@@ -1359,6 +1384,8 @@ export abstract class Renderable extends BaseRenderable {
+@@ -1436,6 +1478,8 @@ export abstract class Renderable extends BaseRenderable {
      if (shouldPushOpacity) {
        renderList.push({ action: "popOpacity" })
      }
@@ -86,22 +163,36 @@ index 2584019e..ea007fd4 100644
    }
  
    public render(buffer: OptimizedBuffer, deltaTime: number): void {
-@@ -1385,8 +1412,46 @@ export abstract class Renderable extends BaseRenderable {
+@@ -1454,10 +1498,10 @@ export abstract class Renderable extends BaseRenderable {
+       this.renderAfter.call(this, renderBuffer, deltaTime)
      }
+ 
+-    // Hooks may move the renderable mid-frame, so sample the cached absolute
++    // Hooks may move the renderable mid-frame, so sample the absolute
+     // position after they run before hit-grid writes or framebuffer compositing.
+-    const screenX = this._screenX
+-    const screenY = this._screenY
++    const screenX = this.screenX
++    const screenY = this.screenY
+ 
+     this.markClean()
+     this._ctx.addToHitGrid(screenX, screenY, this.width, this.height, this.num)
+@@ -1477,6 +1521,56 @@ export abstract class Renderable extends BaseRenderable {
+     return this._childrenInZIndexOrder.map((child) => child.num)
    }
  
--  protected _getVisibleChildren(): number[] {
--    return this._childrenInZIndexOrder.map((child) => child.num)
-+  protected _getVisibleChildren(): number[] | null {
-+    return null
-+  }
-+
 +  private canReuseRenderCommands(ancestorLayoutChanged: boolean): boolean {
 +    if (ancestorLayoutChanged) {
 +      return false
 +    }
 +
-+    if (this.subtreeDirty || this._liveCount > 0 || this._shouldUpdateBefore.size > 0 || this.needsZIndexSort) {
++    if (
++      this.subtreeDirty ||
++      this._liveCount > 0 ||
++      this._customUpdateHookCount > 0 ||
++      this._shouldUpdateBefore.size > 0 ||
++      this.needsZIndexSort
++    ) {
 +      return false
 +    }
 +
@@ -115,7 +206,13 @@ index 2584019e..ea007fd4 100644
 +  ): void {
 +    this.subtreeDirty = false
 +
-+    if (ancestorLayoutChanged || this._liveCount > 0 || this._shouldUpdateBefore.size > 0 || this.needsZIndexSort) {
++    if (
++      ancestorLayoutChanged ||
++      this._liveCount > 0 ||
++      this._customUpdateHookCount > 0 ||
++      this._shouldUpdateBefore.size > 0 ||
++      this.needsZIndexSort
++    ) {
 +      this.cachedRenderCommandsValid = false
 +      this.cachedRenderCommands = []
 +      return
@@ -132,10 +229,23 @@ index 2584019e..ea007fd4 100644
 +
 +    this.cachedRenderCommands = subtreeCommands
 +    this.cachedRenderCommandsValid = true
-   }
- 
++  }
++
    protected onUpdate(deltaTime: number): void {
-@@ -1654,13 +1719,14 @@ export class RootRenderable extends Renderable {
+     // Default implementation: do nothing
+     // Override this method to provide custom rendering
+@@ -1489,8 +1583,8 @@ export abstract class Renderable extends BaseRenderable {
+     height: number
+   } {
+     return {
+-      x: this.buffered ? 0 : this._screenX,
+-      y: this.buffered ? 0 : this._screenY,
++      x: this.buffered ? 0 : this.screenX,
++      y: this.buffered ? 0 : this.screenY,
+       width: this.width,
+       height: this.height,
+     }
+@@ -1741,13 +1835,14 @@ export class RootRenderable extends Renderable {
      // but that's only possible if we move the layout tree to native.
  
      // 1. Calculate layout from root
@@ -152,28 +262,44 @@ index 2584019e..ea007fd4 100644
  
      // 3. Render all collected renderables
      this._ctx.clearHitGridScissorRects()
-diff --git a/src/renderables/ScrollBox.ts b/src/renderables/ScrollBox.ts
-index 528379ac..d10acd99 100644
---- a/src/renderables/ScrollBox.ts
-+++ b/src/renderables/ScrollBox.ts
-@@ -31,13 +31,13 @@ class ContentRenderable extends BoxRenderable {
-     this._viewportCulling = value
+diff --git a/src/renderables/EditBufferRenderable.ts b/src/renderables/EditBufferRenderable.ts
+index 22da4cc3..00b0068e 100644
+--- a/src/renderables/EditBufferRenderable.ts
++++ b/src/renderables/EditBufferRenderable.ts
+@@ -982,10 +982,8 @@ export abstract class EditBufferRenderable extends Renderable implements LineInf
+   render(buffer: OptimizedBuffer, deltaTime: number): void {
+     if (!this.visible) return
+     if (this.isDestroyed) return
+-    // Editor rendering/cursor placement reads absolute coordinates multiple
+-    // times per frame, so it benefits from the same cached screen position.
+-    const screenX = this._screenX
+-    const screenY = this._screenY
++    const screenX = this.screenX
++    const screenY = this.screenY
+ 
+     this.markClean()
+     this._ctx.addToHitGrid(screenX, screenY, this.width, this.height, this.num)
+@@ -995,15 +993,15 @@ export abstract class EditBufferRenderable extends Renderable implements LineInf
    }
  
--  protected _getVisibleChildren(): number[] {
-+  protected _getVisibleChildren(): number[] | null {
-     if (this._viewportCulling) {
-       return getObjectsInViewport(this.viewport, this.getChildrenSortedByPrimaryAxis(), this.primaryAxis, 0).map(
-         (child) => child.num,
-       )
-     }
--    return this.getChildrenSortedByPrimaryAxis().map((child) => child.num)
-+    return null
+   protected renderSelf(buffer: OptimizedBuffer): void {
+-    buffer.drawEditorView(this.editorView, this._screenX, this._screenY)
++    buffer.drawEditorView(this.editorView, this.screenX, this.screenY)
    }
- }
  
+   protected renderCursor(buffer: OptimizedBuffer): void {
+     if (!this._showCursor || !this._focused) return
+ 
+     const visualCursor = this.editorView.getVisualCursor()
+-    const screenX = this._screenX
+-    const screenY = this._screenY
++    const screenX = this.screenX
++    const screenY = this.screenY
+ 
+     const cursorX = screenX + visualCursor.visualCol + 1 // +1 for 1-based terminal coords
+     const cursorY = screenY + visualCursor.visualRow + 1 // +1 for 1-based terminal coords
 diff --git a/src/renderables/Text.test.ts b/src/renderables/Text.test.ts
-index e8cf0a27..f4749da4 100644
+index d38ffb7e..178a5531 100644
 --- a/src/renderables/Text.test.ts
 +++ b/src/renderables/Text.test.ts
 @@ -84,6 +84,40 @@ describe("TextRenderable Selection", () => {
@@ -218,26 +344,35 @@ index e8cf0a27..f4749da4 100644
      it("should handle selection from start to end", async () => {
        const { text } = await createTextRenderable(currentRenderer, {
 diff --git a/src/renderables/TextBufferRenderable.ts b/src/renderables/TextBufferRenderable.ts
-index 73d42b15..deced55b 100644
+index b2659b1f..7e0ddcc7 100644
 --- a/src/renderables/TextBufferRenderable.ts
 +++ b/src/renderables/TextBufferRenderable.ts
-@@ -37,6 +37,7 @@ export abstract class TextBufferRenderable extends Renderable implements LineInf
-   protected _scrollX: number = 0
+@@ -38,6 +38,7 @@ export abstract class TextBufferRenderable extends Renderable implements LineInf
    protected _scrollY: number = 0
    protected _truncate: boolean = false
+   protected _firstLineOffset: number = 0
 +  private frameBufferRendered: boolean = false
  
    protected textBuffer: TextBuffer
    protected textBufferView: TextBufferView
-@@ -478,20 +479,40 @@ export abstract class TextBufferRenderable extends Renderable implements LineInf
+@@ -480,25 +481,45 @@ export abstract class TextBufferRenderable extends Renderable implements LineInf
+ 
    render(buffer: OptimizedBuffer, deltaTime: number): void {
      if (!this.visible) return
- 
+-    // Text views do enough per-frame work that avoiding recursive x/y lookups is
+-    // measurable; use the layout cache for hit-grid and draw entry points.
+-    const screenX = this._screenX
+-    const screenY = this._screenY
+-
 -    this.markClean()
--    this._ctx.addToHitGrid(this.x, this.y, this.width, this.height, this.num)
+-    this._ctx.addToHitGrid(screenX, screenY, this.width, this.height, this.num)
 -
 -    this.renderSelf(buffer)
--
++    // Use live screen coordinates here because render-command reuse can skip
++    // refreshing cached descendant positions after ancestor-only translates.
++    const screenX = this.screenX
++    const screenY = this.screenY
+ 
      if (this.buffered && this.frameBuffer) {
 +      if (!this.frameBufferRendered || this.isDirty || this.live) {
 +        this.frameBuffer.clear(this.bg)
@@ -245,19 +380,19 @@ index 73d42b15..deced55b 100644
 +        this.frameBufferRendered = true
 +      }
 +
-       buffer.drawFrameBuffer(this.x, this.y, this.frameBuffer)
+       buffer.drawFrameBuffer(screenX, screenY, this.frameBuffer)
 +    } else {
 +      this.renderSelf(buffer)
      }
 +
 +    this.markClean()
-+    this._ctx.addToHitGrid(this.x, this.y, this.width, this.height, this.num)
++    this._ctx.addToHitGrid(screenX, screenY, this.width, this.height, this.num)
    }
  
    protected renderSelf(buffer: OptimizedBuffer): void {
 +    const { x, y } = this.getRenderOrigin(buffer)
      if (this.textBuffer.ptr) {
--      buffer.drawTextBuffer(this.textBufferView, this.x, this.y)
+-      buffer.drawTextBuffer(this.textBufferView, this._screenX, this._screenY)
 +      buffer.drawTextBuffer(this.textBufferView, x, y)
 +    }
 +  }
@@ -272,7 +407,7 @@ index 73d42b15..deced55b 100644
 +      return { x: 0, y: 0 }
      }
 +
-+    return { x: this.x, y: this.y }
++    return { x: this.screenX, y: this.screenY }
    }
  
    destroy(): void {
@@ -372,16 +507,3 @@ index 00000000..6d0ab02d
 +    expect(countedLeaf.updateLayoutCalls).toBe(warmedCalls)
 +  })
 +})
-diff --git a/src/tests/renderable.test.ts b/src/tests/renderable.test.ts
-index 39454c99..4c48c391 100644
---- a/src/tests/renderable.test.ts
-+++ b/src/tests/renderable.test.ts
-@@ -862,7 +862,7 @@ describe("Renderable - Layout with Viewport Filtering", () => {
-       this._filterEnabled = true
-     }
- 
--    protected _getVisibleChildren(): number[] {
-+    protected _getVisibleChildren(): number[] | null {
-       if (!this._filterEnabled) {
-         return super._getVisibleChildren()
-       }

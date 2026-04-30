@@ -449,10 +449,10 @@ index 00000000..41bc770e
 +  </g>
 +</svg>
 diff --git a/src/Renderable.ts b/src/Renderable.ts
-index 993ba357..2584019e 100644
+index f20d4be4..d608da40 100644
 --- a/src/Renderable.ts
 +++ b/src/Renderable.ts
-@@ -1333,15 +1333,15 @@ export abstract class Renderable extends BaseRenderable {
+@@ -1396,15 +1396,15 @@ export abstract class Renderable extends BaseRenderable {
  
      const shouldPushScissor = this._overflow !== "visible" && this.width > 0 && this.height > 0
      if (shouldPushScissor) {
@@ -464,14 +464,14 @@ index 993ba357..2584019e 100644
          y: scissorRect.y,
          width: scissorRect.width,
          height: scissorRect.height,
--        screenX: this.x,
--        screenY: this.y,
+-        screenX: this._screenX,
+-        screenY: this._screenY,
 +        screenX: scissorRect.x,
 +        screenY: scissorRect.y,
        })
      }
-     const visibleChildren = this._getVisibleChildren()
-@@ -1403,6 +1403,20 @@ export abstract class Renderable extends BaseRenderable {
+     // Most renderables expose all children. Skip building a visible-child list
+@@ -1496,6 +1496,20 @@ export abstract class Renderable extends BaseRenderable {
      }
    }
  
@@ -493,10 +493,10 @@ index 993ba357..2584019e 100644
      // Default implementation: do nothing
      // Override this method to provide custom rendering
 diff --git a/src/buffer.ts b/src/buffer.ts
-index ea32b45d..f9af893e 100644
+index d867da65..8d2234dc 100644
 --- a/src/buffer.ts
 +++ b/src/buffer.ts
-@@ -291,6 +291,13 @@ export class OptimizedBuffer {
+@@ -296,6 +296,13 @@ export class OptimizedBuffer {
      this.lib.bufferFillRect(this.bufferPtr, x, y, width, height, bg)
    }
  
@@ -510,130 +510,8 @@ index ea32b45d..f9af893e 100644
    public colorMatrix(
      matrix: Float32Array,
      cellMask: Float32Array,
-diff --git a/src/examples/wide-grapheme-overlay-demo.ts b/src/examples/wide-grapheme-overlay-demo.ts
-index 59636f57..85360ba9 100644
---- a/src/examples/wide-grapheme-overlay-demo.ts
-+++ b/src/examples/wide-grapheme-overlay-demo.ts
-@@ -7,7 +7,6 @@ import {
-   OptimizedBuffer,
-   t,
-   bold,
--  underline,
-   fg,
-   type MouseEvent,
-   type KeyEvent,
-@@ -16,12 +15,12 @@ import type { CliRenderer, RenderContext } from "../index.js"
- import { setupCommonDemoKeys } from "./lib/standalone-keys.js"
- 
- const GRAPHEME_LINES: string[] = [
--  "東京都  北京市  서울시  大阪府  名古屋  横浜市  上海市",
--  "👨‍👩‍👧‍👦  👩🏽‍💻  🏳️‍🌈  🇺🇸  🇩🇪  🇯🇵  🇮🇳  家族  絵文字  🎉🎊🎈",
--  "こんにちは世界  你好世界  안녕하세요  สวัสดี  مرحبا",
--  "漢字テスト  中文测试  한국어  日本語  繁體中文  简体中文",
--  "🚀 Full-width: ＡＢＣＤＥＦ  Half: abcdef  ½ ⅞ ⅓",
--  "混合テキスト mixed text with 漢字 and emoji 🎯",
-+  "W2 CJK: 東京都  北京市  서울시  大阪府  名古屋  横浜市  上海市",
-+  "W2 emoji: 👨‍👩‍👧‍👦  👩🏽‍💻  👩‍🚀  🇺🇸  🇩🇪  🇯🇵  🇮🇳  🎉🎊🎈",
-+  "VS16 off/on: ♥ / ♥️   ☀ / ☀️   ✈ / ✈️   ☎ / ☎️   ☺ / ☺️   ✂ / ✂️",
-+  "ZWJ + flags: 👩‍🚀  🧑‍🚀  👨‍👩‍👧‍👦  🧑‍💻  🇺🇸  🇩🇪  🇯🇵  🇮🇳",
-+  "Mixed: こんにちは世界  你好世界  안녕하세요  สวัสดี  مرحبا",
-+  "Half/full: ＡＢＣＤＥＦ  abcdef  ½ ⅞ ⅓  漢字  emoji 🎯",
- ]
- 
- const HEADER_HEIGHT = 2
-@@ -37,6 +36,7 @@ class DraggableBox extends BoxRenderable {
-   private dragOffsetX = 0
-   private dragOffsetY = 0
-   private alphaPercentage: number
-+  private showAlphaLabel: boolean
- 
-   constructor(
-     ctx: RenderContext,
-@@ -47,6 +47,8 @@ class DraggableBox extends BoxRenderable {
-     height: number,
-     bg: RGBA,
-     zIndex: number,
-+    bordered = false,
-+    showAlphaLabel = true,
-   ) {
-     super(ctx, {
-       id,
-@@ -54,16 +56,24 @@ class DraggableBox extends BoxRenderable {
-       height,
-       zIndex,
-       backgroundColor: bg,
-+      border: bordered,
-+      borderColor: bordered ? RGBA.fromInts(255, 255, 255, 235) : undefined,
-+      borderStyle: bordered ? "rounded" : undefined,
-       position: "absolute",
-       left: x,
-       top: y,
-     })
-     this.alphaPercentage = Math.round(bg.a * 100)
-+    this.showAlphaLabel = showAlphaLabel
-   }
- 
-   protected renderSelf(buffer: OptimizedBuffer): void {
-     super.renderSelf(buffer)
- 
-+    if (!this.showAlphaLabel) {
-+      return
-+    }
-+
-     const alphaText = `${this.alphaPercentage}%`
-     const centerX = this.x + Math.floor(this.width / 2 - alphaText.length / 2)
-     const centerY = this.y + Math.floor(this.height / 2)
-@@ -94,7 +104,7 @@ class DraggableBox extends BoxRenderable {
-           const newY = event.y - this.dragOffsetY
- 
-           this.x = Math.max(0, Math.min(newX, this._ctx.width - this.width))
--          this.y = Math.max(0, Math.min(newY, this._ctx.height - this.height))
-+          this.y = Math.max(HEADER_HEIGHT, Math.min(newY, this._ctx.height - this.height))
- 
-           event.stopPropagation()
-         }
-@@ -139,7 +149,8 @@ function toggleScrim(renderer: CliRenderer) {
- function updateHeader() {
-   if (!headerDisplay) return
-   const dimLabel = scrimVisible ? "D: hide scrim" : "D: show scrim"
--  headerDisplay.content = t`${bold(fg("#00D4AA")("Wide Grapheme Overlay"))} ${fg("#A8A8B2")(`| ${dimLabel} | Drag boxes over CJK/emoji | Ctrl+C: quit`)}`
-+  headerDisplay.content = t`${bold(fg("#00D4AA")("Wide Grapheme Overlay"))} ${fg("#A8A8B2")(`| ${dimLabel} | Ctrl+C: quit`)}
-+${fg("#7A8394")("Compare the small bordered probe, one large bordered box, and the plain translucent fills across the CJK/emoji lines")}`
- }
- 
- export function run(renderer: CliRenderer): void {
-@@ -167,6 +178,21 @@ export function run(renderer: CliRenderer): void {
-   const background = new GraphemeBackground(renderer, "wg-background", renderer.terminalWidth, bgHeight)
-   root.add(background)
- 
-+  const edgeProbe = new DraggableBox(
-+    renderer,
-+    "wg-edge-probe",
-+    11,
-+    HEADER_HEIGHT,
-+    6,
-+    3,
-+    RGBA.fromValues(64 / 255, 176 / 255, 255 / 255, 128 / 255),
-+    90,
-+    true,
-+    false,
-+  )
-+  root.add(edgeProbe)
-+  draggableBoxes.push(edgeProbe)
-+
-   // Full-screen dimming scrim (same as opencode dialog backdrop: RGBA(0,0,0,150))
-   scrim = new BoxRenderable(renderer, {
-     id: "wg-scrim",
-@@ -191,6 +217,7 @@ export function run(renderer: CliRenderer): void {
-     8,
-     RGBA.fromValues(64 / 255, 176 / 255, 255 / 255, 128 / 255),
-     100,
-+    true,
-   )
-   root.add(box1)
-   draggableBoxes.push(box1)
 diff --git a/src/renderables/Box.test.ts b/src/renderables/Box.test.ts
-index 0b17406f..962a9593 100644
+index eb336933..9f6341c0 100644
 --- a/src/renderables/Box.test.ts
 +++ b/src/renderables/Box.test.ts
 @@ -1,15 +1,38 @@
@@ -687,7 +565,7 @@ index 0b17406f..962a9593 100644
  
      expect(lines[0].slice(0, 16)).toBe("┌─Top──────────┐")
      expect(lines[4].slice(0, 16)).toBe("└──────────Bot─┘")
-@@ -199,7 +222,738 @@ describe("BoxRenderable - border titles (top and bottom)", () => {
+@@ -199,7 +222,7 @@ describe("BoxRenderable - border titles (top and bottom)", () => {
      testRenderer.root.add(box)
      await renderOnce()
  
@@ -696,6 +574,102 @@ index 0b17406f..962a9593 100644
      expect(lines[4].slice(0, 18)).toBe(expectedBorder)
    })
  })
+@@ -319,18 +342,33 @@ describe("BoxRenderable - no-op rendering", () => {
+       height: 5,
+     })
+ 
+-    let called = false
++    let drawBoxCalled = false
++    let fillRectCalled = false
++    let clipFillCalled = false
+     const buffer = {
++      width: 80,
++      height: 24,
++      getCurrentOpacity() {
++        return 1
++      },
+       drawBox() {
+-        called = true
++        drawBoxCalled = true
++      },
++      fillRect() {
++        fillRectCalled = true
++      },
++      fillRectClipWideGraphemes() {
++        clipFillCalled = true
+       },
+     }
+ 
+-    ;(box as any).renderSelf(buffer)
+-    expect(called).toBe(false)
++    ;(box as any).renderSelf(buffer, 0)
++    expect(drawBoxCalled).toBe(false)
++    expect(fillRectCalled).toBe(false)
++    expect(clipFillCalled).toBe(false)
+   })
+ 
+-  test("still draws boxes with a visible fill", () => {
++  test("still fills boxes with a visible background", () => {
+     const box = new BoxRenderable(testRenderer, {
+       id: "filled-box",
+       width: 10,
+@@ -338,15 +376,28 @@ describe("BoxRenderable - no-op rendering", () => {
+       backgroundColor: "#112233",
+     })
+ 
+-    let called = false
++    let drawBoxCalled = false
++    let fillRectCalled = false
+     const buffer = {
++      width: 80,
++      height: 24,
++      getCurrentOpacity() {
++        return 1
++      },
+       drawBox() {
+-        called = true
++        drawBoxCalled = true
++      },
++      fillRect() {
++        fillRectCalled = true
++      },
++      fillRectClipWideGraphemes() {
++        throw new Error("opaque fills should not use clip-wide fill path")
+       },
+     }
+ 
+-    ;(box as any).renderSelf(buffer)
+-    expect(called).toBe(true)
++    ;(box as any).renderSelf(buffer, 0)
++    expect(fillRectCalled).toBe(true)
++    expect(drawBoxCalled).toBe(false)
+   })
+ 
+   test("still draws boxes with borders", () => {
+@@ -357,14 +408,752 @@ describe("BoxRenderable - no-op rendering", () => {
+       border: true,
+     })
+ 
+-    let called = false
++    let drawBoxCalled = false
+     const buffer = {
++      width: 80,
++      height: 24,
++      getCurrentOpacity() {
++        return 1
++      },
+       drawBox() {
+-        called = true
++        drawBoxCalled = true
++      },
++      fillRect() {},
++      fillRectClipWideGraphemes() {},
++    }
++
++    ;(box as any).renderSelf(buffer, 0)
++    expect(drawBoxCalled).toBe(true)
++  })
++})
 +
 +describe("BoxRenderable - wide grapheme alpha fill", () => {
 +  test("leaves wide text untouched when a transparent box would otherwise take the clipping path", async () => {
@@ -1271,8 +1245,8 @@ index 0b17406f..962a9593 100644
 +
 +  test("keeps subclass renderSelf framebuffer-local while clipping wide grapheme edges", async () => {
 +    class BufferedLabelBox extends BoxRenderable {
-+      protected override renderSelf(buffer: OptimizedBuffer): void {
-+        super.renderSelf(buffer)
++      protected override renderSelf(buffer: OptimizedBuffer, deltaTime: number): void {
++        super.renderSelf(buffer, deltaTime)
 +        buffer.drawText("X", 5, 0, RGBA.fromInts(255, 255, 255, 255))
 +      }
 +    }
@@ -1366,7 +1340,7 @@ index 0b17406f..962a9593 100644
 +      backgroundColor: "#ff0000",
 +      renderAfter(buffer) {
 +        buffer.drawText("A", 0, 0, RGBA.fromInts(255, 255, 255, 255))
-+      },
+       },
 +    })
 +    testRenderer.root.add(box)
 +
@@ -1394,8 +1368,10 @@ index 0b17406f..962a9593 100644
 +      protected override renderSelf(buffer: OptimizedBuffer): void {
 +        super.renderSelf(buffer)
 +      }
-+    }
-+
+     }
+ 
+-    ;(box as any).renderSelf(buffer)
+-    expect(called).toBe(true)
 +    testRenderer.root.add(
 +      new TextRenderable(testRenderer, {
 +        id: "line-0",
@@ -1425,10 +1401,10 @@ index 0b17406f..962a9593 100644
 +
 +    const row = captureCharFrame().split("\n")[2]
 +    expect(row?.startsWith("ab👋cd")).toBe(true)
-+  })
-+})
+   })
+ })
 diff --git a/src/renderables/Box.ts b/src/renderables/Box.ts
-index 97b61799..4c871df7 100644
+index 58bfa8cb..22f5f3ca 100644
 --- a/src/renderables/Box.ts
 +++ b/src/renderables/Box.ts
 @@ -14,6 +14,49 @@ import { type ColorInput, RGBA, parseColor } from "../lib/RGBA.js"
@@ -1491,12 +1467,11 @@ index 97b61799..4c871df7 100644
  
    protected _defaultOptions = {
      backgroundColor: "transparent",
-@@ -237,20 +283,70 @@ export class BoxRenderable extends Renderable {
+@@ -237,31 +283,80 @@ export class BoxRenderable extends Renderable {
      }
    }
  
 -  protected renderSelf(buffer: OptimizedBuffer): void {
--    const currentBorderColor = this._focused ? this._focusedBorderColor : this._borderColor
 +  public override render(buffer: OptimizedBuffer, deltaTime: number): void {
 +    let shouldDrawFrameBuffer = false
 +
@@ -1542,17 +1517,34 @@ index 97b61799..4c871df7 100644
 +      buffer.drawFrameBuffer(this.x, this.y, this.frameBuffer!)
 +    }
 +  }
- 
++
 +  protected renderSelf(buffer: OptimizedBuffer, _deltaTime: number): void {
+     const hasBorder = this.borderSides.top || this.borderSides.right || this.borderSides.bottom || this.borderSides.left
+-    const hasVisibleFill = this.shouldFill && this._backgroundColor.a > 0
+-    // Many boxes are used only for layout. Skip drawBox entirely when a box
+-    // would not draw pixels so wrapper nodes do not pay the FFI/native cost.
++    const hasVisibleFill = this.shouldFill && this._backgroundColor.a * buffer.getCurrentOpacity() > 0
+     if (!hasBorder && !hasVisibleFill) {
+       return
+     }
+ 
+-    const hasFocusWithin = this._focusable && (this._focused || this._hasFocusedDescendant)
+-    const currentBorderColor = hasFocusWithin ? this._focusedBorderColor : this._borderColor
+-    const screenX = this._screenX
+-    const screenY = this._screenY
 +    const currentBorderColor = this.getCurrentBorderColor()
 +    const { x, y } = this.getRenderOrigin(buffer)
 +    if (!this.suppressFillDuringFrameBufferRender) {
 +      this.renderFill(buffer)
 +    }
++    if (!hasBorder) {
++      return
++    }
+ 
 +    const borderBackgroundColor = this.shouldFill ? TRANSPARENT : this._backgroundColor
      buffer.drawBox({
--      x: this.x,
--      y: this.y,
+-      x: screenX,
+-      y: screenY,
 +      x,
 +      y,
        width: this.width,
@@ -1568,7 +1560,7 @@ index 97b61799..4c871df7 100644
        title: this._title,
        titleAlignment: this._titleAlignment,
        bottomTitle: this._bottomTitle,
-@@ -258,6 +354,234 @@ export class BoxRenderable extends Renderable {
+@@ -269,6 +364,235 @@ export class BoxRenderable extends Renderable {
      })
    }
  
@@ -1624,7 +1616,8 @@ index 97b61799..4c871df7 100644
 +  }
 +
 +  private getCurrentBorderColor(): RGBA {
-+    return this._focused ? this._focusedBorderColor : this._borderColor
++    const hasFocusWithin = this._focusable && (this._focused || this._hasFocusedDescendant)
++    return hasFocusWithin ? this._focusedBorderColor : this._borderColor
 +  }
 +
 +  private renderToBuffer(
@@ -1687,11 +1680,11 @@ index 97b61799..4c871df7 100644
 +      return
 +    }
 +
-+    // Width/height <= 2 means there is no interior left after reserving a
-+    // one-cell perimeter band, so the whole translucent fill has to use the
-+    // clipping path.
++    // When the visible fill collapses to a 1- or 2-cell band, keep the normal
++    // preserved-fill behavior instead of turning the whole box into an edge
++    // clipping pass. This matters for boxes clipped by the viewport.
 +    if (fillRect.width <= 2 || fillRect.height <= 2) {
-+      buffer.fillRectClipWideGraphemes(fillRect.x, fillRect.y, fillRect.width, fillRect.height, this._backgroundColor)
++      buffer.fillRect(fillRect.x, fillRect.y, fillRect.width, fillRect.height, this._backgroundColor)
 +      return
 +    }
 +
@@ -1804,10 +1797,10 @@ index 97b61799..4c871df7 100644
      const baseRect = super.getScissorRect()
  
 diff --git a/src/zig.ts b/src/zig.ts
-index 90f79ac1..66dbec85 100644
+index e2ff9339..fb8d0b82 100644
 --- a/src/zig.ts
 +++ b/src/zig.ts
-@@ -366,6 +366,10 @@ function getOpenTUILib(libPath?: string) {
+@@ -406,6 +406,10 @@ function getOpenTUILib(libPath?: string) {
        args: ["ptr", "i32", "i32", "u32", "u32", "ptr", "u32", "ptr", "ptr", "ptr", "u32", "ptr", "u32"],
        returns: "void",
      },
@@ -1818,7 +1811,7 @@ index 90f79ac1..66dbec85 100644
      bufferPushScissorRect: {
        args: ["ptr", "i32", "i32", "u32", "u32"],
        returns: "void",
-@@ -394,7 +398,6 @@ function getOpenTUILib(libPath?: string) {
+@@ -434,7 +438,6 @@ function getOpenTUILib(libPath?: string) {
        args: ["ptr"],
        returns: "void",
      },
@@ -1826,7 +1819,7 @@ index 90f79ac1..66dbec85 100644
      addToHitGrid: {
        args: ["ptr", "i32", "i32", "u32", "u32", "u32"],
        returns: "void",
-@@ -1448,6 +1451,14 @@ export interface RenderLib {
+@@ -1525,6 +1528,14 @@ export interface RenderLib {
      attributes?: number,
    ) => void
    bufferFillRect: (buffer: Pointer, x: number, y: number, width: number, height: number, color: RGBA) => void
@@ -1841,7 +1834,7 @@ index 90f79ac1..66dbec85 100644
    bufferColorMatrix: (
      buffer: Pointer,
      matrixPtr: Pointer,
-@@ -2188,6 +2199,18 @@ class FFIRenderLib implements RenderLib {
+@@ -2324,6 +2335,18 @@ class FFIRenderLib implements RenderLib {
      this.opentui.symbols.bufferFillRect(buffer, x, y, width, height, bg)
    }
  
@@ -1853,7 +1846,7 @@ index 90f79ac1..66dbec85 100644
 +    height: number,
 +    color: RGBA,
 +  ) {
-+    const bg = color.buffer
++    const bg = rgbaPtr(color)
 +    this.opentui.symbols.bufferFillRectClipWideGraphemes(buffer, x, y, width, height, bg)
 +  }
 +
@@ -1861,10 +1854,10 @@ index 90f79ac1..66dbec85 100644
      buffer: Pointer,
      matrixPtr: Pointer,
 diff --git a/src/zig/buffer.zig b/src/zig/buffer.zig
-index 7575bbde..13b652b1 100644
+index 60d0d27d..6acd93ed 100644
 --- a/src/zig/buffer.zig
 +++ b/src/zig/buffer.zig
-@@ -169,6 +169,48 @@ pub const OptimizedBuffer = struct {
+@@ -180,6 +180,42 @@ pub const OptimizedBuffer = struct {
      scissor_stack: std.ArrayListUnmanaged(ClipRect),
      opacity_stack: std.ArrayListUnmanaged(f32),
  
@@ -1875,20 +1868,14 @@ index 7575bbde..13b652b1 100644
 +    const BlendCursor = struct {
 +        span_end_x: u32 = 0,
 +        active: bool = false,
-+        fg: RGBA = .{ 0.0, 0.0, 0.0, 0.0 },
-+        bg: RGBA = .{ 0.0, 0.0, 0.0, 0.0 },
++        fg: RGBA = ansi.rgbColor(0, 0, 0, 0),
++        bg: RGBA = ansi.rgbColor(0, 0, 0, 0),
 +        attributes: u32 = 0,
 +
 +        fn sameStyle(self: *const BlendCursor, fg: RGBA, bg: RGBA, attributes: u32) bool {
 +            return self.attributes == attributes and
-+                self.fg[0] == fg[0] and
-+                self.fg[1] == fg[1] and
-+                self.fg[2] == fg[2] and
-+                self.fg[3] == fg[3] and
-+                self.bg[0] == bg[0] and
-+                self.bg[1] == bg[1] and
-+                self.bg[2] == bg[2] and
-+                self.bg[3] == bg[3];
++                rgbaEqual(self.fg, fg) and
++                rgbaEqual(self.bg, bg);
 +        }
 +
 +        /// Alpha-blend with span-skip awareness. Use this instead of
@@ -1913,7 +1900,7 @@ index 7575bbde..13b652b1 100644
      const InitOptions = struct {
          respectAlpha: bool = false,
          blendBackdropColor: ?RGBA = null,
-@@ -592,15 +634,14 @@ pub const OptimizedBuffer = struct {
+@@ -603,15 +639,14 @@ pub const OptimizedBuffer = struct {
          return self.coordsToIndex(x, y);
      }
  
@@ -1935,7 +1922,7 @@ index 7575bbde..13b652b1 100644
  
          if (prev_link_id != 0 and prev_link_id != new_link_id) {
              self.link_tracker.removeCellRef(prev_link_id);
-@@ -610,6 +651,138 @@ pub const OptimizedBuffer = struct {
+@@ -621,6 +656,138 @@ pub const OptimizedBuffer = struct {
          }
      }
  
@@ -2074,7 +2061,7 @@ index 7575bbde..13b652b1 100644
      pub fn get(self: *const OptimizedBuffer, x: u32, y: u32) ?Cell {
          if (x >= self.width or y >= self.height) return null;
  
-@@ -728,7 +901,7 @@ pub const OptimizedBuffer = struct {
+@@ -739,7 +906,7 @@ pub const OptimizedBuffer = struct {
          return bytes_written;
      }
  
@@ -2083,7 +2070,7 @@ index 7575bbde..13b652b1 100644
          const hasBgAlpha = isRGBAWithAlpha(overlayCell.bg);
          const hasFgAlpha = isRGBAWithAlpha(overlayCell.fg);
  
-@@ -740,12 +913,11 @@ pub const OptimizedBuffer = struct {
+@@ -751,12 +918,11 @@ pub const OptimizedBuffer = struct {
              const charIsDefaultSpace = overlayCell.char == DEFAULT_SPACE_CHAR;
              const destNotZero = destCell.char != 0;
              const destNotDefaultSpace = destCell.char != DEFAULT_SPACE_CHAR;
@@ -2099,7 +2086,7 @@ index 7575bbde..13b652b1 100644
              const finalChar = if (preserveChar) destCell.char else overlayCell.char;
  
              var finalFg: RGBA = undefined;
-@@ -783,6 +955,40 @@ pub const OptimizedBuffer = struct {
+@@ -791,6 +957,42 @@ pub const OptimizedBuffer = struct {
          return overlayCell;
      }
  
@@ -2116,20 +2103,22 @@ index 7575bbde..13b652b1 100644
 +    fn renderPlaceholder(self: *OptimizedBuffer, span_start: u32, width: u32, overlayCell: Cell, destCell: Cell) void {
 +        const blendedBg = blendColors(overlayCell.bg, destCell.bg, self.blendBackdropColor);
 +        const blendedFg = blendColors(overlayCell.bg, destCell.fg, self.blendBackdropColor);
-+        const placeholderBg = RGBA{ blendedBg[0], blendedBg[1], blendedBg[2], overlayCell.bg[3] };
 +        const y = span_start / self.width;
 +        const x = span_start % self.width;
 +        const attrs = overlayCell.attributes;
++        const left = makeCell('[', blendedFg, blendedBg, attrs);
++        const right = makeCell(']', blendedFg, blendedBg, attrs);
++        const space = makeCell(DEFAULT_SPACE_CHAR, blendedFg, blendedBg, attrs);
 +
-+        self.set(x, y, Cell{ .char = '[', .fg = blendedFg, .bg = placeholderBg, .attributes = attrs });
++        self.set(x, y, left);
 +        if (width > 1 and x + 1 < self.width) {
-+            self.set(x + 1, y, Cell{ .char = ']', .fg = blendedFg, .bg = placeholderBg, .attributes = attrs });
++            self.set(x + 1, y, right);
 +        }
 +
 +        var extra: u32 = 2;
 +        while (extra < width) : (extra += 1) {
 +            if (x + extra < self.width) {
-+                self.set(x + extra, y, Cell{ .char = DEFAULT_SPACE_CHAR, .fg = blendedFg, .bg = placeholderBg, .attributes = attrs });
++                self.set(x + extra, y, space);
 +            }
 +        }
 +    }
@@ -2140,40 +2129,56 @@ index 7575bbde..13b652b1 100644
      pub fn setCellWithAlphaBlending(
          self: *OptimizedBuffer,
          x: u32,
-@@ -791,27 +997,70 @@ pub const OptimizedBuffer = struct {
+@@ -799,18 +1001,20 @@ pub const OptimizedBuffer = struct {
          fg: RGBA,
          bg: RGBA,
          attributes: u32,
 -    ) !void {
--        if (!self.isPointInScissor(@intCast(x), @intCast(y))) return;
 +    ) !u32 {
+         return self.setCellWithAlphaBlendingCell(x, y, makeCell(char, fg, bg, attributes));
+     }
+ 
+-    fn setCellWithAlphaBlendingCell(self: *OptimizedBuffer, x: u32, y: u32, cell: Cell) !void {
+-        if (!self.isPointInScissor(@intCast(x), @intCast(y))) return;
++    fn setCellWithAlphaBlendingCell(self: *OptimizedBuffer, x: u32, y: u32, cell: Cell) !u32 {
 +        if (!self.isPointInScissor(@intCast(x), @intCast(y))) return x;
 +
 +        const index = self.coordsToIndex(x, y);
  
-         // Apply current opacity from the stack
          const opacity = self.getCurrentOpacity();
-         if (isFullyOpaque(opacity, fg, bg)) {
-             self.set(x, y, Cell{ .char = char, .fg = fg, .bg = bg, .attributes = attributes });
+-        if (isFullyTransparent(opacity, cell.fg, cell.bg)) return;
++        if (isFullyTransparent(opacity, cell.fg, cell.bg)) return x;
+         if (isFullyOpaque(opacity, cell.fg, cell.bg)) {
+             self.set(x, y, cell);
 -            return;
 +            return x;
          }
  
-         const effectiveFg = RGBA{ fg[0], fg[1], fg[2], fg[3] * opacity };
-         const effectiveBg = RGBA{ bg[0], bg[1], bg[2], bg[3] * opacity };
-+        if (effectiveFg[3] == 0.0 and effectiveBg[3] == 0.0) return x;
- 
-         const overlayCell = Cell{ .char = char, .fg = effectiveFg, .bg = effectiveBg, .attributes = attributes };
+         const opacity_u8 = opacityToU8(opacity);
+@@ -820,13 +1024,56 @@ pub const OptimizedBuffer = struct {
+             applyOpacity(cell.bg, opacity_u8),
+             cell.attributes,
+         );
++        if (ansi.alpha(effectiveCell.fg) == 0 and ansi.alpha(effectiveCell.bg) == 0) return x;
  
 -        if (self.get(x, y)) |destCell| {
--            const blendedCell = self.blendCells(overlayCell, destCell);
+-            const blendedCell = self.blendCells(effectiveCell, destCell);
 -            self.set(x, y, blendedCell);
 -        } else {
 +        const destCell = self.get(x, y) orelse {
-             self.set(x, y, overlayCell);
+             self.set(x, y, effectiveCell);
 +            return x;
 +        };
-+        const blendedCell = self.blendCells(overlayCell, destCell);
++
++        if (effectiveCell.char == DEFAULT_SPACE_CHAR and
++            ansi.alpha(effectiveCell.bg) == 0 and
++            (gp.isGraphemeChar(destCell.char) or gp.isContinuationChar(destCell.char)))
++        {
++            const span = self.graphemeSpanForIndex(index, destCell.char);
++            return span.end % self.width;
++        }
++
++        const blendedCell = self.blendCells(effectiveCell, destCell);
 +        const preservesDestChar = blendedCell.char == destCell.char and
 +            (gp.isGraphemeChar(destCell.char) or gp.isContinuationChar(destCell.char));
 +        if (!preservesDestChar) {
@@ -2188,14 +2193,7 @@ index 7575bbde..13b652b1 100644
 +            return x;
 +        }
 +
-+        // A transparent space should be a no-op for an already-preserved wide
-+        // span; return the span end so left-to-right callers can skip the rest.
-+        if (overlayCell.char == DEFAULT_SPACE_CHAR and overlayCell.bg[3] == 0.0) {
-+            const span = self.graphemeSpanForIndex(index, destCell.char);
-+            return span.end % self.width;
-         }
-+
-+        if (overlayCell.char == DEFAULT_SPACE_CHAR and self.shouldPlaceholderWideChar(destCell.char)) {
++        if (effectiveCell.char == DEFAULT_SPACE_CHAR and self.shouldPlaceholderWideChar(destCell.char)) {
 +            const span = self.graphemeSpanForIndex(index, destCell.char);
 +            const span_start_x = span.start % self.width;
 +            const span_end_x = span.end % self.width;
@@ -2205,21 +2203,21 @@ index 7575bbde..13b652b1 100644
 +            {
 +                const width = span.end - span.start + 1;
 +                const start_cell = self.cellAtIndex(span.start);
-+                self.renderPlaceholder(span.start, width, overlayCell, start_cell);
++                self.renderPlaceholder(span.start, width, effectiveCell, start_cell);
 +                return span_end_x;
 +            }
 +
-+            return self.blendPreservedGraphemeSpan(index, overlayCell);
-+        }
++            return self.blendPreservedGraphemeSpan(index, effectiveCell);
+         }
 +
 +        // Wide grapheme: resolve the full span, blend once from the canonical
 +        // start cell, and write uniformly.
-+        return self.blendPreservedGraphemeSpan(index, overlayCell);
++        return self.blendPreservedGraphemeSpan(index, effectiveCell);
      }
  
      pub fn setCellWithAlphaBlendingRaw(
-@@ -852,6 +1101,71 @@ pub const OptimizedBuffer = struct {
-         }
+@@ -905,6 +1152,77 @@ pub const OptimizedBuffer = struct {
+         return true;
      }
  
 +    /// Alpha-blend an overlay cell while clipping any intersected wide
@@ -2238,16 +2236,22 @@ index 7575bbde..13b652b1 100644
 +        if (!self.isPointInScissor(@intCast(x), @intCast(y))) return;
 +
 +        const opacity = self.getCurrentOpacity();
-+        if (isFullyOpaque(opacity, fg, bg)) {
-+            self.set(x, y, Cell{ .char = char, .fg = fg, .bg = bg, .attributes = attributes });
++        const cell = makeCell(char, fg, bg, attributes);
++        if (isFullyTransparent(opacity, cell.fg, cell.bg)) return;
++        if (isFullyOpaque(opacity, cell.fg, cell.bg)) {
++            self.set(x, y, cell);
 +            return;
 +        }
 +
-+        const effectiveFg = RGBA{ fg[0], fg[1], fg[2], fg[3] * opacity };
-+        const effectiveBg = RGBA{ bg[0], bg[1], bg[2], bg[3] * opacity };
-+        if (char == DEFAULT_SPACE_CHAR and effectiveBg[3] == 0.0) return;
-+        if (effectiveFg[3] == 0.0 and effectiveBg[3] == 0.0) return;
-+        const overlayCell = Cell{ .char = char, .fg = effectiveFg, .bg = effectiveBg, .attributes = attributes };
++        const opacity_u8 = opacityToU8(opacity);
++        const overlayCell = makeCell(
++            cell.char,
++            applyOpacity(cell.fg, opacity_u8),
++            applyOpacity(cell.bg, opacity_u8),
++            cell.attributes,
++        );
++        if (overlayCell.char == DEFAULT_SPACE_CHAR and ansi.alpha(overlayCell.bg) == 0) return;
++        if (ansi.alpha(overlayCell.fg) == 0 and ansi.alpha(overlayCell.bg) == 0) return;
 +
 +        if (self.get(x, y)) |destCell| {
 +            const blendedCell = self.blendCellsWithoutPreservingChar(overlayCell, destCell);
@@ -2290,16 +2294,16 @@ index 7575bbde..13b652b1 100644
      pub fn drawChar(
          self: *OptimizedBuffer,
          char: u32,
-@@ -864,7 +1178,7 @@ pub const OptimizedBuffer = struct {
-         if (!self.isPointInScissor(@intCast(x), @intCast(y))) return;
+@@ -914,7 +1232,7 @@ pub const OptimizedBuffer = struct {
+         bg: RGBA,
+         attributes: u32,
+     ) !void {
+-        try self.setCellWithAlphaBlendingCell(x, y, makeCell(char, fg, bg, attributes));
++        _ = try self.setCellWithAlphaBlendingCell(x, y, makeCell(char, fg, bg, attributes));
+     }
  
-         if (isRGBAWithAlpha(bg) or isRGBAWithAlpha(fg)) {
--            try self.setCellWithAlphaBlending(x, y, char, fg, bg, attributes);
-+            _ = try self.setCellWithAlphaBlending(x, y, char, fg, bg, attributes);
-         } else {
-             self.set(x, y, Cell{
-                 .char = char,
-@@ -883,46 +1197,27 @@ pub const OptimizedBuffer = struct {
+     pub fn fillRect(
+@@ -925,63 +1243,47 @@ pub const OptimizedBuffer = struct {
          height: u32,
          bg: RGBA,
      ) !void {
@@ -2307,6 +2311,9 @@ index 7575bbde..13b652b1 100644
 -        if (x >= self.width or y >= self.height) return;
 -
 -        if (!self.isRectInScissor(@intCast(x), @intCast(y), width, height)) return;
+-
+         const opacity = self.getCurrentOpacity();
+         if (isFullyTransparent(opacity, ansi.rgbColor(0, 0, 0, 0), bg)) return;
 -
 -        const startX = x;
 -        const startY = y;
@@ -2324,26 +2331,47 @@ index 7575bbde..13b652b1 100644
 -        const clippedStartY = @max(startY, @as(u32, @intCast(clippedRect.y)));
 -        const clippedEndX = @min(endX, @as(u32, @intCast(clippedRect.x + @as(i32, @intCast(clippedRect.width)) - 1)));
 -        const clippedEndY = @min(endY, @as(u32, @intCast(clippedRect.y + @as(i32, @intCast(clippedRect.height)) - 1)));
-+        if (bg[3] * self.getCurrentOpacity() == 0.0) return;
 +        const bounds = self.clippedFillBounds(x, y, width, height) orelse return;
  
--        const opacity = self.getCurrentOpacity();
--        const hasAlpha = isRGBAWithAlpha(bg) or opacity < 1.0;
-+        const hasAlpha = isRGBAWithAlpha(bg) or self.getCurrentOpacity() < 1.0;
+         const hasAlpha = isRGBAWithAlpha(bg) or opacity < 1.0;
+         const graphemeAware = self.grapheme_tracker.hasAny();
          const linkAware = self.link_tracker.hasAny();
  
-         if (hasAlpha or self.grapheme_tracker.hasAny() or linkAware) {
+         if (graphemeAware or linkAware) {
 -            var fillY = clippedStartY;
 -            while (fillY <= clippedEndY) : (fillY += 1) {
 -                var fillX = clippedStartX;
 -                while (fillX <= clippedEndX) : (fillX += 1) {
--                    try self.setCellWithAlphaBlending(fillX, fillY, DEFAULT_SPACE_CHAR, .{ 1.0, 1.0, 1.0, 1.0 }, bg, 0);
+-                    try self.setCellWithAlphaBlendingCell(
 +            var fillY = bounds.start_y;
 +            while (fillY <= bounds.end_y) : (fillY += 1) {
 +                var cursor = BlendCursor{};
 +                var fillX = bounds.start_x;
 +                while (fillX <= bounds.end_x) : (fillX += 1) {
-+                    fillX = try cursor.blendAt(self, fillX, fillY, DEFAULT_SPACE_CHAR, .{ 1.0, 1.0, 1.0, 1.0 }, bg, 0);
++                    fillX = try cursor.blendAt(
++                        self,
+                         fillX,
+                         fillY,
+-                        makeCell(DEFAULT_SPACE_CHAR, ansi.rgbColor(255, 255, 255, 255), bg, 0),
++                        DEFAULT_SPACE_CHAR,
++                        ansi.rgbColor(255, 255, 255, 255),
++                        bg,
++                        0,
+                     );
+                 }
+             }
+         } else if (hasAlpha) {
+             // No grapheme/link bookkeeping is needed here, so the raw blend
+             // path avoids the extra tracker work done by the generic setter.
+-            var fillY = clippedStartY;
+-            while (fillY <= clippedEndY) : (fillY += 1) {
+-                var fillX = clippedStartX;
+-                while (fillX <= clippedEndX) : (fillX += 1) {
++            var fillY = bounds.start_y;
++            while (fillY <= bounds.end_y) : (fillY += 1) {
++                var fillX = bounds.start_x;
++                while (fillX <= bounds.end_x) : (fillX += 1) {
+                     try self.setCellWithAlphaBlendingRaw(fillX, fillY, DEFAULT_SPACE_CHAR, ansi.rgbColor(255, 255, 255, 255), bg, 0);
                  }
              }
          } else {
@@ -2359,8 +2387,8 @@ index 7575bbde..13b652b1 100644
  
                  const rowSliceChar = self.buffer.char[rowStartIndex .. rowStartIndex + rowWidth];
                  const rowSliceFg = self.buffer.fg[rowStartIndex .. rowStartIndex + rowWidth];
-@@ -937,6 +1232,33 @@ pub const OptimizedBuffer = struct {
-         }
+@@ -1022,6 +1324,33 @@ pub const OptimizedBuffer = struct {
+         );
      }
  
 +    pub fn fillRectClipWideGraphemes(
@@ -2371,7 +2399,7 @@ index 7575bbde..13b652b1 100644
 +        height: u32,
 +        bg: RGBA,
 +    ) !void {
-+        if (bg[3] * self.getCurrentOpacity() == 0.0) return;
++        if (ansi.alpha(bg) == 0 or self.getCurrentOpacity() == 0.0) return;
 +        const bounds = self.clippedFillBounds(x, y, width, height) orelse return;
 +
 +        const hasAlpha = isRGBAWithAlpha(bg) or self.getCurrentOpacity() < 1.0;
@@ -2382,7 +2410,7 @@ index 7575bbde..13b652b1 100644
 +            while (fillY <= bounds.end_y) : (fillY += 1) {
 +                var fillX = bounds.start_x;
 +                while (fillX <= bounds.end_x) : (fillX += 1) {
-+                    try self.setCellWithAlphaBlendingClipWideGraphemes(fillX, fillY, DEFAULT_SPACE_CHAR, .{ 1.0, 1.0, 1.0, 1.0 }, bg, 0);
++                    try self.setCellWithAlphaBlendingClipWideGraphemes(fillX, fillY, DEFAULT_SPACE_CHAR, ansi.rgbColor(255, 255, 255, 255), bg, 0);
 +                }
 +            }
 +        } else {
@@ -2393,7 +2421,7 @@ index 7575bbde..13b652b1 100644
      pub fn drawText(
          self: *OptimizedBuffer,
          text: []const u8,
-@@ -962,6 +1284,7 @@ pub const OptimizedBuffer = struct {
+@@ -1050,6 +1379,7 @@ pub const OptimizedBuffer = struct {
          var byte_offset: u32 = 0;
          var col: u32 = 0;
          var special_idx: usize = 0;
@@ -2401,26 +2429,37 @@ index 7575bbde..13b652b1 100644
  
          while (byte_offset < text.len) {
              const charX = x + advance_cells;
-@@ -1013,7 +1336,8 @@ pub const OptimizedBuffer = struct {
+@@ -1101,10 +1431,14 @@ pub const OptimizedBuffer = struct {
                      if (tab_x >= self.width) break;
  
                      if (isRGBAWithAlpha(bgColor)) {
--                        try self.setCellWithAlphaBlending(
+-                        try self.setCellWithAlphaBlendingCell(
 +                        _ = try cursor.blendAt(
 +                            self,
                              tab_x,
                              y,
-                             DEFAULT_SPACE_CHAR,
-@@ -1044,7 +1368,7 @@ pub const OptimizedBuffer = struct {
+-                            makeCell(DEFAULT_SPACE_CHAR, fg, bgColor, attributes),
++                            DEFAULT_SPACE_CHAR,
++                            fg,
++                            bgColor,
++                            attributes,
+                         );
+                     } else {
+                         self.set(tab_x, y, makeCell(DEFAULT_SPACE_CHAR, fg, bgColor, attributes));
+@@ -1124,11 +1458,7 @@ pub const OptimizedBuffer = struct {
              }
  
              if (isRGBAWithAlpha(bgColor)) {
--                try self.setCellWithAlphaBlending(charX, y, encoded_char, fg, bgColor, attributes);
+-                try self.setCellWithAlphaBlendingCell(
+-                    charX,
+-                    y,
+-                    makeCell(encoded_char, fg, bgColor, attributes),
+-                );
 +                _ = try cursor.blendAt(self, charX, y, encoded_char, fg, bgColor, attributes);
              } else {
-                 self.set(charX, y, Cell{
-                     .char = encoded_char,
-@@ -1125,6 +1449,7 @@ pub const OptimizedBuffer = struct {
+                 self.set(charX, y, makeCell(encoded_char, fg, bgColor, attributes));
+             }
+@@ -1207,6 +1537,7 @@ pub const OptimizedBuffer = struct {
          var dY = clippedStartY;
          while (dY <= clippedEndY) : (dY += 1) {
              var lastDrawnGraphemeId: u32 = 0;
@@ -2428,25 +2467,33 @@ index 7575bbde..13b652b1 100644
  
              var dX = clippedStartX;
              while (dX <= clippedEndX) : (dX += 1) {
-@@ -1151,7 +1476,7 @@ pub const OptimizedBuffer = struct {
+@@ -1233,11 +1564,7 @@ pub const OptimizedBuffer = struct {
                          if (graphemeId != lastDrawnGraphemeId) {
                              // We haven't drawn the start character for this grapheme (likely out of bounds to the left)
                              // Draw a space with the same attributes to fill the cell
--                            self.setCellWithAlphaBlending(@intCast(dX), @intCast(dY), DEFAULT_SPACE_CHAR, srcFg, srcBg, srcAttr) catch {};
+-                            self.setCellWithAlphaBlendingCell(
+-                                @intCast(dX),
+-                                @intCast(dY),
+-                                makeCell(DEFAULT_SPACE_CHAR, srcFg, srcBg, srcAttr),
+-                            ) catch {};
 +                            _ = cursor.blendAt(self, @intCast(dX), @intCast(dY), DEFAULT_SPACE_CHAR, srcFg, srcBg, srcAttr) catch @as(u32, @intCast(dX));
                          }
                          continue;
                      }
-@@ -1160,7 +1485,7 @@ pub const OptimizedBuffer = struct {
+@@ -1246,11 +1573,7 @@ pub const OptimizedBuffer = struct {
                          lastDrawnGraphemeId = srcChar & gp.GRAPHEME_ID_MASK;
                      }
  
--                    self.setCellWithAlphaBlending(@intCast(dX), @intCast(dY), srcChar, srcFg, srcBg, srcAttr) catch {};
+-                    self.setCellWithAlphaBlendingCell(
+-                        @intCast(dX),
+-                        @intCast(dY),
+-                        makeCell(srcChar, srcFg, srcBg, srcAttr),
+-                    ) catch {};
 +                    _ = cursor.blendAt(self, @intCast(dX), @intCast(dY), srcChar, srcFg, srcBg, srcAttr) catch 0;
                      continue;
                  }
  
-@@ -1222,6 +1547,7 @@ pub const OptimizedBuffer = struct {
+@@ -1334,6 +1657,7 @@ pub const OptimizedBuffer = struct {
              if (currentY >= bufferBottomY) break;
  
              currentX = x;
@@ -2454,7 +2501,7 @@ index 7575bbde..13b652b1 100644
              var column_in_line: u32 = 0;
              globalCharPos = vline.col_offset;
  
-@@ -1486,13 +1812,15 @@ pub const OptimizedBuffer = struct {
+@@ -1620,22 +1944,27 @@ pub const OptimizedBuffer = struct {
  
                          var tab_col: u32 = 0;
                          while (tab_col < g_width) : (tab_col += 1) {
@@ -2465,58 +2512,82 @@ index 7575bbde..13b652b1 100644
                              const char = if (tab_col == 0 and tab_indicator != null) tab_indicator.? else DEFAULT_SPACE_CHAR;
                              const fg = if (tab_col == 0 and tab_indicator_color != null) tab_indicator_color.? else drawFg;
  
--                            try self.setCellWithAlphaBlending(
+                             if (useTransparentTextFastPath) {
+-                                const index = self.coordsToIndex(@intCast(currentX + @as(i32, @intCast(tab_col))), @intCast(currentY));
++                                const index = self.coordsToIndex(@intCast(tab_x_i32), @intCast(currentY));
+                                 if (self.trySetTransparentTextCellFast(index, char, fg, drawAttributes)) {
+                                     continue;
+                                 }
+                             }
+ 
+-                            try self.setCellWithAlphaBlendingCell(
 -                                @intCast(currentX + @as(i32, @intCast(tab_col))),
 +                            _ = try cursor.blendAt(
 +                                self,
 +                                @intCast(tab_x_i32),
                                  @intCast(currentY),
-                                 char,
-                                 fg,
-@@ -1515,7 +1843,8 @@ pub const OptimizedBuffer = struct {
-                             encoded_char = gp.packGraphemeStart(gid & gp.GRAPHEME_ID_MASK, g_width);
+-                                makeCell(char, fg, drawBg, drawAttributes),
++                                char,
++                                fg,
++                                drawBg,
++                                drawAttributes,
+                             );
+                         }
+                     } else {
+@@ -1664,10 +1993,14 @@ pub const OptimizedBuffer = struct {
+                             }
                          }
  
--                        try self.setCellWithAlphaBlending(
+-                        try self.setCellWithAlphaBlendingCell(
 +                        _ = try cursor.blendAt(
 +                            self,
                              @intCast(currentX),
                              @intCast(currentY),
-                             encoded_char,
-@@ -1770,7 +2099,7 @@ pub const OptimizedBuffer = struct {
-                             char = if (borderSides.right) borderChars[@intFromEnum(BorderCharIndex.topRight)] else borderChars[@intFromEnum(BorderCharIndex.horizontal)];
-                         }
- 
--                        try self.setCellWithAlphaBlending(@intCast(drawX), @intCast(startY), char, borderColor, backgroundColor, 0);
-+                        _ = try self.setCellWithAlphaBlending(@intCast(drawX), @intCast(startY), char, borderColor, backgroundColor, 0);
+-                            makeCell(encoded_char, drawFg, drawBg, drawAttributes),
++                            encoded_char,
++                            drawFg,
++                            drawBg,
++                            drawAttributes,
+                         );
                      }
-                 }
-             }
-@@ -1793,7 +2122,7 @@ pub const OptimizedBuffer = struct {
-                             char = if (borderSides.right) borderChars[@intFromEnum(BorderCharIndex.bottomRight)] else borderChars[@intFromEnum(BorderCharIndex.horizontal)];
-                         }
  
--                        try self.setCellWithAlphaBlending(@intCast(drawX), @intCast(endY), char, borderColor, backgroundColor, 0);
-+                        _ = try self.setCellWithAlphaBlending(@intCast(drawX), @intCast(endY), char, borderColor, backgroundColor, 0);
-                     }
-                 }
-             }
-@@ -1808,12 +2137,12 @@ pub const OptimizedBuffer = struct {
-             while (drawY <= verticalEndY) : (drawY += 1) {
-                 // Left border
-                 if (borderSides.left and isAtActualLeft and startX >= 0 and startX < @as(i32, @intCast(self.width))) {
--                    try self.setCellWithAlphaBlending(@intCast(startX), @intCast(drawY), borderChars[@intFromEnum(BorderCharIndex.vertical)], borderColor, backgroundColor, 0);
-+                    _ = try self.setCellWithAlphaBlending(@intCast(startX), @intCast(drawY), borderChars[@intFromEnum(BorderCharIndex.vertical)], borderColor, backgroundColor, 0);
-                 }
- 
-                 // Right border
-                 if (borderSides.right and isAtActualRight and endX >= 0 and endX < @as(i32, @intCast(self.width))) {
--                    try self.setCellWithAlphaBlending(@intCast(endX), @intCast(drawY), borderChars[@intFromEnum(BorderCharIndex.vertical)], borderColor, backgroundColor, 0);
-+                    _ = try self.setCellWithAlphaBlending(@intCast(endX), @intCast(drawY), borderChars[@intFromEnum(BorderCharIndex.vertical)], borderColor, backgroundColor, 0);
-                 }
-             }
-         }
-@@ -1892,6 +2221,7 @@ pub const OptimizedBuffer = struct {
+@@ -1952,7 +2285,7 @@ pub const OptimizedBuffer = struct {
+                             self.buffer.fg[index] = borderColor;
+                             self.buffer.attributes[index] = 0;
+                         } else {
+-                            try self.setCellWithAlphaBlendingCell(
++                            _ = try self.setCellWithAlphaBlendingCell(
+                                 @intCast(drawX),
+                                 @intCast(startY),
+                                 makeCell(char, borderColor, backgroundColor, 0),
+@@ -1986,7 +2319,7 @@ pub const OptimizedBuffer = struct {
+                             self.buffer.fg[index] = borderColor;
+                             self.buffer.attributes[index] = 0;
+                         } else {
+-                            try self.setCellWithAlphaBlendingCell(
++                            _ = try self.setCellWithAlphaBlendingCell(
+                                 @intCast(drawX),
+                                 @intCast(endY),
+                                 makeCell(char, borderColor, backgroundColor, 0),
+@@ -2012,7 +2345,7 @@ pub const OptimizedBuffer = struct {
+                         self.buffer.fg[index] = borderColor;
+                         self.buffer.attributes[index] = 0;
+                     } else {
+-                        try self.setCellWithAlphaBlendingCell(
++                        _ = try self.setCellWithAlphaBlendingCell(
+                             @intCast(startX),
+                             @intCast(drawY),
+                             makeCell(borderChars[@intFromEnum(BorderCharIndex.vertical)], borderColor, backgroundColor, 0),
+@@ -2028,7 +2361,7 @@ pub const OptimizedBuffer = struct {
+                         self.buffer.fg[index] = borderColor;
+                         self.buffer.attributes[index] = 0;
+                     } else {
+-                        try self.setCellWithAlphaBlendingCell(
++                        _ = try self.setCellWithAlphaBlendingCell(
+                             @intCast(endX),
+                             @intCast(drawY),
+                             makeCell(borderChars[@intFromEnum(BorderCharIndex.vertical)], borderColor, backgroundColor, 0),
+@@ -2112,6 +2445,7 @@ pub const OptimizedBuffer = struct {
  
          var y_cell = posY;
          while (y_cell < self.height) : (y_cell += 1) {
@@ -2524,16 +2595,23 @@ index 7575bbde..13b652b1 100644
              var x_cell = posX;
              while (x_cell < self.width) : (x_cell += 1) {
                  if (!self.isPointInScissor(@intCast(x_cell), @intCast(y_cell))) {
-@@ -1917,7 +2247,7 @@ pub const OptimizedBuffer = struct {
+@@ -2137,14 +2471,7 @@ pub const OptimizedBuffer = struct {
  
                  const cellResult = renderQuadrantBlock(pixelsRgba);
  
--                try self.setCellWithAlphaBlending(x_cell, y_cell, cellResult.char, cellResult.fg, cellResult.bg, 0);
+-                try self.setCellWithAlphaBlending(
+-                    x_cell,
+-                    y_cell,
+-                    cellResult.char,
+-                    cellResult.fg,
+-                    cellResult.bg,
+-                    0,
+-                );
 +                _ = try cursor.blendAt(self, x_cell, y_cell, cellResult.char, cellResult.fg, cellResult.bg, 0);
              }
          }
      }
-@@ -1938,6 +2268,8 @@ pub const OptimizedBuffer = struct {
+@@ -2165,6 +2492,8 @@ pub const OptimizedBuffer = struct {
          const numCells = dataLen / cellResultSize;
          const bufferWidthCells = terminalWidthCells;
  
@@ -2542,7 +2620,7 @@ index 7575bbde..13b652b1 100644
          var i: usize = 0;
          while (i < numCells) : (i += 1) {
              const cellDataOffset = i * cellResultSize;
-@@ -1945,6 +2277,11 @@ pub const OptimizedBuffer = struct {
+@@ -2172,6 +2501,11 @@ pub const OptimizedBuffer = struct {
              const cellX = posX + @as(u32, @intCast(i % bufferWidthCells));
              const cellY = posY + @as(u32, @intCast(i / bufferWidthCells));
  
@@ -2554,7 +2632,7 @@ index 7575bbde..13b652b1 100644
              if (cellX >= terminalWidthCells or cellY >= terminalHeightCells) continue;
              if (cellX >= self.width or cellY >= self.height) continue;
  
-@@ -1967,7 +2304,7 @@ pub const OptimizedBuffer = struct {
+@@ -2194,7 +2528,7 @@ pub const OptimizedBuffer = struct {
                  char = BLOCK_CHAR;
              }
  
@@ -2563,7 +2641,7 @@ index 7575bbde..13b652b1 100644
          }
      }
  
-@@ -2017,6 +2354,7 @@ pub const OptimizedBuffer = struct {
+@@ -2244,6 +2578,7 @@ pub const OptimizedBuffer = struct {
              srcY += 1;
              destY += 1;
          }) {
@@ -2571,16 +2649,16 @@ index 7575bbde..13b652b1 100644
              var srcX: u32 = startX;
              var destX: u32 = destStartX;
              while (srcX < startX + visibleWidth) : ({
-@@ -2036,7 +2374,7 @@ pub const OptimizedBuffer = struct {
-                 const fg: RGBA = .{ baseFg[0], baseFg[1], baseFg[2], gray * baseFg[3] * opacity };
+@@ -2263,7 +2598,7 @@ pub const OptimizedBuffer = struct {
+                 const fg = applyOpacity(baseFg, opacityToU8(gray * opacity));
  
                  if (graphemeAware or linkAware) {
--                    self.setCellWithAlphaBlending(destX, destY, char, fg, bg, 0) catch {};
+-                    self.setCellWithAlphaBlendingCell(destX, destY, makeCell(char, fg, bg, 0)) catch {};
 +                    _ = cursor.blendAt(self, destX, destY, char, fg, bg, 0) catch 0;
                  } else {
-                     self.setCellWithAlphaBlendingRaw(destX, destY, char, fg, bg, 0) catch {};
+                     self.setCellWithAlphaBlendingRawCell(destX, destY, makeCell(char, fg, bg, 0)) catch {};
                  }
-@@ -2087,6 +2425,7 @@ pub const OptimizedBuffer = struct {
+@@ -2314,6 +2649,7 @@ pub const OptimizedBuffer = struct {
              cellY += 1;
              destY += 1;
          }) {
@@ -2588,45 +2666,44 @@ index 7575bbde..13b652b1 100644
              var cellX: u32 = startX;
              var destX: u32 = destStartX;
              while (cellX < startX + visibleWidth) : ({
-@@ -2118,7 +2457,7 @@ pub const OptimizedBuffer = struct {
-                 const fg: RGBA = .{ baseFg[0], baseFg[1], baseFg[2], gray * baseFg[3] * opacity };
+@@ -2345,7 +2681,7 @@ pub const OptimizedBuffer = struct {
+                 const fg = applyOpacity(baseFg, opacityToU8(gray * opacity));
  
                  if (graphemeAware or linkAware) {
--                    self.setCellWithAlphaBlending(destX, destY, char, fg, bg, 0) catch {};
+-                    self.setCellWithAlphaBlendingCell(destX, destY, makeCell(char, fg, bg, 0)) catch {};
 +                    _ = cursor.blendAt(self, destX, destY, char, fg, bg, 0) catch 0;
                  } else {
-                     self.setCellWithAlphaBlendingRaw(destX, destY, char, fg, bg, 0) catch {};
+                     self.setCellWithAlphaBlendingRawCell(destX, destY, makeCell(char, fg, bg, 0)) catch {};
                  }
 diff --git a/src/zig/lib.zig b/src/zig/lib.zig
-index b95b7e0b..9716c8e3 100644
+index 628a312a..0036bb90 100644
 --- a/src/zig/lib.zig
 +++ b/src/zig/lib.zig
-@@ -518,7 +518,7 @@ export fn bufferDrawText(bufferPtr: *buffer.OptimizedBuffer, text: [*]const u8,
- export fn bufferSetCellWithAlphaBlending(bufferPtr: *buffer.OptimizedBuffer, x: u32, y: u32, char: u32, fg: [*]const f32, bg: [*]const f32, attributes: u32) void {
-     const rgbaFg = utils.f32PtrToRGBA(fg);
-     const rgbaBg = utils.f32PtrToRGBA(bg);
--    bufferPtr.setCellWithAlphaBlending(x, y, char, rgbaFg, rgbaBg, attributes) catch {};
-+    _ = bufferPtr.setCellWithAlphaBlending(x, y, char, rgbaFg, rgbaBg, attributes) catch return;
+@@ -643,7 +643,7 @@ export fn bufferDrawText(bufferPtr: *buffer.OptimizedBuffer, text: [*]const u8,
  }
  
- export fn bufferSetCell(bufferPtr: *buffer.OptimizedBuffer, x: u32, y: u32, char: u32, fg: [*]const f32, bg: [*]const f32, attributes: u32) void {
-@@ -538,6 +538,11 @@ export fn bufferFillRect(bufferPtr: *buffer.OptimizedBuffer, x: u32, y: u32, wid
-     bufferPtr.fillRect(x, y, width, height, rgbaBg) catch {};
+ export fn bufferSetCellWithAlphaBlending(bufferPtr: *buffer.OptimizedBuffer, x: u32, y: u32, char: u32, fg: [*]const u16, bg: [*]const u16, attributes: u32) void {
+-    bufferPtr.setCellWithAlphaBlending(x, y, char, ptrToRGBA(fg), ptrToRGBA(bg), attributes) catch {};
++    _ = bufferPtr.setCellWithAlphaBlending(x, y, char, ptrToRGBA(fg), ptrToRGBA(bg), attributes) catch return;
  }
  
-+export fn bufferFillRectClipWideGraphemes(bufferPtr: *buffer.OptimizedBuffer, x: u32, y: u32, width: u32, height: u32, bg: [*]const f32) void {
-+    const rgbaBg = utils.f32PtrToRGBA(bg);
-+    bufferPtr.fillRectClipWideGraphemes(x, y, width, height, rgbaBg) catch {};
+ export fn bufferSetCell(bufferPtr: *buffer.OptimizedBuffer, x: u32, y: u32, char: u32, fg: [*]const u16, bg: [*]const u16, attributes: u32) void {
+@@ -659,6 +659,10 @@ export fn bufferFillRect(bufferPtr: *buffer.OptimizedBuffer, x: u32, y: u32, wid
+     bufferPtr.fillRect(x, y, width, height, ptrToRGBA(bg)) catch {};
+ }
+ 
++export fn bufferFillRectClipWideGraphemes(bufferPtr: *buffer.OptimizedBuffer, x: u32, y: u32, width: u32, height: u32, bg: [*]const u16) void {
++    bufferPtr.fillRectClipWideGraphemes(x, y, width, height, ptrToRGBA(bg)) catch {};
 +}
 +
  export fn bufferColorMatrix(bufferPtr: *buffer.OptimizedBuffer, matrixPtr: [*]const f32, cellMaskPtr: [*]const f32, cellMaskCount: usize, strength: f32, target: u8) void {
      if (cellMaskCount == 0) return;
      const matrix = matrixPtr[0..16];
 diff --git a/src/zig/renderer.zig b/src/zig/renderer.zig
-index bc739e81..e9a669d7 100644
+index c1eb2122..d8e76a4e 100644
 --- a/src/zig/renderer.zig
 +++ b/src/zig/renderer.zig
-@@ -635,6 +635,12 @@ pub const CliRenderer = struct {
+@@ -1274,6 +1274,12 @@ pub const CliRenderer = struct {
  
              var runStart: i64 = -1;
              var runLength: u32 = 0;
@@ -2639,7 +2716,7 @@ index bc739e81..e9a669d7 100644
  
              for (0..self.width) |ux| {
                  const x = @as(u32, @intCast(ux));
-@@ -642,6 +648,15 @@ pub const CliRenderer = struct {
+@@ -1281,6 +1287,15 @@ pub const CliRenderer = struct {
                  const nextCell = self.nextRenderBuffer.get(x, y);
  
                  if (currentCell == null or nextCell == null) continue;
@@ -2653,9 +2730,9 @@ index bc739e81..e9a669d7 100644
 +                    continue;
 +                }
  
-                 if (!force) {
+                 if (!should_force) {
                      const charEqual = currentCell.?.char == nextCell.?.char;
-@@ -719,6 +734,28 @@ pub const CliRenderer = struct {
+@@ -1348,6 +1363,28 @@ pub const CliRenderer = struct {
                      ansi.TextAttributes.applyAttributesOutputWriter(writer, cell.attributes) catch {};
                  }
  
@@ -2684,7 +2761,7 @@ index bc739e81..e9a669d7 100644
                  // Handle grapheme characters
                  if (gp.isGraphemeChar(cell.char)) {
                      const gid: u32 = gp.graphemeIdFromChar(cell.char);
-@@ -729,11 +766,19 @@ pub const CliRenderer = struct {
+@@ -1358,11 +1395,19 @@ pub const CliRenderer = struct {
                      if (bytes.len > 0) {
                          const capabilities = self.terminal.getCapabilities();
                          const graphemeWidth = gp.charRightExtent(cell.char) + 1;
@@ -2705,7 +2782,7 @@ index bc739e81..e9a669d7 100644
                                  const nextX = x + graphemeWidth;
                                  if (nextX < self.width) {
                                      ansi.ANSI.moveToOutput(writer, nextX + 1, y + 1 + self.renderOffset) catch {};
-@@ -742,11 +787,13 @@ pub const CliRenderer = struct {
+@@ -1371,11 +1416,13 @@ pub const CliRenderer = struct {
                          }
                      }
                  } else if (gp.isContinuationChar(cell.char)) {
@@ -2725,28 +2802,46 @@ index bc739e81..e9a669d7 100644
                      const len = std.unicode.utf8Encode(@intCast(cell.char), &utf8Buf) catch 1;
                      writer.writeAll(utf8Buf[0..len]) catch {};
 diff --git a/src/zig/tests/buffer_test.zig b/src/zig/tests/buffer_test.zig
-index b72c3f91..5ebf82fd 100644
+index df344be0..6fa82fdf 100644
 --- a/src/zig/tests/buffer_test.zig
 +++ b/src/zig/tests/buffer_test.zig
-@@ -2228,7 +2228,7 @@ test "OptimizedBuffer - blendColors with transparent destination" {
+@@ -120,7 +120,7 @@ test "OptimizedBuffer - alpha blending downgrades blended metadata to rgb" {
+     const base_bg = ansi.rgbaFromFloats(0.0, 0.0, 0.0, 1.0);
+     try buf.clear(base_bg, null);
  
-     const semi_white = RGBA{ 1.0, 1.0, 1.0, 0.5 };
-     const transparent_fg = RGBA{ 0.0, 0.0, 0.0, 0.0 };
+-    try buf.setCellWithAlphaBlending(
++    _ = try buf.setCellWithAlphaBlending(
+         0,
+         0,
+         'B',
+@@ -141,7 +141,7 @@ test "OptimizedBuffer - alpha blending downgrades blended metadata to rgb" {
+         .attributes = 0,
+     });
+ 
+-    try buf.setCellWithAlphaBlending(
++    _ = try buf.setCellWithAlphaBlending(
+         0,
+         0,
+         'C',
+@@ -2571,7 +2571,7 @@ test "OptimizedBuffer - blendColors with transparent destination" {
+ 
+     const semi_white = ansi.rgbaFromFloats(1.0, 1.0, 1.0, 0.5);
+     const transparent_fg = ansi.rgbaFromFloats(0.0, 0.0, 0.0, 0.0);
 -    try buf.setCellWithAlphaBlending(0, 0, 'X', semi_white, transparent_fg, 0);
 +    _ = try buf.setCellWithAlphaBlending(0, 0, 'X', semi_white, transparent_fg, 0);
  
      const cell = buf.get(0, 0).?;
-     try std.testing.expect(cell.fg[0] > 0.45);
-@@ -2255,7 +2255,7 @@ test "OptimizedBuffer - blend backdrop flattens transparent destination" {
+     try std.testing.expectEqual(@as(u8, 255), ansi.red(cell.fg));
+@@ -2599,7 +2599,7 @@ test "OptimizedBuffer - blend backdrop flattens transparent destination" {
  
-     const opaque_fg = RGBA{ 1.0, 1.0, 1.0, 1.0 };
-     const semi_black_bg = RGBA{ 0.0, 0.0, 0.0, 0.5 };
+     const opaque_fg = ansi.rgbaFromFloats(1.0, 1.0, 1.0, 1.0);
+     const semi_black_bg = ansi.rgbaFromFloats(0.0, 0.0, 0.0, 0.5);
 -    try buf.setCellWithAlphaBlending(0, 0, buffer_mod.DEFAULT_SPACE_CHAR, opaque_fg, semi_black_bg, 0);
 +    _ = try buf.setCellWithAlphaBlending(0, 0, buffer_mod.DEFAULT_SPACE_CHAR, opaque_fg, semi_black_bg, 0);
  
      const cell = buf.get(0, 0).?;
-     try std.testing.expect(cell.bg[0] > 0.45);
-@@ -2555,3 +2555,1044 @@ test "renderer - CJK graphemes shifting left must preserve continuation cells (#
+     try std.testing.expectEqual(@as(u8, 127), ansi.red(cell.bg));
+@@ -2896,3 +2896,1031 @@ test "renderer - CJK graphemes shifting left must preserve continuation cells (#
      const id8 = gp.graphemeIdFromChar(cell8.char);
      try std.testing.expectEqual(id7, id8);
  }
@@ -2787,8 +2882,8 @@ index b72c3f91..5ebf82fd 100644
 +    );
 +    defer buf.deinit();
 +
-+    const bg = RGBA{ 0.0, 0.0, 0.0, 1.0 };
-+    const fg = RGBA{ 1.0, 1.0, 1.0, 1.0 };
++    const bg = ansi.rgbaFromFloats(0.0, 0.0, 0.0, 1.0);
++    const fg = ansi.rgbaFromFloats(1.0, 1.0, 1.0, 1.0);
 +    try buf.clear(bg, null);
 +
 +    // Write a width-2 grapheme (東) at column 2
@@ -2803,8 +2898,8 @@ index b72c3f91..5ebf82fd 100644
 +    try std.testing.expect(gp.isContinuationChar(cont_before.char));
 +
 +    // Apply a translucent overlay (like NestedTmuxOverlay's #0088ff18) over the whole row
-+    const overlay_bg = RGBA{ 0.0, 0.533, 1.0, 0.094 }; // #0088ff18
-+    const overlay_fg = RGBA{ 0.0, 0.0, 0.0, 0.0 };
++    const overlay_bg = ansi.rgbaFromFloats(0.0, 0.533, 1.0, 0.094); // #0088ff18
++    const overlay_fg = ansi.rgbaFromFloats(0.0, 0.0, 0.0, 0.0);
 +    for (0..10) |x| {
 +        _ = try buf.setCellWithAlphaBlending(@intCast(x), 0, ' ', overlay_fg, overlay_bg, 0);
 +    }
@@ -2820,8 +2915,8 @@ index b72c3f91..5ebf82fd 100644
 +    try std.testing.expectEqual(cont_before.char, cont_after.char);
 +
 +    // Background should be tinted (not identical to the original pure black)
-+    try std.testing.expect(start_after.bg[1] > 0.01); // green channel gained from #0088ff
-+    try std.testing.expect(cont_after.bg[1] > 0.01);
++    try std.testing.expect(ansi.greenF(start_after.bg) > 0.01); // green channel gained from #0088ff
++    try std.testing.expect(ansi.greenF(cont_after.bg) > 0.01);
 +
 +    // Both cells should have the SAME blended bg (no double-blending)
 +    try std.testing.expectEqual(start_after.bg[0], cont_after.bg[0]);
@@ -2841,8 +2936,8 @@ index b72c3f91..5ebf82fd 100644
 +    );
 +    defer buf.deinit();
 +
-+    const bg = RGBA{ 0.0, 0.0, 0.0, 1.0 };
-+    const fg = RGBA{ 1.0, 1.0, 1.0, 1.0 };
++    const bg = ansi.rgbaFromFloats(0.0, 0.0, 0.0, 1.0);
++    const fg = ansi.rgbaFromFloats(1.0, 1.0, 1.0, 1.0);
 +    try buf.clear(bg, null);
 +
 +    // Write a width-2 grapheme (東) at column 2
@@ -2851,8 +2946,8 @@ index b72c3f91..5ebf82fd 100644
 +    buf.set(2, 0, .{ .char = grapheme_start, .fg = fg, .bg = bg, .attributes = 0 });
 +
 +    // drawText a single translucent space at x=3 (the continuation cell only)
-+    const overlay_bg = RGBA{ 0.0, 0.533, 1.0, 0.094 };
-+    const overlay_fg = RGBA{ 1.0, 1.0, 1.0, 1.0 };
++    const overlay_bg = ansi.rgbaFromFloats(0.0, 0.533, 1.0, 0.094);
++    const overlay_fg = ansi.rgbaFromFloats(1.0, 1.0, 1.0, 1.0);
 +    try buf.drawText(" ", 3, 0, overlay_fg, overlay_bg, 0);
 +
 +    // Grapheme must survive
@@ -2862,8 +2957,8 @@ index b72c3f91..5ebf82fd 100644
 +    try std.testing.expect(gp.isContinuationChar(cont_after.char));
 +
 +    // Both cells should be tinted (not just x=3)
-+    try std.testing.expect(start_after.bg[1] > 0.01);
-+    try std.testing.expect(cont_after.bg[1] > 0.01);
++    try std.testing.expect(ansi.greenF(start_after.bg) > 0.01);
++    try std.testing.expect(ansi.greenF(cont_after.bg) > 0.01);
 +
 +    // Both cells should have the SAME blended bg (uniform tint across the span)
 +    try std.testing.expectEqual(start_after.bg[0], cont_after.bg[0]);
@@ -2883,8 +2978,8 @@ index b72c3f91..5ebf82fd 100644
 +    );
 +    defer buf.deinit();
 +
-+    const bg = RGBA{ 0.0, 0.0, 0.0, 1.0 };
-+    const fg = RGBA{ 1.0, 1.0, 1.0, 1.0 };
++    const bg = ansi.rgbaFromFloats(0.0, 0.0, 0.0, 1.0);
++    const fg = ansi.rgbaFromFloats(1.0, 1.0, 1.0, 1.0);
 +    try buf.clear(bg, null);
 +
 +    // Write a width-2 grapheme (東) at column 2
@@ -2901,7 +2996,7 @@ index b72c3f91..5ebf82fd 100644
 +    );
 +    defer child.deinit();
 +    child.setRespectAlpha(true);
-+    const overlay_bg = RGBA{ 0.0, 0.533, 1.0, 0.094 };
++    const overlay_bg = ansi.rgbaFromFloats(0.0, 0.533, 1.0, 0.094);
 +    try child.clear(overlay_bg, null);
 +
 +    // Composite the 1×1 child at dest x=3 (the continuation cell only)
@@ -2914,8 +3009,8 @@ index b72c3f91..5ebf82fd 100644
 +    try std.testing.expect(gp.isContinuationChar(cont_after.char));
 +
 +    // Both cells should be tinted (not just x=3)
-+    try std.testing.expect(start_after.bg[1] > 0.01);
-+    try std.testing.expect(cont_after.bg[1] > 0.01);
++    try std.testing.expect(ansi.greenF(start_after.bg) > 0.01);
++    try std.testing.expect(ansi.greenF(cont_after.bg) > 0.01);
 +
 +    // Both cells should have the SAME blended bg (uniform tint across the span)
 +    try std.testing.expectEqual(start_after.bg[0], cont_after.bg[0]);
@@ -2943,8 +3038,8 @@ index b72c3f91..5ebf82fd 100644
 +    );
 +    defer ref.deinit();
 +
-+    const base_bg = RGBA{ 0.0, 0.0, 0.0, 1.0 };
-+    const fg = RGBA{ 1.0, 1.0, 1.0, 1.0 };
++    const base_bg = ansi.rgbaFromFloats(0.0, 0.0, 0.0, 1.0);
++    const fg = ansi.rgbaFromFloats(1.0, 1.0, 1.0, 1.0);
 +    try buf.clear(base_bg, null);
 +    try ref.clear(base_bg, null);
 +
@@ -2961,10 +3056,10 @@ index b72c3f91..5ebf82fd 100644
 +    );
 +    defer child.deinit();
 +    child.setRespectAlpha(true);
-+    try child.clear(RGBA{ 0.0, 0.0, 0.0, 0.0 }, null);
++    try child.clear(ansi.rgbaFromFloats(0.0, 0.0, 0.0, 0.0), null);
 +
-+    const blue_bg = RGBA{ 0.0, 0.0, 1.0, 0.5 };
-+    const red_bg = RGBA{ 1.0, 0.0, 0.0, 0.5 };
++    const blue_bg = ansi.rgbaFromFloats(0.0, 0.0, 1.0, 0.5);
++    const red_bg = ansi.rgbaFromFloats(1.0, 0.0, 0.0, 0.5);
 +    child.set(0, 0, .{ .char = buffer_mod.DEFAULT_SPACE_CHAR, .fg = fg, .bg = blue_bg, .attributes = 0 });
 +    child.set(1, 0, .{ .char = buffer_mod.DEFAULT_SPACE_CHAR, .fg = fg, .bg = red_bg, .attributes = 0 });
 +
@@ -3002,8 +3097,8 @@ index b72c3f91..5ebf82fd 100644
 +    );
 +    defer buf.deinit();
 +
-+    const bg = RGBA{ 0.0, 0.0, 0.0, 1.0 };
-+    const fg = RGBA{ 1.0, 1.0, 1.0, 1.0 };
++    const bg = ansi.rgbaFromFloats(0.0, 0.0, 0.0, 1.0);
++    const fg = ansi.rgbaFromFloats(1.0, 1.0, 1.0, 1.0);
 +    try buf.clear(bg, null);
 +
 +    const gid = try pool.alloc("東");
@@ -3015,7 +3110,7 @@ index b72c3f91..5ebf82fd 100644
 +    try std.testing.expect(gp.isGraphemeChar(start_before.char));
 +    try std.testing.expect(gp.isContinuationChar(cont_before.char));
 +
-+    const overlay_bg = RGBA{ 0.0, 0.533, 1.0, 0.094 };
++    const overlay_bg = ansi.rgbaFromFloats(0.0, 0.533, 1.0, 0.094);
 +    try buf.fillRect(3, 0, 1, 1, overlay_bg);
 +
 +    const start_after = buf.get(2, 0).?;
@@ -3026,8 +3121,8 @@ index b72c3f91..5ebf82fd 100644
 +    try std.testing.expectEqual(start_before.char, start_after.char);
 +    try std.testing.expectEqual(cont_before.char, cont_after.char);
 +
-+    try std.testing.expect(start_after.bg[1] > 0.01);
-+    try std.testing.expect(cont_after.bg[1] > 0.01);
++    try std.testing.expect(ansi.greenF(start_after.bg) > 0.01);
++    try std.testing.expect(ansi.greenF(cont_after.bg) > 0.01);
 +
 +    try std.testing.expectEqual(start_after.bg[0], cont_after.bg[0]);
 +    try std.testing.expectEqual(start_after.bg[1], cont_after.bg[1]);
@@ -3046,15 +3141,15 @@ index b72c3f91..5ebf82fd 100644
 +    );
 +    defer buf.deinit();
 +
-+    const bg = RGBA{ 0.0, 0.0, 0.0, 1.0 };
-+    const fg = RGBA{ 1.0, 1.0, 1.0, 1.0 };
++    const bg = ansi.rgbaFromFloats(0.0, 0.0, 0.0, 1.0);
++    const fg = ansi.rgbaFromFloats(1.0, 1.0, 1.0, 1.0);
 +    try buf.clear(bg, null);
 +
 +    const gid = try pool.alloc("東");
 +    const grapheme_start = gp.packGraphemeStart(gid & gp.GRAPHEME_ID_MASK, 2);
 +    buf.set(2, 0, .{ .char = grapheme_start, .fg = fg, .bg = bg, .attributes = 0 });
 +
-+    const overlay_bg = RGBA{ 0.0, 0.533, 1.0, 0.094 };
++    const overlay_bg = ansi.rgbaFromFloats(0.0, 0.533, 1.0, 0.094);
 +    try buf.fillRectClipWideGraphemes(3, 0, 1, 1, overlay_bg);
 +
 +    const outside = buf.get(2, 0).?;
@@ -3062,10 +3157,8 @@ index b72c3f91..5ebf82fd 100644
 +
 +    try std.testing.expectEqual(@as(u32, buffer_mod.DEFAULT_SPACE_CHAR), outside.char);
 +    try std.testing.expectEqual(@as(u32, buffer_mod.DEFAULT_SPACE_CHAR), inside.char);
-+    try std.testing.expectEqual(bg[0], outside.bg[0]);
-+    try std.testing.expectEqual(bg[1], outside.bg[1]);
-+    try std.testing.expectEqual(bg[2], outside.bg[2]);
-+    try std.testing.expect(inside.bg[1] > 0.01);
++    try std.testing.expectEqual(bg, outside.bg);
++    try std.testing.expect(ansi.greenF(inside.bg) > 0.01);
 +}
 +
 +test "fillRectClipWideGraphemes clips a right-edge overlap instead of tinting outside the box" {
@@ -3080,15 +3173,15 @@ index b72c3f91..5ebf82fd 100644
 +    );
 +    defer buf.deinit();
 +
-+    const bg = RGBA{ 0.0, 0.0, 0.0, 1.0 };
-+    const fg = RGBA{ 1.0, 1.0, 1.0, 1.0 };
++    const bg = ansi.rgbaFromFloats(0.0, 0.0, 0.0, 1.0);
++    const fg = ansi.rgbaFromFloats(1.0, 1.0, 1.0, 1.0);
 +    try buf.clear(bg, null);
 +
 +    const gid = try pool.alloc("東");
 +    const grapheme_start = gp.packGraphemeStart(gid & gp.GRAPHEME_ID_MASK, 2);
 +    buf.set(2, 0, .{ .char = grapheme_start, .fg = fg, .bg = bg, .attributes = 0 });
 +
-+    const overlay_bg = RGBA{ 0.0, 0.533, 1.0, 0.094 };
++    const overlay_bg = ansi.rgbaFromFloats(0.0, 0.533, 1.0, 0.094);
 +    try buf.fillRectClipWideGraphemes(2, 0, 1, 1, overlay_bg);
 +
 +    const inside = buf.get(2, 0).?;
@@ -3096,10 +3189,8 @@ index b72c3f91..5ebf82fd 100644
 +
 +    try std.testing.expectEqual(@as(u32, buffer_mod.DEFAULT_SPACE_CHAR), inside.char);
 +    try std.testing.expectEqual(@as(u32, buffer_mod.DEFAULT_SPACE_CHAR), outside.char);
-+    try std.testing.expect(inside.bg[1] > 0.01);
-+    try std.testing.expectEqual(bg[0], outside.bg[0]);
-+    try std.testing.expectEqual(bg[1], outside.bg[1]);
-+    try std.testing.expectEqual(bg[2], outside.bg[2]);
++    try std.testing.expect(ansi.greenF(inside.bg) > 0.01);
++    try std.testing.expectEqual(bg, outside.bg);
 +}
 +
 +test "fillRectClipWideGraphemes with transparent background is a no-op over wide graphemes" {
@@ -3114,8 +3205,8 @@ index b72c3f91..5ebf82fd 100644
 +    );
 +    defer buf.deinit();
 +
-+    const bg = RGBA{ 0.0, 0.0, 0.0, 1.0 };
-+    const fg = RGBA{ 1.0, 1.0, 1.0, 1.0 };
++    const bg = ansi.rgbaFromFloats(0.0, 0.0, 0.0, 1.0);
++    const fg = ansi.rgbaFromFloats(1.0, 1.0, 1.0, 1.0);
 +    try buf.clear(bg, null);
 +
 +    const gid = try pool.alloc("東");
@@ -3127,7 +3218,7 @@ index b72c3f91..5ebf82fd 100644
 +    try std.testing.expect(gp.isGraphemeChar(start_before.char));
 +    try std.testing.expect(gp.isContinuationChar(cont_before.char));
 +
-+    try buf.fillRectClipWideGraphemes(3, 0, 1, 1, RGBA{ 0.0, 0.0, 0.0, 0.0 });
++    try buf.fillRectClipWideGraphemes(3, 0, 1, 1, ansi.rgbaFromFloats(0.0, 0.0, 0.0, 0.0));
 +
 +    const start_after = buf.get(2, 0).?;
 +    const cont_after = buf.get(3, 0).?;
@@ -3153,8 +3244,8 @@ index b72c3f91..5ebf82fd 100644
 +    );
 +    defer buf.deinit();
 +
-+    const bg = RGBA{ 0.0, 0.0, 0.0, 1.0 };
-+    const fg = RGBA{ 1.0, 1.0, 1.0, 1.0 };
++    const bg = ansi.rgbaFromFloats(0.0, 0.0, 0.0, 1.0);
++    const fg = ansi.rgbaFromFloats(1.0, 1.0, 1.0, 1.0);
 +    try buf.clear(bg, null);
 +
 +    // Write a width-2 grapheme (東) at column 2
@@ -3173,8 +3264,8 @@ index b72c3f91..5ebf82fd 100644
 +    defer ref.deinit();
 +    try ref.clear(bg, null);
 +    ref.set(2, 0, .{ .char = grapheme_start, .fg = fg, .bg = bg, .attributes = 0 });
-+    const overlay_bg = RGBA{ 0.0, 0.533, 1.0, 0.094 };
-+    const overlay_fg = RGBA{ 1.0, 1.0, 1.0, 1.0 };
++    const overlay_bg = ansi.rgbaFromFloats(0.0, 0.533, 1.0, 0.094);
++    const overlay_fg = ansi.rgbaFromFloats(1.0, 1.0, 1.0, 1.0);
 +    _ = try ref.setCellWithAlphaBlending(2, 0, ' ', overlay_fg, overlay_bg, 0);
 +    const expected_bg = ref.get(2, 0).?.bg;
 +
@@ -3211,8 +3302,8 @@ index b72c3f91..5ebf82fd 100644
 +    );
 +    defer buf.deinit();
 +
-+    const bg = RGBA{ 0.0, 0.0, 0.0, 1.0 };
-+    const fg = RGBA{ 1.0, 1.0, 1.0, 1.0 };
++    const bg = ansi.rgbaFromFloats(0.0, 0.0, 0.0, 1.0);
++    const fg = ansi.rgbaFromFloats(1.0, 1.0, 1.0, 1.0);
 +    try buf.clear(bg, null);
 +
 +    // Place two separate wide graphemes: 東 at x=1 and 京 at x=5
@@ -3235,8 +3326,8 @@ index b72c3f91..5ebf82fd 100644
 +    try ref.clear(bg, null);
 +    ref.set(1, 0, .{ .char = gs1, .fg = fg, .bg = bg, .attributes = 0 });
 +    ref.set(5, 0, .{ .char = gs2, .fg = fg, .bg = bg, .attributes = 0 });
-+    const overlay_bg = RGBA{ 0.0, 0.533, 1.0, 0.094 };
-+    const overlay_fg = RGBA{ 1.0, 1.0, 1.0, 1.0 };
++    const overlay_bg = ansi.rgbaFromFloats(0.0, 0.533, 1.0, 0.094);
++    const overlay_fg = ansi.rgbaFromFloats(1.0, 1.0, 1.0, 1.0);
 +    _ = try ref.setCellWithAlphaBlending(1, 0, ' ', overlay_fg, overlay_bg, 0);
 +    _ = try ref.setCellWithAlphaBlending(5, 0, ' ', overlay_fg, overlay_bg, 0);
 +    const expected_bg1 = ref.get(1, 0).?.bg;
@@ -3284,8 +3375,8 @@ index b72c3f91..5ebf82fd 100644
 +    );
 +    defer buf.deinit();
 +
-+    const bg = RGBA{ 0.0, 0.0, 0.0, 1.0 };
-+    const fg = RGBA{ 1.0, 1.0, 1.0, 1.0 };
++    const bg = ansi.rgbaFromFloats(0.0, 0.0, 0.0, 1.0);
++    const fg = ansi.rgbaFromFloats(1.0, 1.0, 1.0, 1.0);
 +    try buf.clear(bg, null);
 +
 +    // Write 東 at x=2 (occupies x=2 and x=3)
@@ -3300,7 +3391,7 @@ index b72c3f91..5ebf82fd 100644
 +
 +    // fillRect at x=3 — the span expansion should NOT write to x=2
 +    // because x=2 is outside the scissor.
-+    const overlay_bg = RGBA{ 0.0, 0.533, 1.0, 0.094 };
++    const overlay_bg = ansi.rgbaFromFloats(0.0, 0.533, 1.0, 0.094);
 +    try buf.fillRect(3, 0, 1, 1, overlay_bg);
 +
 +    buf.popScissorRect();
@@ -3313,7 +3404,7 @@ index b72c3f91..5ebf82fd 100644
 +    try std.testing.expect(gp.isContinuationChar(cont_after.char));
 +
 +    // x=3 (inside scissor) should be tinted
-+    try std.testing.expect(cont_after.bg[1] > 0.01);
++    try std.testing.expect(ansi.greenF(cont_after.bg) > 0.01);
 +
 +    // x=2 (outside scissor) must NOT be tinted — bg should be unchanged
 +    try std.testing.expectEqual(start_bg_before[0], start_after.bg[0]);
@@ -3333,8 +3424,8 @@ index b72c3f91..5ebf82fd 100644
 +    );
 +    defer buf.deinit();
 +
-+    const bg = RGBA{ 0.0, 0.0, 0.0, 1.0 };
-+    const fg = RGBA{ 1.0, 1.0, 1.0, 1.0 };
++    const bg = ansi.rgbaFromFloats(0.0, 0.0, 0.0, 1.0);
++    const fg = ansi.rgbaFromFloats(1.0, 1.0, 1.0, 1.0);
 +    try buf.clear(bg, null);
 +
 +    // Write 東 at x=2 (occupies x=2 and x=3)
@@ -3345,8 +3436,8 @@ index b72c3f91..5ebf82fd 100644
 +    // drawText " B" at x=2: space at x=2 should tint the span,
 +    // then 'B' at x=3 should overwrite the continuation cell.
 +    // The span-skip logic must NOT skip non-space characters.
-+    const overlay_bg = RGBA{ 0.0, 0.533, 1.0, 0.094 };
-+    const overlay_fg = RGBA{ 1.0, 1.0, 1.0, 1.0 };
++    const overlay_bg = ansi.rgbaFromFloats(0.0, 0.533, 1.0, 0.094);
++    const overlay_fg = ansi.rgbaFromFloats(1.0, 1.0, 1.0, 1.0);
 +    try buf.drawText(" B", 2, 0, overlay_fg, overlay_bg, 0);
 +
 +    const cell3 = buf.get(3, 0).?;
@@ -3366,8 +3457,8 @@ index b72c3f91..5ebf82fd 100644
 +    );
 +    defer buf.deinit();
 +
-+    const bg = RGBA{ 0.0, 0.0, 0.0, 1.0 };
-+    const fg = RGBA{ 1.0, 1.0, 1.0, 1.0 };
++    const bg = ansi.rgbaFromFloats(0.0, 0.0, 0.0, 1.0);
++    const fg = ansi.rgbaFromFloats(1.0, 1.0, 1.0, 1.0);
 +    try buf.clear(bg, null);
 +
 +    // Write 東 at x=2 (occupies x=2 and x=3)
@@ -3385,11 +3476,11 @@ index b72c3f91..5ebf82fd 100644
 +    );
 +    defer child.deinit();
 +    child.setRespectAlpha(true);
-+    const overlay_bg = RGBA{ 0.0, 0.533, 1.0, 0.094 };
-+    const overlay_fg = RGBA{ 1.0, 1.0, 1.0, 1.0 };
++    const overlay_bg = ansi.rgbaFromFloats(0.0, 0.533, 1.0, 0.094);
++    const overlay_fg = ansi.rgbaFromFloats(1.0, 1.0, 1.0, 1.0);
 +    try child.clear(overlay_bg, null);
 +    // Overwrite cell 1 with 'B' (fully opaque)
-+    child.set(1, 0, .{ .char = 'B', .fg = overlay_fg, .bg = RGBA{ 0.0, 0.0, 0.0, 1.0 }, .attributes = 0 });
++    child.set(1, 0, .{ .char = 'B', .fg = overlay_fg, .bg = ansi.rgbaFromFloats(0.0, 0.0, 0.0, 1.0), .attributes = 0 });
 +
 +    // Composite at dest x=2: space lands on grapheme start, 'B' on continuation
 +    buf.drawFrameBuffer(2, 0, child, null, null, null, null);
@@ -3413,8 +3504,8 @@ index b72c3f91..5ebf82fd 100644
 +    );
 +    defer buf.deinit();
 +
-+    const bg = RGBA{ 0.0, 0.0, 0.0, 1.0 };
-+    const fg = RGBA{ 1.0, 1.0, 1.0, 1.0 };
++    const bg = ansi.rgbaFromFloats(0.0, 0.0, 0.0, 1.0);
++    const fg = ansi.rgbaFromFloats(1.0, 1.0, 1.0, 1.0);
 +    try buf.clear(bg, null);
 +
 +    // Write 東 at x=2 (occupies x=2 and x=3)
@@ -3433,8 +3524,8 @@ index b72c3f91..5ebf82fd 100644
 +    try ref.clear(bg, null);
 +    ref.set(2, 0, .{ .char = grapheme_start, .fg = fg, .bg = bg, .attributes = 0 });
 +
-+    const overlay_bg = RGBA{ 0.0, 0.533, 1.0, 0.094 };
-+    const overlay_fg = RGBA{ 1.0, 1.0, 1.0, 1.0 };
++    const overlay_bg = ansi.rgbaFromFloats(0.0, 0.533, 1.0, 0.094);
++    const overlay_fg = ansi.rgbaFromFloats(1.0, 1.0, 1.0, 1.0);
 +
 +    // Apply two separate fillRect overlays
 +    try buf.fillRect(2, 0, 2, 1, overlay_bg);
@@ -3472,7 +3563,7 @@ index b72c3f91..5ebf82fd 100644
 +    single_ref.set(2, 0, .{ .char = grapheme_start, .fg = fg, .bg = bg, .attributes = 0 });
 +    _ = try single_ref.setCellWithAlphaBlending(2, 0, ' ', overlay_fg, overlay_bg, 0);
 +    const single_bg = single_ref.get(2, 0).?.bg;
-+    try std.testing.expect(actual_start.bg[2] > single_bg[2]);
++    try std.testing.expect(ansi.blue(actual_start.bg) > ansi.blue(single_bg));
 +}
 +
 +test "scissored partial-span tint followed by unclipped tint applies to both cells" {
@@ -3487,8 +3578,8 @@ index b72c3f91..5ebf82fd 100644
 +    );
 +    defer buf.deinit();
 +
-+    const bg = RGBA{ 0.0, 0.0, 0.0, 1.0 };
-+    const fg = RGBA{ 1.0, 1.0, 1.0, 1.0 };
++    const bg = ansi.rgbaFromFloats(0.0, 0.0, 0.0, 1.0);
++    const fg = ansi.rgbaFromFloats(1.0, 1.0, 1.0, 1.0);
 +    try buf.clear(bg, null);
 +
 +    // Write 東 at x=2 (occupies x=2 and x=3)
@@ -3496,7 +3587,7 @@ index b72c3f91..5ebf82fd 100644
 +    const grapheme_start = gp.packGraphemeStart(gid & gp.GRAPHEME_ID_MASK, 2);
 +    buf.set(2, 0, .{ .char = grapheme_start, .fg = fg, .bg = bg, .attributes = 0 });
 +
-+    const overlay_bg = RGBA{ 0.0, 0.533, 1.0, 0.094 };
++    const overlay_bg = ansi.rgbaFromFloats(0.0, 0.533, 1.0, 0.094);
 +
 +    // First: scissored fillRect that only covers x=3 (continuation cell)
 +    try buf.pushScissorRect(3, 0, 1, 1);
@@ -3506,7 +3597,7 @@ index b72c3f91..5ebf82fd 100644
 +    // x=2 should be untouched (outside scissor), x=3 tinted
 +    const bg_after_first_x2 = buf.get(2, 0).?.bg;
 +    try std.testing.expectEqual(bg[1], bg_after_first_x2[1]);
-+    try std.testing.expect(buf.get(3, 0).?.bg[1] > 0.01);
++    try std.testing.expect(ansi.greenF(buf.get(3, 0).?.bg) > 0.01);
 +
 +    // Second: unclipped fillRect covering x=2 — must NOT be suppressed
 +    try buf.fillRect(2, 0, 1, 1, overlay_bg);
@@ -3519,7 +3610,7 @@ index b72c3f91..5ebf82fd 100644
 +    try std.testing.expect(gp.isContinuationChar(final_x3.char));
 +
 +    // x=2 must now be tinted (the second fillRect must have applied)
-+    try std.testing.expect(final_x2.bg[1] > 0.01);
++    try std.testing.expect(ansi.greenF(final_x2.bg) > 0.01);
 +}
 +
 +test "alpha overlay preserves wide text but replaces emoji with placeholder" {
@@ -3534,8 +3625,8 @@ index b72c3f91..5ebf82fd 100644
 +    );
 +    defer buf.deinit();
 +
-+    const bg = RGBA{ 0.0, 0.0, 0.0, 1.0 };
-+    const fg = RGBA{ 1.0, 1.0, 1.0, 1.0 };
++    const bg = ansi.rgbaFromFloats(0.0, 0.0, 0.0, 1.0);
++    const fg = ansi.rgbaFromFloats(1.0, 1.0, 1.0, 1.0);
 +    try buf.clear(bg, null);
 +
 +    const cjk_gid = try pool.alloc("東");
@@ -3544,7 +3635,7 @@ index b72c3f91..5ebf82fd 100644
 +    const emoji_gid = try pool.alloc("👋");
 +    buf.set(4, 0, .{ .char = gp.packGraphemeStart(emoji_gid & gp.GRAPHEME_ID_MASK, 2), .fg = fg, .bg = bg, .attributes = 0 });
 +
-+    try buf.fillRect(0, 0, 10, 1, RGBA{ 0.0, 0.0, 1.0, 0.5 });
++    try buf.fillRect(0, 0, 10, 1, ansi.rgbaFromFloats(0.0, 0.0, 1.0, 0.5));
 +
 +    try std.testing.expect(gp.isGraphemeChar(buf.get(0, 0).?.char));
 +    try std.testing.expectEqual(@as(u32, '['), buf.get(4, 0).?.char);
@@ -3563,14 +3654,14 @@ index b72c3f91..5ebf82fd 100644
 +    );
 +    defer buf.deinit();
 +
-+    const bg = RGBA{ 0.0, 0.0, 0.0, 1.0 };
-+    const fg = RGBA{ 1.0, 1.0, 1.0, 1.0 };
++    const bg = ansi.rgbaFromFloats(0.0, 0.0, 0.0, 1.0);
++    const fg = ansi.rgbaFromFloats(1.0, 1.0, 1.0, 1.0);
 +    try buf.clear(bg, null);
 +
 +    const emoji_gid = try pool.alloc("👋");
 +    buf.set(2, 0, .{ .char = gp.packGraphemeStart(emoji_gid & gp.GRAPHEME_ID_MASK, 4), .fg = fg, .bg = bg, .attributes = 0 });
 +
-+    try buf.fillRect(2, 0, 4, 1, RGBA{ 1.0, 0.0, 0.0, 0.5 });
++    try buf.fillRect(2, 0, 4, 1, ansi.rgbaFromFloats(1.0, 0.0, 0.0, 0.5));
 +
 +    try std.testing.expectEqual(@as(u32, '['), buf.get(2, 0).?.char);
 +    try std.testing.expectEqual(@as(u32, ']'), buf.get(3, 0).?.char);
@@ -3604,8 +3695,8 @@ index b72c3f91..5ebf82fd 100644
 +        buf.classifyWideChar(gp.packGraphemeStart(emoji_gid & gp.GRAPHEME_ID_MASK, 2)),
 +    );
 +
-+    const dark_bg = RGBA{ 0.0, 0.0, 0.0, 1.0 };
-+    const fg = RGBA{ 1.0, 1.0, 1.0, 1.0 };
++    const dark_bg = ansi.rgbaFromFloats(0.0, 0.0, 0.0, 1.0);
++    const fg = ansi.rgbaFromFloats(1.0, 1.0, 1.0, 1.0);
 +    try buf.clear(dark_bg, null);
 +    try buf.drawText("नमस्ते", 0, 0, fg, dark_bg, 0);
 +    try std.testing.expectEqual(OptimizedBuffer.WideCharKind.wide_text, buf.classifyWideChar(buf.get(2, 0).?.char));
@@ -3623,14 +3714,14 @@ index b72c3f91..5ebf82fd 100644
 +    );
 +    defer buf.deinit();
 +
-+    const bg = RGBA{ 0.0, 0.0, 0.0, 1.0 };
-+    const fg = RGBA{ 1.0, 1.0, 1.0, 1.0 };
++    const bg = ansi.rgbaFromFloats(0.0, 0.0, 0.0, 1.0);
++    const fg = ansi.rgbaFromFloats(1.0, 1.0, 1.0, 1.0);
 +    try buf.clear(bg, null);
 +
 +    const emoji_gid = try pool.alloc("👋");
 +    buf.set(2, 0, .{ .char = gp.packGraphemeStart(emoji_gid & gp.GRAPHEME_ID_MASK, 2), .fg = fg, .bg = bg, .attributes = 0 });
 +
-+    _ = try buf.setCellWithAlphaBlending(2, 0, buffer_mod.DEFAULT_SPACE_CHAR, .{ 1.0, 1.0, 1.0, 1.0 }, RGBA{ 1.0, 0.0, 0.0, 0.5 }, 0);
++    _ = try buf.setCellWithAlphaBlending(2, 0, buffer_mod.DEFAULT_SPACE_CHAR, ansi.rgbaFromFloats(1.0, 1.0, 1.0, 1.0), ansi.rgbaFromFloats(1.0, 0.0, 0.0, 0.5), 0);
 +    try std.testing.expectEqual(@as(u32, '['), buf.get(2, 0).?.char);
 +    try std.testing.expectEqual(@as(u32, ']'), buf.get(3, 0).?.char);
 +}
@@ -3647,8 +3738,8 @@ index b72c3f91..5ebf82fd 100644
 +    );
 +    defer buf.deinit();
 +
-+    const bg = RGBA{ 0.0, 0.0, 0.0, 1.0 };
-+    const fg = RGBA{ 1.0, 1.0, 1.0, 1.0 };
++    const bg = ansi.rgbaFromFloats(0.0, 0.0, 0.0, 1.0);
++    const fg = ansi.rgbaFromFloats(1.0, 1.0, 1.0, 1.0);
 +    try buf.clear(bg, null);
 +
 +    const emoji_gid = try pool.alloc("👋");
@@ -3658,7 +3749,7 @@ index b72c3f91..5ebf82fd 100644
 +    const start_before = buf.get(2, 0).?;
 +    const cont_before = buf.get(3, 0).?;
 +
-+    _ = try buf.setCellWithAlphaBlending(2, 0, buffer_mod.DEFAULT_SPACE_CHAR, fg, RGBA{ 0.0, 0.0, 0.0, 0.0 }, 0);
++    _ = try buf.setCellWithAlphaBlending(2, 0, buffer_mod.DEFAULT_SPACE_CHAR, fg, ansi.rgbaFromFloats(0.0, 0.0, 0.0, 0.0), 0);
 +
 +    const start_after = buf.get(2, 0).?;
 +    const cont_after = buf.get(3, 0).?;
@@ -3679,19 +3770,16 @@ index b72c3f91..5ebf82fd 100644
 +    );
 +    defer buf.deinit();
 +
-+    const bg = RGBA{ 0.0, 0.0, 0.0, 1.0 };
-+    const fg = RGBA{ 0.5, 0.5, 0.5, 1.0 };
++    const bg = ansi.rgbaFromFloats(0.0, 0.0, 0.0, 1.0);
++    const fg = ansi.rgbaFromFloats(0.5, 0.5, 0.5, 1.0);
 +    try buf.clear(bg, null);
 +
-+    _ = try buf.setCellWithAlphaBlending(1, 0, buffer_mod.DEFAULT_SPACE_CHAR, fg, RGBA{ 0.0, 0.0, 0.0, 0.0 }, 0);
++    _ = try buf.setCellWithAlphaBlending(1, 0, buffer_mod.DEFAULT_SPACE_CHAR, fg, ansi.rgbaFromFloats(0.0, 0.0, 0.0, 0.0), 0);
 +
 +    const cell = buf.get(1, 0).?;
-+    const epsilon: f32 = 0.01;
 +    try std.testing.expectEqual(buffer_mod.DEFAULT_SPACE_CHAR, cell.char);
-+    try std.testing.expect(@abs(cell.fg[0] - fg[0]) < epsilon);
-+    try std.testing.expect(@abs(cell.fg[1] - fg[1]) < epsilon);
-+    try std.testing.expect(@abs(cell.fg[2] - fg[2]) < epsilon);
-+    try std.testing.expect(@abs(cell.bg[3] - bg[3]) < epsilon);
++    try std.testing.expectEqual(fg, cell.fg);
++    try std.testing.expectEqual(bg, cell.bg);
 +}
 +
 +test "fillRect with transparent background leaves blank-cell styles unchanged" {
@@ -3706,24 +3794,18 @@ index b72c3f91..5ebf82fd 100644
 +    );
 +    defer buf.deinit();
 +
-+    const bg = RGBA{ 0.0, 0.0, 0.0, 1.0 };
-+    const fg = RGBA{ 0.0, 0.0, 0.0, 1.0 };
++    const bg = ansi.rgbaFromFloats(0.0, 0.0, 0.0, 1.0);
++    const fg = ansi.rgbaFromFloats(0.0, 0.0, 0.0, 1.0);
 +    const attributes: u32 = 1;
 +    try buf.clear(bg, null);
 +    buf.set(1, 0, .{ .char = buffer_mod.DEFAULT_SPACE_CHAR, .fg = fg, .bg = bg, .attributes = attributes });
 +
-+    try buf.fillRect(1, 0, 1, 1, RGBA{ 0.0, 0.0, 0.0, 0.0 });
++    try buf.fillRect(1, 0, 1, 1, ansi.rgbaFromFloats(0.0, 0.0, 0.0, 0.0));
 +
 +    const cell = buf.get(1, 0).?;
 +    try std.testing.expectEqual(buffer_mod.DEFAULT_SPACE_CHAR, cell.char);
-+    try std.testing.expectEqual(fg[0], cell.fg[0]);
-+    try std.testing.expectEqual(fg[1], cell.fg[1]);
-+    try std.testing.expectEqual(fg[2], cell.fg[2]);
-+    try std.testing.expectEqual(fg[3], cell.fg[3]);
-+    try std.testing.expectEqual(bg[0], cell.bg[0]);
-+    try std.testing.expectEqual(bg[1], cell.bg[1]);
-+    try std.testing.expectEqual(bg[2], cell.bg[2]);
-+    try std.testing.expectEqual(bg[3], cell.bg[3]);
++    try std.testing.expectEqual(fg, cell.fg);
++    try std.testing.expectEqual(bg, cell.bg);
 +    try std.testing.expectEqual(attributes, cell.attributes);
 +}
 +
@@ -3739,12 +3821,12 @@ index b72c3f91..5ebf82fd 100644
 +    );
 +    defer buf.deinit();
 +
-+    const bg = RGBA{ 0.0, 0.0, 0.0, 1.0 };
-+    const fg = RGBA{ 1.0, 1.0, 1.0, 1.0 };
++    const bg = ansi.rgbaFromFloats(0.0, 0.0, 0.0, 1.0);
++    const fg = ansi.rgbaFromFloats(1.0, 1.0, 1.0, 1.0);
 +    try buf.clear(bg, null);
 +    try buf.drawText("नमस्ते", 0, 0, fg, bg, 0);
 +
-+    try buf.fillRect(0, 0, 8, 1, RGBA{ 1.0, 0.0, 0.0, 0.5 });
++    try buf.fillRect(0, 0, 8, 1, ansi.rgbaFromFloats(1.0, 0.0, 0.0, 0.5));
 +
 +    try std.testing.expect(gp.isGraphemeChar(buf.get(2, 0).?.char));
 +    try std.testing.expect(gp.isContinuationChar(buf.get(3, 0).?.char));
@@ -3762,8 +3844,8 @@ index b72c3f91..5ebf82fd 100644
 +    );
 +    defer fb.deinit();
 +
-+    const dark_bg = RGBA{ 0.04, 0.05, 0.08, 1.0 };
-+    const fg = RGBA{ 1.0, 1.0, 1.0, 1.0 };
++    const dark_bg = ansi.rgbaFromFloats(0.04, 0.05, 0.08, 1.0);
++    const fg = ansi.rgbaFromFloats(1.0, 1.0, 1.0, 1.0);
 +    try fb.clear(dark_bg, null);
 +
 +    const gid = try pool.alloc("👋");
@@ -3779,7 +3861,7 @@ index b72c3f91..5ebf82fd 100644
 +
 +    try buf.clear(dark_bg, null);
 +    buf.drawFrameBuffer(0, 0, fb, null, null, null, null);
-+    try buf.fillRect(0, 0, 10, 1, RGBA{ 0.0, 0.0, 1.0, 0.5 });
++    try buf.fillRect(0, 0, 10, 1, ansi.rgbaFromFloats(0.0, 0.0, 1.0, 0.5));
 +    try std.testing.expectEqual(@as(u32, '['), buf.get(2, 0).?.char);
 +
 +    try buf.clear(dark_bg, null);
@@ -3792,10 +3874,10 @@ index b72c3f91..5ebf82fd 100644
 +    try std.testing.expectEqualStrings("👋", try pool.get(gp.graphemeIdFromChar(start.char)));
 +}
 diff --git a/src/zig/tests/renderer_test.zig b/src/zig/tests/renderer_test.zig
-index cf0f7b3f..9d7c655d 100644
+index d452fe03..af8bf6b9 100644
 --- a/src/zig/tests/renderer_test.zig
 +++ b/src/zig/tests/renderer_test.zig
-@@ -905,6 +905,40 @@ test "renderer - explicit_cursor_positioning emits cursor move after wide graphe
+@@ -1134,6 +1134,40 @@ test "renderer - explicit_cursor_positioning emits cursor move after wide graphe
      try std.testing.expect(std.mem.indexOf(u8, output, "\x1b[1;3H") != null);
  }
  
@@ -3815,9 +3897,9 @@ index cf0f7b3f..9d7c655d 100644
 +    cli_renderer.terminal.caps.explicit_cursor_positioning = false;
 +    cli_renderer.terminal.caps.explicit_width = false;
 +
-+    const dark_bg = RGBA{ 0.04, 0.05, 0.08, 1.0 };
-+    const tinted_bg = RGBA{ 0.0, 0.0, 1.0, 0.5 };
-+    const fg = RGBA{ 1.0, 1.0, 1.0, 1.0 };
++    const dark_bg = ansi.rgbaFromFloats(0.04, 0.05, 0.08, 1.0);
++    const tinted_bg = ansi.rgbaFromFloats(0.0, 0.0, 1.0, 0.5);
++    const fg = ansi.rgbaFromFloats(1.0, 1.0, 1.0, 1.0);
 +
 +    const first_buffer = cli_renderer.getNextBuffer();
 +    try first_buffer.clear(dark_bg, null);
@@ -3836,7 +3918,7 @@ index cf0f7b3f..9d7c655d 100644
  test "renderer - explicit_cursor_positioning produces more cursor moves" {
      const pool = gp.initGlobalPool(std.testing.allocator);
      defer gp.deinitGlobalPool();
-@@ -977,6 +1011,7 @@ test "renderer - explicit_cursor_positioning produces more cursor moves" {
+@@ -1206,6 +1240,7 @@ test "renderer - explicit_cursor_positioning produces more cursor moves" {
          }
      }
  
@@ -3844,9 +3926,9 @@ index cf0f7b3f..9d7c655d 100644
      try std.testing.expect(count_with > count_without);
  }
  
-@@ -1015,3 +1050,191 @@ test "renderer - explicit_cursor_positioning with CJK characters" {
- 
-     try std.testing.expect(std.mem.indexOf(u8, output, "\x1b[1;3H") != null);
+@@ -1953,3 +1988,191 @@ test "renderer - unchanged frame with unchanged cursor emits no output" {
+     // produce visible shimmer in terminals that animate cursor or repaint eagerly.
+     try std.testing.expectEqual(@as(usize, 0), output.len);
  }
 +
 +test "renderer - repainting CJK text under translucent overlay keeps wide text in fallback output" {
@@ -3880,8 +3962,8 @@ index cf0f7b3f..9d7c655d 100644
 +    cli_renderer.terminal.caps.explicit_cursor_positioning = false;
 +    cli_renderer.terminal.caps.explicit_width = false;
 +
-+    const dark_bg = RGBA{ 0.0, 0.0, 0.0, 1.0 };
-+    const tint_bg = RGBA{ 1.0, 0.0, 0.0, 0.15 };
++    const dark_bg = ansi.rgbaFromFloats(0.0, 0.0, 0.0, 1.0);
++    const tint_bg = ansi.rgbaFromFloats(1.0, 0.0, 0.0, 0.15);
 +
 +    const first_buffer = cli_renderer.getNextBuffer();
 +    try first_buffer.clear(dark_bg, null);
@@ -3920,8 +4002,8 @@ index cf0f7b3f..9d7c655d 100644
 +    cli_renderer.terminal.caps.explicit_width = false;
 +
 +    const next_buffer = cli_renderer.getNextBuffer();
-+    const fg = RGBA{ 1.0, 1.0, 1.0, 1.0 };
-+    const bg = RGBA{ 0.0, 0.0, 0.0, 1.0 };
++    const fg = ansi.rgbaFromFloats(1.0, 1.0, 1.0, 1.0);
++    const bg = ansi.rgbaFromFloats(0.0, 0.0, 0.0, 1.0);
 +    try next_buffer.drawText("世X", 0, 0, fg, bg, 0);
 +
 +    cli_renderer.render(false);
@@ -3949,9 +4031,9 @@ index cf0f7b3f..9d7c655d 100644
 +    cli_renderer.terminal.caps.explicit_cursor_positioning = true;
 +    cli_renderer.terminal.caps.explicit_width = false;
 +
-+    const dark_bg = RGBA{ 0.04, 0.05, 0.08, 1.0 };
-+    const tinted_bg = RGBA{ 0.0, 0.0, 1.0, 0.5 };
-+    const fg = RGBA{ 1.0, 1.0, 1.0, 1.0 };
++    const dark_bg = ansi.rgbaFromFloats(0.04, 0.05, 0.08, 1.0);
++    const tinted_bg = ansi.rgbaFromFloats(0.0, 0.0, 1.0, 0.5);
++    const fg = ansi.rgbaFromFloats(1.0, 1.0, 1.0, 1.0);
 +
 +    const first_buffer = cli_renderer.getNextBuffer();
 +    try first_buffer.clear(dark_bg, null);
@@ -3983,9 +4065,9 @@ index cf0f7b3f..9d7c655d 100644
 +    cli_renderer.terminal.caps.explicit_cursor_positioning = false;
 +    cli_renderer.terminal.caps.explicit_width = true;
 +
-+    const dark_bg = RGBA{ 0.04, 0.05, 0.08, 1.0 };
-+    const tinted_bg = RGBA{ 0.0, 0.0, 1.0, 0.5 };
-+    const fg = RGBA{ 1.0, 1.0, 1.0, 1.0 };
++    const dark_bg = ansi.rgbaFromFloats(0.04, 0.05, 0.08, 1.0);
++    const tinted_bg = ansi.rgbaFromFloats(0.0, 0.0, 1.0, 0.5);
++    const fg = ansi.rgbaFromFloats(1.0, 1.0, 1.0, 1.0);
 +
 +    const first_buffer = cli_renderer.getNextBuffer();
 +    try first_buffer.clear(dark_bg, null);
@@ -4017,9 +4099,9 @@ index cf0f7b3f..9d7c655d 100644
 +    cli_renderer.terminal.caps.explicit_cursor_positioning = false;
 +    cli_renderer.terminal.caps.explicit_width = false;
 +
-+    const dark_bg = RGBA{ 0.04, 0.05, 0.08, 1.0 };
-+    const tinted_bg = RGBA{ 0.0, 0.0, 1.0, 0.5 };
-+    const fg = RGBA{ 1.0, 1.0, 1.0, 1.0 };
++    const dark_bg = ansi.rgbaFromFloats(0.04, 0.05, 0.08, 1.0);
++    const tinted_bg = ansi.rgbaFromFloats(0.0, 0.0, 1.0, 0.5);
++    const fg = ansi.rgbaFromFloats(1.0, 1.0, 1.0, 1.0);
 +
 +    const first_buffer = cli_renderer.getNextBuffer();
 +    try first_buffer.clear(dark_bg, null);
