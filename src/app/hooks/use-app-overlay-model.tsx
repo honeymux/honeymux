@@ -204,7 +204,7 @@ export function useAppOverlayModel({
         optionsWatermarkFocused={watermarkState.previewFocused}
         paneTabDragFloat={paneTabDragFloat}
         privilegedPaneDetectionEnabled={privilegedPaneDetectionEnabled}
-        privilegedPaneDetectionOpacity={config.privilegedPaneDetectionOpacity ?? 15}
+        privilegedPaneDetectionOpacity={config.privilegedPaneDetectionOpacity ?? 10}
         recoveringPaneRects={recoveringPaneRects}
         rootPanes={rootPanes}
         showWatermark={watermarkState.showInRootOverlay}

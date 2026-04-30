@@ -154,7 +154,7 @@ export function useOptionsDialogSession(
     () => initialConfig.privilegedPaneDetection,
   );
   const [configPrivilegedPaneDetectionOpacity, setConfigPrivilegedPaneDetectionOpacityState] = useState(
-    () => initialConfig.privilegedPaneDetectionOpacity ?? 15,
+    () => initialConfig.privilegedPaneDetectionOpacity ?? 10,
   );
   const [configDimInactivePanes, setConfigDimInactivePanesState] = useState(
     () => initialConfig.dimInactivePanes ?? false,
@@ -281,7 +281,7 @@ export function useOptionsDialogSession(
     setConfigScreenshotDirCursorState(0);
     screenshotDirEditRef.current = { cursor: 0, dir: config.screenshotDir ?? "", editing: false };
     setConfigPrivilegedPaneDetectionState(config.privilegedPaneDetection ?? true);
-    setConfigPrivilegedPaneDetectionOpacityState(config.privilegedPaneDetectionOpacity ?? 15);
+    setConfigPrivilegedPaneDetectionOpacityState(config.privilegedPaneDetectionOpacity ?? 10);
     setConfigDimInactivePanesState(config.dimInactivePanes ?? false);
     setConfigDimInactivePanesOpacityState(config.dimInactivePanesOpacity ?? 40);
     setConfigQuickTerminalSizeState(config.quickTerminalSize ?? 90);

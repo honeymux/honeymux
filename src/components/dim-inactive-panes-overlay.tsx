@@ -21,15 +21,7 @@ export function DimInactivePanesOverlay({
 }: DimInactivePanesOverlayProps) {
   const originTop = uiMode === "raw" ? 0 : 3;
   const originLeft = sidebarOffset ?? 0;
-
-  // Convert opacity (0-100) to 2-digit hex alpha.
-  // Using black (#000000) so that:
-  //   - Black backgrounds (empty cells): black + black = still black (invisible)
-  //   - Text: gets visually dimmed toward black through compositing
-  const alphaHex = Math.round((opacity / 100) * 255)
-    .toString(16)
-    .padStart(2, "0");
-  const bgColor = `#000000${alphaHex}`;
+  const bgColor = getDimInactivePaneOverlayColor(opacity);
 
   return (
     <>
@@ -51,4 +43,14 @@ export function DimInactivePanesOverlay({
       })}
     </>
   );
+}
+
+export function getDimInactivePaneOverlayColor(opacity = 40): string {
+  // This setting is a literal opacity percentage. Use black so empty black
+  // backgrounds remain black while text and non-black backgrounds dim together.
+  const clampedOpacity = Math.max(0, Math.min(100, opacity));
+  const alphaHex = Math.round((clampedOpacity / 100) * 255)
+    .toString(16)
+    .padStart(2, "0");
+  return `#000000${alphaHex}`;
 }

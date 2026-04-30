@@ -1,10 +1,14 @@
 import type { RootPaneRect } from "../app/hooks/use-root-detection.ts";
 import type { UIMode } from "../util/config.ts";
 
+const ROOT_WARNING_RENDER_OPACITY_MAX = 50;
+const ROOT_WARNING_RENDER_OPACITY_MIN = 5;
+const ROOT_WARNING_RENDER_OPACITY_SCALE = 3;
+
 export interface RootWarningOverlayProps {
   /** Visible content columns (termCols) — used to clamp overlays so the tool bar isn't tinted. */
   contentCols?: number;
-  /** Tint opacity as a percentage (5–50). Default 15. */
+  /** Privileged-pane tint strength from config. Scaled to renderer alpha. Default 10. */
   opacity?: number;
   rootPanes: RootPaneRect[];
   /** Sidebar offset (shifts originLeft). */
@@ -14,7 +18,7 @@ export interface RootWarningOverlayProps {
 
 export function RootWarningOverlay({
   contentCols,
-  opacity = 15,
+  opacity = 10,
   rootPanes,
   sidebarOffset,
   uiMode,
@@ -23,10 +27,7 @@ export function RootWarningOverlay({
   // We offset by the chrome: left border + tab bar / minimal header.
   const originTop = uiMode === "raw" ? 0 : 3;
   const originLeft = sidebarOffset ?? 0;
-  const alpha = Math.round((Math.max(5, Math.min(50, opacity)) / 100) * 255)
-    .toString(16)
-    .padStart(2, "0");
-  const tintColor = `#ff0000${alpha}`;
+  const tintColor = getRootWarningTintColor(opacity);
 
   return (
     <>
@@ -52,4 +53,18 @@ export function RootWarningOverlay({
       })}
     </>
   );
+}
+
+export function getRootWarningTintColor(opacity = 10): string {
+  // The option predates OpenTUI's corrected alpha blending and uses a compact
+  // 1-15 warning-strength range. Scale it into a render alpha that still
+  // survives common 256-color quantization for pane backgrounds.
+  const renderOpacity = Math.max(
+    ROOT_WARNING_RENDER_OPACITY_MIN,
+    Math.min(ROOT_WARNING_RENDER_OPACITY_MAX, opacity * ROOT_WARNING_RENDER_OPACITY_SCALE),
+  );
+  const alpha = Math.round((renderOpacity / 100) * 255)
+    .toString(16)
+    .padStart(2, "0");
+  return `#ff0000${alpha}`;
 }

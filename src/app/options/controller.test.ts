@@ -34,7 +34,7 @@ function createState(overrides: Partial<OptionsDialogState> = {}): OptionsDialog
     muxotronEnabled: true,
     paneTabsEnabled: false,
     privilegedPaneDetection: true,
-    privilegedPaneDetectionOpacity: 15,
+    privilegedPaneDetectionOpacity: 10,
     quickTerminalSize: 90,
     remoteAdding: null,
     remoteEditing: null,
