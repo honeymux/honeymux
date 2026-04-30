@@ -80,7 +80,6 @@ interface TabBarProps {
   onTabReorder?: (fromIndex: number, toIndex: number) => void;
   onTextInputActive?: (active: boolean) => void;
   onToolbarToggle?: () => void;
-  ptyDragging?: boolean;
   reviewLatched?: boolean;
   selectedSession?: import("../agents/types.ts").AgentSession | null;
   sessionName?: string;
@@ -157,7 +156,6 @@ export function TabBar({
   onTabReorder,
   onTextInputActive,
   onToolbarToggle,
-  ptyDragging,
   reviewLatched,
   selectedSession,
   sessionName,
@@ -262,7 +260,6 @@ export function TabBar({
     hasToolbarToggle: !!onToolbarToggle,
     muxotronEnabledProp,
     muxotronExpanded,
-    ptyDragging: !!ptyDragging,
     sessionName,
     uiMode,
     width,
@@ -415,7 +412,7 @@ export function TabBar({
         ) : (
           <text content={bot} fg={fg} selectable={false} />
         )}
-        {badgeLabel && !ptyDragging && (
+        {badgeLabel && (
           <box
             flexDirection="column"
             height={3}
@@ -538,7 +535,7 @@ export function TabBar({
               </>
             );
           })()}
-        {!ptyDragging && muxotronEnabled && !muxotronExpanded && (
+        {muxotronEnabled && !muxotronExpanded && (
           <Muxotron
             activePaneId={activePaneId}
             agentAlertAnimConfusables={
@@ -585,7 +582,6 @@ export function TabBar({
           />
         )}
         {hintGap >= MIN_HINT_WIDTH &&
-          !ptyDragging &&
           !muxotronExpanded &&
           (() => {
             const idleContent = `${mainMenuBindingLabel || "ctrl+g"} = main menu`;
@@ -615,7 +611,6 @@ export function TabBar({
             );
           })()}
         {tmuxKeyBindingHintDisplay &&
-          !ptyDragging &&
           !muxotronExpanded &&
           (() => {
             const hintContent = ` ${tmuxKeyBindingHintDisplay} `;
@@ -640,7 +635,7 @@ export function TabBar({
             );
           })()}
       </box>
-      {!ptyDragging && muxotronEnabled && muxotronExpanded && (
+      {muxotronEnabled && muxotronExpanded && (
         <Muxotron
           activePaneId={activePaneId}
           agentAlertAnimConfusables={

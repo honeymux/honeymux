@@ -10,14 +10,8 @@ function createMapperHarness(
   muxotronFocusActive = false,
   zoomAction: "zoomAgentsView" | "zoomServerView" | null = null,
 ) {
-  const dragCalls: boolean[] = [];
   const rightClickCalls: number[] = [];
   const zoomEndCalls: number[] = [];
-  const ptyDragActiveRef = {
-    current: (active: boolean) => {
-      dragCalls.push(active);
-    },
-  };
   const tabRightClickRef: { current: ((x: number) => void) | null } = {
     current: withRightClickHandler
       ? (x: number) => {
@@ -63,7 +57,6 @@ function createMapperHarness(
       paneTabDragEndRef: { current: null },
       paneTabDragMoveRef: { current: null },
       paneTabDraggingRef: { current: false },
-      ptyDragActiveRef,
       qtResizeDragEndRef: { current: null },
       qtResizeDragMoveRef: { current: null },
       qtResizeDraggingRef: { current: false },
@@ -91,38 +84,10 @@ function createMapperHarness(
     } as any,
   });
 
-  return { dragCalls, mapper, rightClickCalls, zoomEndCalls };
+  return { mapper, rightClickCalls, zoomEndCalls };
 }
 
 describe("createMouseCoordinateMapper", () => {
-  test("activates PTY drag hint on Alt/Option press in full-mode content", () => {
-    const { dragCalls, mapper } = createMapperHarness("adaptive");
-
-    const press = mapper(10, 6, 8, "M");
-    expect(press).toEqual({ x: 10, y: 3 });
-    expect(dragCalls).toEqual([true]);
-
-    const release = mapper(10, 6, 0, "m");
-    expect(release).toEqual({ x: 10, y: 3 });
-    expect(dragCalls).toEqual([true, false]);
-  });
-
-  test("keeps existing motion-triggered activation for non-modifier drag", () => {
-    const { dragCalls, mapper } = createMapperHarness("adaptive");
-
-    const press = mapper(10, 6, 0, "M");
-    expect(press).toEqual({ x: 10, y: 3 });
-    expect(dragCalls).toEqual([]);
-
-    const motion = mapper(11, 6, 32, "M");
-    expect(motion).toEqual({ x: 11, y: 3 });
-    expect(dragCalls).toEqual([true]);
-
-    const release = mapper(11, 6, 0, "m");
-    expect(release).toEqual({ x: 11, y: 3 });
-    expect(dragCalls).toEqual([true, false]);
-  });
-
   test("consumes right-click in tab bar and routes it to tab handler", () => {
     const { mapper, rightClickCalls } = createMapperHarness("adaptive");
 
@@ -179,63 +144,6 @@ describe("createMouseCoordinateMapper", () => {
     expect(rightClickCalls).toEqual([]);
   });
 
-  test("suppresses drag hint when press is on a tmux pane border", () => {
-    // Two side-by-side panes: left 0-59 and right 61-120, border at column 60
-    const paneRects = [
-      { height: 37, left: 0, top: 0, width: 60 },
-      { height: 37, left: 61, top: 0, width: 59 },
-    ];
-    const { dragCalls, mapper } = createMapperHarness("adaptive", true, paneRects);
-
-    // Press on the border (1-based screen x=61 → 0-based pty x=60, which is the border)
-    // screenY=4 → pty row 1 (1-based), 0-based = 0
-    const press = mapper(61, 4, 0, "M");
-    expect(press).toEqual({ x: 61, y: 1 });
-
-    // Motion — should NOT trigger the drag hint
-    const motion = mapper(62, 4, 32, "M");
-    expect(motion).toEqual({ x: 62, y: 1 });
-    expect(dragCalls).toEqual([]);
-
-    // Release
-    mapper(62, 4, 0, "m");
-    expect(dragCalls).toEqual([]);
-  });
-
-  test("still shows drag hint when press is inside a pane (not border)", () => {
-    const paneRects = [
-      { height: 37, left: 0, top: 0, width: 60 },
-      { height: 37, left: 61, top: 0, width: 59 },
-    ];
-    const { dragCalls, mapper } = createMapperHarness("adaptive", true, paneRects);
-
-    // Press inside left pane (1-based screen x=10 → 0-based pty x=9)
-    const press = mapper(10, 6, 0, "M");
-    expect(press).toEqual({ x: 10, y: 3 });
-
-    // Motion — SHOULD trigger the drag hint
-    const motion = mapper(11, 6, 32, "M");
-    expect(motion).toEqual({ x: 11, y: 3 });
-    expect(dragCalls).toEqual([true]);
-
-    // Release
-    mapper(11, 6, 0, "m");
-    expect(dragCalls).toEqual([true, false]);
-  });
-
-  test("suppresses Alt-press drag hint on pane border", () => {
-    const paneRects = [
-      { height: 37, left: 0, top: 0, width: 60 },
-      { height: 37, left: 61, top: 0, width: 59 },
-    ];
-    const { dragCalls, mapper } = createMapperHarness("adaptive", true, paneRects);
-
-    // Alt-press on border
-    const press = mapper(61, 4, 8, "M");
-    expect(press).toEqual({ x: 61, y: 1 });
-    expect(dragCalls).toEqual([]);
-  });
-
   test("consumes click-to-move gestures in full mode", () => {
     const { mapper } = createMapperHarness("adaptive", true, [], (ptyX, ptyY) => ptyX === 10 && ptyY === 3);
 
@@ -248,16 +156,6 @@ describe("createMouseCoordinateMapper", () => {
 
     expect(mapper(12, 7, 0, "M")).toBe("consume");
     expect(mapper(12, 7, 0, "m")).toBe("consume");
-  });
-
-  test("activates PTY drag hint on Alt/Option press in marquee mode content", () => {
-    const { dragCalls, mapper } = createMapperHarness("marquee-top");
-
-    expect(mapper(10, 6, 8, "M")).toEqual({ x: 10, y: 3 });
-    expect(dragCalls).toEqual([true]);
-
-    expect(mapper(10, 6, 0, "m")).toEqual({ x: 10, y: 3 });
-    expect(dragCalls).toEqual([true, false]);
   });
 
   test("forwards shift+scroll wheel events to tmux coordinates", () => {
@@ -322,7 +220,6 @@ describe("createMouseCoordinateMapper", () => {
           },
         },
         paneTabDraggingRef,
-        ptyDragActiveRef: { current: null },
         qtResizeDragEndRef: { current: null },
         qtResizeDragMoveRef: { current: null },
         qtResizeDraggingRef: { current: false },
@@ -421,7 +318,6 @@ describe("createMouseCoordinateMapper", () => {
         paneTabDragEndRef: { current: null },
         paneTabDragMoveRef: { current: null },
         paneTabDraggingRef: { current: false },
-        ptyDragActiveRef: { current: null },
         qtResizeDragEndRef: { current: null },
         qtResizeDragMoveRef: { current: null },
         qtResizeDraggingRef: { current: false },
@@ -490,7 +386,6 @@ describe("createMouseCoordinateMapper", () => {
           paneTabDragEndRef: { current: null },
           paneTabDragMoveRef: { current: null },
           paneTabDraggingRef: { current: false },
-          ptyDragActiveRef: { current: null },
           qtResizeDragEndRef: { current: () => {} },
           qtResizeDragMoveRef: { current: () => {} },
           qtResizeDraggingRef,

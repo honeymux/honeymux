@@ -67,7 +67,6 @@ interface TmuxPaneNormalModeProps {
   onTabReorder?: (fromIndex: number, toIndex: number) => void;
   onTextInputActive?: (active: boolean) => void;
   onToolbarToggle?: () => void;
-  ptyDragging?: boolean;
   reviewLatched?: boolean;
   selectedSession?: import("../../agents/types.ts").AgentSession | null;
   sessionName: string;
@@ -147,7 +146,6 @@ export function TmuxPaneNormalMode({
   onTabReorder,
   onTextInputActive,
   onToolbarToggle,
-  ptyDragging,
   reviewLatched,
   selectedSession,
   sessionName,
@@ -225,7 +223,6 @@ export function TmuxPaneNormalMode({
         onTabReorder={onTabReorder}
         onTextInputActive={onTextInputActive}
         onToolbarToggle={onToolbarToggle}
-        ptyDragging={ptyDragging}
         reviewLatched={reviewLatched}
         selectedSession={selectedSession}
         sessionName={sessionName}

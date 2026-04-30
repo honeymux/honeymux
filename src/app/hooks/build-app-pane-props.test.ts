@@ -189,7 +189,6 @@ describe("build-app-pane-props", () => {
         handleSidebarToggleRef: { current: () => {} },
         handleToolbarToggleRef: { current: () => {} },
         overflowOpenRef: { current: false },
-        ptyDragActiveRef: { current: null },
         registryRef: { current: null },
         showHintRef: { current: null },
         tabDragEndRef: { current: null },

@@ -21,7 +21,6 @@ export interface BuildTabBarModelOptions {
   hasToolbarToggle: boolean;
   muxotronEnabledProp?: boolean;
   muxotronExpanded?: boolean;
-  ptyDragging: boolean;
   sessionName?: string;
   uiMode: UIMode;
   width: number;
@@ -81,7 +80,6 @@ export function buildTabBarModel({
   hasToolbarToggle,
   muxotronEnabledProp,
   muxotronExpanded,
-  ptyDragging,
   sessionName,
   uiMode,
   width,
@@ -95,7 +93,7 @@ export function buildTabBarModel({
   const toolbarIconReserve = hasToolbarToggle ? 3 : 0;
   const profileReserve = hasLayoutProfileClick ? 3 : 0;
   const toolbarReserve = toolbarIconReserve + profileReserve;
-  const badgeReserve = computeTabBarBadgeReserve({ hasLayoutProfileClick, hasToolbarToggle, ptyDragging, sessionName });
+  const badgeReserve = computeTabBarBadgeReserve({ hasLayoutProfileClick, hasToolbarToggle, sessionName });
 
   const muxotronEnabled = muxotronEnabledProp !== false;
   const muxotronWidth = getMuxotronWidth(width, uiMode, muxotronEnabled, false);
@@ -186,7 +184,7 @@ export function buildTabBarModel({
     displayActiveIndex,
     width,
     badgeReserve,
-    ptyDragging ? 0 : badgeWidth,
+    badgeWidth,
     hasNewWindow && !hasOverflow,
     sidebarReserve,
     showId,
@@ -275,17 +273,16 @@ export function buildTabBarModel({
 export function computeTabBarBadgeReserve(opts: {
   hasLayoutProfileClick: boolean;
   hasToolbarToggle: boolean;
-  ptyDragging: boolean;
   sessionName?: string;
 }): number {
-  const { hasLayoutProfileClick, hasToolbarToggle, ptyDragging, sessionName } = opts;
+  const { hasLayoutProfileClick, hasToolbarToggle, sessionName } = opts;
   const displayName = sessionName ? truncateName(stripNonPrintingControlChars(sessionName), MAX_SESSION_DISPLAY) : null;
   const badgeLabel = displayName ? ` ${displayName} ▾ ` : null;
   const badgeWidth = badgeLabel != null ? stringWidth(badgeLabel) : 0;
   const toolbarIconReserve = hasToolbarToggle ? 3 : 0;
   const profileReserve = hasLayoutProfileClick ? 3 : 0;
   const toolbarReserve = toolbarIconReserve + profileReserve;
-  return (badgeWidth > 0 && !ptyDragging ? badgeWidth + 2 : 0) + toolbarReserve;
+  return (badgeWidth > 0 ? badgeWidth + 2 : 0) + toolbarReserve;
 }
 
 function buildActiveIdOverlay(

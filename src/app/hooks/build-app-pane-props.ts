@@ -348,7 +348,6 @@ export function buildAppPaneProps({
     dropdownInputRef: refs.dropdownInputRef,
     keyBindings: tmuxSessionState.keyBindings,
     overflowOpenRef: refs.overflowOpenRef,
-    ptyDragActiveRef: refs.ptyDragActiveRef,
     showHintRef: refs.showHintRef,
     statusBarInfo: tmuxSessionState.statusBarInfo,
     tabRightClickRef: refs.tabRightClickRef,

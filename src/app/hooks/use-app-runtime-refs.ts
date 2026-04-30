@@ -103,7 +103,6 @@ export interface AppRuntimeRefs {
   overflowOpenRef: MutableRefObject<boolean>;
   promptClickStateRef: MutableRefObject<PromptClickMode>;
   promptInputStartRef: MutableRefObject<PromptInputStart | null>;
-  ptyDragActiveRef: MutableRefObject<((active: boolean) => void) | null>;
   ptyRef: MutableRefObject<PtyBridge | null>;
   qtResizeDragEndRef: MutableRefObject<(() => void) | null>;
   qtResizeDragMoveRef: MutableRefObject<((screenX: number, screenY: number) => void) | null>;
@@ -257,7 +256,6 @@ export function useAppRuntimeRefs({ sequenceMap }: UseAppRuntimeRefsOptions): Ap
   const agentInstallDialogRef = useRef(false);
   const dialogInputRef = useRef<(data: string) => void>(() => {});
   const overflowOpenRef = useRef(false);
-  const ptyDragActiveRef = useRef<((active: boolean) => void) | null>(null);
   const handleToolbarDismissRef = useRef<() => void>(() => {});
   const sidebarOpenRef = useRef(false);
   const sidebarWidthRef = useRef(32);
@@ -388,7 +386,6 @@ export function useAppRuntimeRefs({ sequenceMap }: UseAppRuntimeRefsOptions): Ap
     overflowOpenRef,
     promptClickStateRef,
     promptInputStartRef,
-    ptyDragActiveRef,
     ptyRef,
     qtResizeDragEndRef,
     qtResizeDragMoveRef,

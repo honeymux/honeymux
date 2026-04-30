@@ -121,7 +121,6 @@ describe("app wiring hooks", () => {
           },
         },
         overflowOpenRef,
-        ptyDragActiveRef: { current: null },
         registryRef,
         showHintRef,
         tabDragEndRef,

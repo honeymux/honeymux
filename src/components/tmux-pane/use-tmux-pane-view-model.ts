@@ -38,7 +38,6 @@ export interface TmuxPaneViewModel {
   overflowItemWidth: number;
   overflowOpen: boolean;
   overflowStartX: number;
-  ptyDragging: boolean;
   tabDragging: boolean;
   termRows: number;
   terminalMetrics: TerminalMetrics;
@@ -114,7 +113,6 @@ export function useTmuxPaneViewModel({
     dropdownInputRef,
     keyBindings,
     overflowOpenRef,
-    ptyDragActiveRef,
     showHintRef,
     uiMode: uiModeProp,
   } = shared;
@@ -122,11 +120,9 @@ export function useTmuxPaneViewModel({
   const uiMode: UIMode = uiModeProp ?? "adaptive";
 
   const [tabDragging, setTabDragging] = useState(false);
-  const [ptyDragging, setPtyDragging] = useState(false);
   const [hotkeyHint, showHotkeyHint] = useHotkeyHint();
   const [tmuxKeyBindingHint, showTmuxKeyBindingHint] = useHotkeyHint();
   if (showHintRef) showHintRef.current = showHotkeyHint;
-  if (ptyDragActiveRef) ptyDragActiveRef.current = setPtyDragging;
 
   const handleDragChange = useCallback(
     (dragging: boolean) => {
@@ -186,7 +182,6 @@ export function useTmuxPaneViewModel({
   const rightReserve = computeTabBarBadgeReserve({
     hasLayoutProfileClick: !!layout.onLayoutProfileClick,
     hasToolbarToggle: !!toolbar.onToolbarToggle,
-    ptyDragging,
     sessionName,
   });
   const overflow = usePaneOverflow({
@@ -238,7 +233,6 @@ export function useTmuxPaneViewModel({
     overflowItemWidth: overflow.overflowItemWidth,
     overflowOpen: overflow.overflowOpen,
     overflowStartX: overflow.overflowStartX,
-    ptyDragging,
     tabDragging,
     termRows: terminalMetrics.rows,
     terminalMetrics,
