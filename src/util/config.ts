@@ -111,7 +111,7 @@ export function defaultConfig(): HoneymuxConfig {
     policyLocalOsc52Passthrough: DEFAULT_LOCAL_OSC52_PASSTHROUGH,
     policyLocalOtherOscPassthrough: DEFAULT_LOCAL_OTHER_OSC_PASSTHROUGH,
     privilegedPaneDetection: true,
-    privilegedPaneDetectionOpacity: 15,
+    privilegedPaneDetectionOpacity: 10,
     quickTerminalSize: 90,
     remote: undefined,
     screenshotDir: "~/.local/state/honeymux/screenshots",

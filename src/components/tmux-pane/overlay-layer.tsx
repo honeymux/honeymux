@@ -14,6 +14,7 @@ import type {
 
 import { theme } from "../../themes/theme.ts";
 import { fitToWidth, padEndToWidth, stringWidth, stripNonPrintingControlChars, truncateName } from "../../util/text.ts";
+import { getDimInactivePaneOverlayColor } from "../dim-inactive-panes-overlay.tsx";
 import { ProfileDropdown } from "../profile-dropdown.tsx";
 import { SessionDropdown } from "../session-dropdown.tsx";
 import { SideBar } from "../sidebar.tsx";
@@ -242,9 +243,7 @@ export function TmuxPaneOverlayLayer({
           const tbDeduct = toolbarOpen ? TOOLBAR_WIDTH : 0;
           if (dimInactivePanesEnabled && activePaneRect) {
             // Inactive panes are already dimmed — only dim the active pane at the same opacity
-            const alphaHex = Math.round(((dimInactivePanesOpacity ?? 40) / 100) * 255)
-              .toString(16)
-              .padStart(2, "0");
+            const bgColor = getDimInactivePaneOverlayColor(dimInactivePanesOpacity);
             const w = Math.min(activePaneRect.width, width - sidebarOffset - tbDeduct - activePaneRect.left);
             const h = activePaneRect.height;
             const dimMouseDown =
@@ -255,7 +254,7 @@ export function TmuxPaneOverlayLayer({
                 : undefined;
             return w > 0 && h > 0 ? (
               <box
-                backgroundColor={`#000000${alphaHex}`}
+                backgroundColor={bgColor}
                 height={h}
                 left={sidebarOffset + activePaneRect.left}
                 onMouseDown={dimMouseDown}
