@@ -1,0 +1,177 @@
+diff --git a/src/zig/renderer.zig b/src/zig/renderer.zig
+index c1eb2122..686147c0 100644
+--- a/src/zig/renderer.zig
++++ b/src/zig/renderer.zig
+@@ -177,8 +177,9 @@ pub const CliRenderer = struct {
+     lastCursorStyleTag: ?u8 = null,
+     lastCursorBlinking: ?bool = null,
+     lastCursorColorRGB: ?[3]u8 = null,
+-    // Cursor diff cache. If nothing changed we avoid emitting cursor restore/show
+-    // sequences for no-op frames, which removes a major source of visible flicker.
++    // Cursor diff cache. If nothing changed we avoid emitting cursor
++    // restore/show sequences for no-op frames, which removes a major source
++    // of visible flicker.
+     lastCursorX: ?u32 = null,
+     lastCursorY: ?u32 = null,
+     lastCursorVisible: ?bool = null,
+@@ -735,7 +736,7 @@ pub const CliRenderer = struct {
+         }
+ 
+         if (!frame_started.*) {
+-            beginRenderFrame(writer);
++            self.beginRenderFrame(writer);
+             frame_started.* = true;
+         }
+ 
+@@ -867,7 +868,7 @@ pub const CliRenderer = struct {
+ 
+             resetActiveOutputBuffer();
+             const writer = OutputBufferWriter.writer();
+-            beginRenderFrame(writer);
++            self.beginRenderFrame(writer);
+             var frame_started = true;
+             self.applyPendingSplitFooterTransition(writer, &frame_started);
+ 
+@@ -1239,9 +1240,11 @@ pub const CliRenderer = struct {
+         return self.currentRenderBuffer;
+     }
+ 
+-    fn beginRenderFrame(writer: anytype) void {
++    fn beginRenderFrame(self: *CliRenderer, writer: anytype) void {
+         writer.writeAll(ansi.ANSI.syncSet) catch {};
+-        writer.writeAll(ansi.ANSI.hideCursor) catch {};
++        if (!self.terminal.getCapabilities().sync) {
++            writer.writeAll(ansi.ANSI.hideCursor) catch {};
++        }
+     }
+ 
+     fn prepareRenderFrame(self: *CliRenderer, force: bool, reset_output_buffer: bool, sync_started: bool) void {
+@@ -1255,6 +1258,8 @@ pub const CliRenderer = struct {
+         }
+ 
+         var writer = OutputBufferWriter.writer();
++        const caps = self.terminal.getCapabilities();
++
+         // Lazy frame start is the core no-op suppression mechanism. If diffing,
+         // cursor state, and pointer state are unchanged, frame_started stays false
+         // and we emit nothing at all for this tick.
+@@ -1267,7 +1272,7 @@ pub const CliRenderer = struct {
+         var currentLinkId: u32 = 0;
+         var utf8Buf: [4]u8 = undefined;
+ 
+-        const hyperlinksEnabled = self.terminal.getCapabilities().hyperlinks;
++        const hyperlinksEnabled = caps.hyperlinks;
+ 
+         for (0..self.height) |uy| {
+             const y = @as(u32, @intCast(uy));
+@@ -1302,7 +1307,7 @@ pub const CliRenderer = struct {
+                 const cell = nextCell.?;
+ 
+                 if (!frame_started) {
+-                    beginRenderFrame(writer);
++                    self.beginRenderFrame(writer);
+                     frame_started = true;
+                 }
+ 
+@@ -1394,7 +1399,7 @@ pub const CliRenderer = struct {
+ 
+         if (hyperlinksEnabled and currentLinkId != 0) {
+             if (!frame_started) {
+-                beginRenderFrame(writer);
++                self.beginRenderFrame(writer);
+                 frame_started = true;
+             }
+             writer.writeAll("\x1b]8;;\x1b\\") catch {};
+@@ -1454,7 +1459,7 @@ pub const CliRenderer = struct {
+ 
+             if (needsCursorRestore) {
+                 if (!frame_started) {
+-                    beginRenderFrame(writer);
++                    self.beginRenderFrame(writer);
+                     frame_started = true;
+                 }
+ 
+@@ -1469,17 +1474,24 @@ pub const CliRenderer = struct {
+                 }
+ 
+                 ansi.ANSI.moveToOutput(writer, cursorX, cursorY) catch {};
+-                writer.writeAll(ansi.ANSI.showCursor) catch {};
++                if (!caps.sync or visibilityChanged) {
++                    writer.writeAll(ansi.ANSI.showCursor) catch {};
++                }
+             }
+ 
+             self.lastCursorX = cursorX;
+             self.lastCursorY = cursorY;
+             self.lastCursorVisible = true;
+         } else {
+-            if (!frame_started and (self.lastCursorVisible == null or self.lastCursorVisible.?)) {
+-                beginRenderFrame(writer);
+-                frame_started = true;
+-                writer.writeAll(ansi.ANSI.hideCursor) catch {};
++            const visibilityChanged = self.lastCursorVisible == null or self.lastCursorVisible.?;
++            if (visibilityChanged) {
++                if (!frame_started) {
++                    self.beginRenderFrame(writer);
++                    frame_started = true;
++                }
++                if (caps.sync) {
++                    writer.writeAll(ansi.ANSI.hideCursor) catch {};
++                }
+             }
+ 
+             self.lastCursorStyleTag = null;
+@@ -1493,7 +1505,7 @@ pub const CliRenderer = struct {
+         const mousePointer = self.terminal.getMousePointer();
+         if (mousePointer != self.lastMousePointerStyle) {
+             if (!frame_started) {
+-                beginRenderFrame(writer);
++                self.beginRenderFrame(writer);
+                 frame_started = true;
+             }
+             ansi.ANSI.setMousePointerOutput(writer, mousePointer.toName()) catch {};
+diff --git a/src/zig/tests/renderer_test.zig b/src/zig/tests/renderer_test.zig
+index d452fe03..163d2cc7 100644
+--- a/src/zig/tests/renderer_test.zig
++++ b/src/zig/tests/renderer_test.zig
+@@ -1963,6 +1963,40 @@ test "renderer - batched split commits share single sync frame" {
+     try std.testing.expectEqual(@as(usize, 1), std.mem.count(u8, output, ansi.ANSI.syncReset));
+ }
+ 
++test "renderer - synchronized output skips redundant cursor visibility on changed frames" {
++    const pool = gp.initGlobalPool(std.testing.allocator);
++    defer gp.deinitGlobalPool();
++    var local_link_pool = link.LinkPool.init(std.testing.allocator);
++    defer local_link_pool.deinit();
++
++    var cli_renderer = try CliRenderer.create(
++        std.testing.allocator,
++        12,
++        4,
++        pool,
++        true,
++    );
++    defer cli_renderer.destroy();
++
++    cli_renderer.terminal.caps.sync = true;
++    cli_renderer.terminal.setCursorPosition(3, 2, true);
++
++    const fg = ansi.rgbaFromFloats(1.0, 1.0, 1.0, 1.0);
++    const bg = ansi.rgbaFromFloats(0.0, 0.0, 0.0, 1.0);
++
++    try cli_renderer.getNextBuffer().drawText("A", 0, 0, fg, bg, 0);
++    cli_renderer.render(false);
++
++    try cli_renderer.getNextBuffer().drawText("B", 0, 0, fg, bg, 0);
++    cli_renderer.render(false);
++
++    const output = cli_renderer.getLastOutputForTest();
++    try std.testing.expect(std.mem.indexOf(u8, output, "B") != null);
++    try std.testing.expect(std.mem.indexOf(u8, output, ansi.ANSI.syncSet) != null);
++    try std.testing.expect(std.mem.indexOf(u8, output, ansi.ANSI.hideCursor) == null);
++    try std.testing.expect(std.mem.indexOf(u8, output, ansi.ANSI.showCursor) == null);
++}
++
+ test "renderer - unchanged frame with unchanged cursor emits no output" {
+     const pool = gp.initGlobalPool(std.testing.allocator);
+     defer gp.deinitGlobalPool();

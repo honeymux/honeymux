@@ -29,10 +29,10 @@ index 5a8bcb87..7b3c335e 100644
  
      applyDependencies(b, module, optimize, target, build_options);
 diff --git a/src/zig/lib.zig b/src/zig/lib.zig
-index b95b7e0b..5a44e489 100644
+index 628a312a..724c7a8f 100644
 --- a/src/zig/lib.zig
 +++ b/src/zig/lib.zig
-@@ -37,11 +37,17 @@ export fn setEventCallback(callback: ?*const fn (namePtr: [*]const u8, nameLen:
+@@ -55,11 +55,17 @@ export fn setEventCallback(callback: ?*const fn (namePtr: [*]const u8, nameLen:
      event_bus.setEventCallback(callback);
  }
  
@@ -55,7 +55,7 @@ index b95b7e0b..5a44e489 100644
  var arena = std.heap.ArenaAllocator.init(globalAllocator);
  const globalArena = arena.allocator();
  
-@@ -58,101 +64,24 @@ pub const ExternalAllocatorStats = extern struct {
+@@ -76,101 +82,24 @@ pub const ExternalAllocatorStats = extern struct {
      requested_bytes_valid: bool,
  };
  
