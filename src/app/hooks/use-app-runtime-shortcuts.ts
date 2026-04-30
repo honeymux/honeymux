@@ -268,7 +268,7 @@ export function useAppRuntimeShortcuts({
       clientRef,
       fade: bufferZoomFade,
       handleRedraw,
-      kittyKeyboardFlags: 15,
+      kittyKeyboardFlags: 31,
       maxLines: bufferZoomMaxLines,
       renderer,
       suppressPassthroughRef,

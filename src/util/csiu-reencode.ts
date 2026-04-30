@@ -74,18 +74,36 @@ export function reEncodeChunk(chunk: string, mode: ForwardMode = "legacy"): stri
  * Non-CSI-u sequences are returned unchanged.
  */
 export function reEncodeCsiU(sequence: string, mode: ForwardMode = "legacy"): null | string {
+  // CSI u with associated text: ESC [ code (:alt)* ; mods (:event)? ; text (:text)* u.
+  // The text payload is what the app should receive; the physical key data is metadata.
+  const associatedText = sequence.match(/^\x1b\[(\d+)((?::\d*)*);(\d*)?(?::(\d+))?;([\d:]+)u$/);
+  if (associatedText) {
+    const code = parseInt(associatedText[1]!, 10);
+    const mods = associatedText[3] ? parseInt(associatedText[3], 10) - 1 : 0;
+    const eventType = associatedText[4] ? parseInt(associatedText[4], 10) : 1;
+    if (eventType === 3) return null;
+    if (isShortcutModifier(mods)) {
+      const effectiveCode = modifiedForwardCode(code, associatedText[2]!, mods);
+      return encodeForward(effectiveCode, mods, mode);
+    }
+    const text = decodeTextCodePoints(associatedText[5]!);
+    if (shouldForwardKeyWithAssociatedText(code)) {
+      return text + encodeForward(code, mods, mode);
+    }
+    return text;
+  }
+
   // CSI u with modifiers: ESC [ code (:shifted_code)? (:base_code)? ; mods (:event_type)? u
   // With flag 4 (alternate keys), the shifted key code is in the second field.
-  const csiU = sequence.match(/^\x1b\[(\d+)(?::(\d+))?(?::\d+)?;(\d+)(?::(\d+))?u$/);
+  // Some IMEs/terminal encoders emit an empty shifted-key field (`code::base`).
+  const csiU = sequence.match(/^\x1b\[(\d+)((?::\d*)*);(\d+)(?::(\d+))?u$/);
   if (csiU) {
     const code = parseInt(csiU[1]!, 10);
-    const shiftedCode = csiU[2] ? parseInt(csiU[2], 10) : 0;
     const mods = parseInt(csiU[3]!, 10) - 1;
     const eventType = csiU[4] ? parseInt(csiU[4], 10) : 1;
     if (eventType === 3) return null; // release
     if (code >= 57441 && code <= 57452) return null; // modifier-only
-    // Use shifted code when available and Shift is pressed (for layout-correct chars)
-    const effectiveCode = shiftedCode > 0 && mods & 1 ? shiftedCode : code;
+    const effectiveCode = modifiedForwardCode(code, csiU[2]!, mods);
     return encodeForward(effectiveCode, mods, mode);
   }
 
@@ -95,6 +113,15 @@ export function reEncodeCsiU(sequence: string, mode: ForwardMode = "legacy"): nu
     const code = parseInt(plain[1]!, 10);
     const eventType = plain[2] ? parseInt(plain[2], 10) : 1;
     if (eventType === 3) return null;
+    if (code >= 57441 && code <= 57452) return null;
+    return encodeForward(code, 0, mode);
+  }
+
+  // CSI u without modifiers but with alternate key fields: ESC [ code (:alt)* u.
+  // Alone this is real text input (for example a non-Latin keyboard layout).
+  const plainAlternate = sequence.match(/^\x1b\[(\d+)((?::\d*)+)u$/);
+  if (plainAlternate) {
+    const code = parseInt(plainAlternate[1]!, 10);
     if (code >= 57441 && code <= 57452) return null;
     return encodeForward(code, 0, mode);
   }
@@ -152,6 +179,14 @@ export function splitSequences(str: string): string[] {
     }
   }
   return seqs;
+}
+
+function decodeTextCodePoints(text: string): string {
+  return text
+    .split(":")
+    .filter((field) => field.length > 0)
+    .map((field) => String.fromCodePoint(parseInt(field, 10)))
+    .join("");
 }
 
 function encodeForward(code: number, mods: number, mode: ForwardMode): string {
@@ -257,6 +292,18 @@ function encodeForward(code: number, mods: number, mode: ForwardMode): string {
   return result;
 }
 
+function firstAlternateCode(alternates: string): number {
+  const first = alternates
+    .split(":")
+    .slice(1)
+    .find((field) => field.length > 0);
+  return first ? parseInt(first, 10) : 0;
+}
+
+function isShortcutModifier(mods: number): boolean {
+  return !!(mods & 2) || !!(mods & 4);
+}
+
 function isUnicodeTextCodePoint(code: number): boolean {
   // Kitty uses Unicode PUA code points for non-text functional keys, so
   // treat PUA as ambiguous unless explicitly mapped above:
@@ -271,4 +318,28 @@ function isUnicodeTextCodePoint(code: number): boolean {
   if (code >= 0x100000 && code <= 0x10fffd) return false;
   if (code >= 0xfdd0 && code <= 0xfdef) return false;
   return (code & 0xfffe) !== 0xfffe;
+}
+
+function lastAlternateCode(alternates: string): number {
+  const last = alternates
+    .split(":")
+    .slice(1)
+    .toReversed()
+    .find((field) => field.length > 0);
+  return last ? parseInt(last, 10) : 0;
+}
+
+function modifiedForwardCode(code: number, alternates: string, mods: number): number {
+  const hasShift = !!(mods & 1);
+  if (isShortcutModifier(mods)) {
+    const baseCode = lastAlternateCode(alternates);
+    if (baseCode > 0) return baseCode;
+  }
+  const shiftedCode = firstAlternateCode(alternates);
+  return shiftedCode > 0 && hasShift ? shiftedCode : code;
+}
+
+function shouldForwardKeyWithAssociatedText(code: number): boolean {
+  if (code === 9 || code === 13 || code === 27 || code === 127 || code === 8) return true;
+  return !!SPECIAL_KEY_LEGACY[code] || !!FKEY_LEGACY[code];
 }
