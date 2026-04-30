@@ -144,18 +144,45 @@ describe("createMouseCoordinateMapper", () => {
     expect(rightClickCalls).toEqual([]);
   });
 
-  test("consumes click-to-move gestures in full mode", () => {
-    const { mapper } = createMapperHarness("adaptive", true, [], (ptyX, ptyY) => ptyX === 10 && ptyY === 3);
+  test("fires click-to-move on release for a bare click in full mode", () => {
+    const calls: Array<[number, number]> = [];
+    const { mapper } = createMapperHarness("adaptive", true, [], (ptyX, ptyY) => {
+      calls.push([ptyX, ptyY]);
+      return true;
+    });
 
-    expect(mapper(10, 6, 0, "M")).toBe("consume");
-    expect(mapper(10, 6, 0, "m")).toBe("consume");
+    // Press and release without motion → click-to-move fires on release.
+    expect(mapper(10, 6, 0, "M")).toEqual({ x: 10, y: 3 });
+    expect(calls).toEqual([]);
+    expect(mapper(10, 6, 0, "m")).toEqual({ x: 10, y: 3 });
+    expect(calls).toEqual([[10, 3]]);
   });
 
-  test("consumes click-to-move gestures in marquee-top mode", () => {
-    const { mapper } = createMapperHarness("marquee-top", true, [], (ptyX, ptyY) => ptyX === 12 && ptyY === 4);
+  test("cancels pending click-to-move on motion so drag selection reaches tmux", () => {
+    const calls: Array<[number, number]> = [];
+    const { mapper } = createMapperHarness("adaptive", true, [], (ptyX, ptyY) => {
+      calls.push([ptyX, ptyY]);
+      return true;
+    });
 
-    expect(mapper(12, 7, 0, "M")).toBe("consume");
-    expect(mapper(12, 7, 0, "m")).toBe("consume");
+    // Press, motion, release: click-to-move must NOT fire — tmux gets the drag.
+    expect(mapper(10, 6, 0, "M")).toEqual({ x: 10, y: 3 });
+    expect(mapper(11, 6, 32, "M")).toEqual({ x: 11, y: 3 });
+    expect(mapper(15, 6, 0, "m")).toEqual({ x: 15, y: 3 });
+    expect(calls).toEqual([]);
+  });
+
+  test("fires click-to-move on release for a bare click in marquee-top mode", () => {
+    const calls: Array<[number, number]> = [];
+    const { mapper } = createMapperHarness("marquee-top", true, [], (ptyX, ptyY) => {
+      calls.push([ptyX, ptyY]);
+      return true;
+    });
+
+    expect(mapper(12, 7, 0, "M")).toEqual({ x: 12, y: 4 });
+    expect(calls).toEqual([]);
+    expect(mapper(12, 7, 0, "m")).toEqual({ x: 12, y: 4 });
+    expect(calls).toEqual([[12, 4]]);
   });
 
   test("forwards shift+scroll wheel events to tmux coordinates", () => {
