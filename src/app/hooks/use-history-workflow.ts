@@ -3,6 +3,7 @@ import type { Dispatch, MutableRefObject, SetStateAction } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type { HistoryQueryResult } from "../../agents/history-search.ts";
+import type { LineEditState } from "../dialogs/line-edit.ts";
 
 import { hasHistoryConsent, historyIndex, saveHistoryConsent } from "../../agents/history-search.ts";
 import { log } from "../../util/log.ts";
@@ -53,10 +54,9 @@ export interface HistoryWorkflowApi {
   openConversationsMenu: () => void;
   resetConversationsPagination: () => void;
   setConsentDialogSelected: Dispatch<SetStateAction<"allow" | "deny">>;
-  setConversationsCursor: Dispatch<SetStateAction<number>>;
   setConversationsDialogOpen: Dispatch<SetStateAction<boolean>>;
+  setConversationsLineEdit: Dispatch<SetStateAction<LineEditState>>;
   setConversationsMenuIndex: Dispatch<SetStateAction<number>>;
-  setConversationsQuery: Dispatch<SetStateAction<string>>;
   setConversationsResultIndex: Dispatch<SetStateAction<number>>;
   setHistoryConsent: Dispatch<SetStateAction<boolean | null>>;
   setHistoryConsentDialogOpen: Dispatch<SetStateAction<boolean>>;
@@ -109,8 +109,13 @@ export function useHistoryWorkflow({ setAgentsDialogOpen }: UseHistoryWorkflowOp
   const [consentDialogSelected, setConsentDialogSelected] = useState<"allow" | "deny">("allow");
 
   const [conversationsDialogOpen, setConversationsDialogOpen] = useState(false);
-  const [conversationsCursor, setConversationsCursor] = useState(0);
-  const [conversationsQuery, setConversationsQuery] = useState("");
+  // Cursor and query share one state object so the dispatch handler can apply
+  // edits via a functional updater. Keeping them in separate `useState` slots
+  // would let rapid keystrokes (e.g. fast typing or pasted bursts) read a
+  // stale closure snapshot before React commits the prior update, dropping
+  // characters whenever two events arrived within a single render window.
+  const [conversationsLineEdit, setConversationsLineEdit] = useState<LineEditState>({ cursor: 0, query: "" });
+  const { cursor: conversationsCursor, query: conversationsQuery } = conversationsLineEdit;
   const [conversationsMenuOpen, setConversationsMenuOpen] = useState(false);
   const [conversationsMenuIndex, setConversationsMenuIndex] = useState(0);
   const [conversationsSearchCaseSensitive, setConversationsSearchCaseSensitive] = useState(
@@ -231,8 +236,7 @@ export function useHistoryWorkflow({ setAgentsDialogOpen }: UseHistoryWorkflowOp
 
   const closeConversationsDialog = useCallback(() => {
     setConversationsDialogOpen(false);
-    setConversationsQuery("");
-    setConversationsCursor(0);
+    setConversationsLineEdit({ cursor: 0, query: "" });
     setConversationsMenuOpen(false);
     setConversationsMenuIndex(0);
     setConversationsPageOffset(0);
@@ -260,8 +264,7 @@ export function useHistoryWorkflow({ setAgentsDialogOpen }: UseHistoryWorkflowOp
     }
     if (historyConsentRef.current === true && historyIndex.status === "ready") {
       setAgentsDialogOpen(false);
-      setConversationsQuery("");
-      setConversationsCursor(0);
+      setConversationsLineEdit({ cursor: 0, query: "" });
       setConversationsMenuOpen(false);
       setConversationsMenuIndex(0);
       setConversationsPageOffset(0);
@@ -348,10 +351,9 @@ export function useHistoryWorkflow({ setAgentsDialogOpen }: UseHistoryWorkflowOp
     openConversationsMenu,
     resetConversationsPagination,
     setConsentDialogSelected,
-    setConversationsCursor,
     setConversationsDialogOpen,
+    setConversationsLineEdit,
     setConversationsMenuIndex,
-    setConversationsQuery,
     setConversationsResultIndex,
     setHistoryConsent,
     setHistoryConsentDialogOpen,

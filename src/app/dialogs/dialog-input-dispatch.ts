@@ -145,13 +145,11 @@ export function dispatchDialogInput(data: string, deps: DialogInputDispatchDeps)
     closeConversationsDialog,
     closeConversationsMenu,
     consentDialogSelected,
-    conversationsCursor,
     conversationsDialogOpen,
     conversationsLoadedCount,
     conversationsMenuIndex,
     conversationsMenuOpen,
     conversationsPageOffset,
-    conversationsQuery,
     conversationsResultIndex,
     conversationsResults,
     goToConversationsAbsoluteIndex,
@@ -164,9 +162,8 @@ export function dispatchDialogInput(data: string, deps: DialogInputDispatchDeps)
     openConversationsMenu,
     resetConversationsPagination,
     setConsentDialogSelected,
-    setConversationsCursor,
+    setConversationsLineEdit,
     setConversationsMenuIndex,
-    setConversationsQuery,
     setConversationsResultIndex,
     showNewerConversationsPage,
     showOlderConversationsPage,
@@ -405,17 +402,22 @@ export function dispatchDialogInput(data: string, deps: DialogInputDispatchDeps)
       return;
     }
     // Line-editing: text input, cursor motion, word/line deletion.
-    const editResult = applyLineEdit({ cursor: conversationsCursor, query: conversationsQuery }, data);
-    if (editResult.handled) {
-      if (editResult.queryChanged) {
-        setConversationsQuery(editResult.next.query);
-        resetConversationsPagination();
-      }
-      if (editResult.next.cursor !== conversationsCursor) {
-        setConversationsCursor(editResult.next.cursor);
-      }
-      return;
-    }
+    //
+    // Use a functional updater so back-to-back keystrokes always read the most
+    // recent committed-or-pending state. Reading from a closure variable here
+    // would let two events arriving inside the same render window both see the
+    // pre-event snapshot and clobber each other (one keypress lost). The
+    // `queryChanged` flag is set inside the updater for the same reason: any
+    // hypothetical re-invocation by React (StrictMode dev) sets it to the same
+    // value, so the post-update side effect remains correct.
+    let queryChangedFromEdit = false;
+    setConversationsLineEdit((prev) => {
+      const result = applyLineEdit(prev, data);
+      if (!result.handled) return prev;
+      if (result.queryChanged) queryChangedFromEdit = true;
+      return result.next;
+    });
+    if (queryChangedFromEdit) resetConversationsPagination();
     return;
   }
 

@@ -4,6 +4,11 @@ import type { HistoryEntry } from "../../agents/history-search.ts";
 
 import { dispatchDialogInput } from "./dialog-input-dispatch.ts";
 
+interface LineEditMock {
+  getState: () => { cursor: number; query: string };
+  setLineEdit: ReturnType<typeof mock>;
+}
+
 function createDeps(overrides?: any): any {
   return {
     agentActions: {
@@ -54,10 +59,9 @@ function createDeps(overrides?: any): any {
       openConversationsMenu: mock(() => {}),
       resetConversationsPagination: mock(() => {}),
       setConsentDialogSelected: mock((_selected: unknown) => {}),
-      setConversationsCursor: mock((_cursor: unknown) => {}),
       setConversationsDialogOpen: mock((_open: unknown) => {}),
+      setConversationsLineEdit: mock((_value: unknown) => {}),
       setConversationsMenuIndex: mock((_index: unknown) => {}),
-      setConversationsQuery: mock((_query: unknown) => {}),
       setConversationsResultIndex: mock((_index: unknown) => {}),
       showNewerConversationsPage: mock(() => {}),
       showOlderConversationsPage: mock(() => {}),
@@ -226,10 +230,24 @@ function createDeps(overrides?: any): any {
   };
 }
 
+function makeLineEditMock(initial: { cursor: number; query: string }): LineEditMock {
+  let state = initial;
+  const setLineEdit = mock((updater: unknown) => {
+    if (typeof updater === "function") {
+      state = (updater as (prev: typeof state) => typeof state)(state);
+    } else {
+      state = updater as typeof state;
+    }
+  });
+  return {
+    getState: () => state,
+    setLineEdit,
+  };
+}
+
 describe("dispatchDialogInput", () => {
   test("typing in the conversations dialog resets paging while updating the query", () => {
-    const setConversationsQuery = mock((_query: unknown) => {});
-    const setConversationsCursor = mock((_cursor: unknown) => {});
+    const lineEdit = makeLineEditMock({ cursor: 2, query: "ab" });
     const resetConversationsPagination = mock(() => {});
     const deps = createDeps({
       historyWorkflow: {
@@ -238,21 +256,18 @@ describe("dispatchDialogInput", () => {
         conversationsDialogOpen: true,
         conversationsQuery: "ab",
         resetConversationsPagination,
-        setConversationsCursor,
-        setConversationsQuery,
+        setConversationsLineEdit: lineEdit.setLineEdit,
       },
     });
 
     dispatchDialogInput("c", deps);
 
-    expect(setConversationsQuery).toHaveBeenCalledWith("abc");
-    expect(setConversationsCursor).toHaveBeenCalledWith(3);
+    expect(lineEdit.getState()).toEqual({ cursor: 3, query: "abc" });
     expect(resetConversationsPagination).toHaveBeenCalledTimes(1);
   });
 
   test("ctrl+a moves the conversations cursor to the beginning", () => {
-    const setConversationsCursor = mock((_cursor: unknown) => {});
-    const setConversationsQuery = mock((_query: unknown) => {});
+    const lineEdit = makeLineEditMock({ cursor: 5, query: "hello" });
     const resetConversationsPagination = mock(() => {});
     const deps = createDeps({
       historyWorkflow: {
@@ -261,38 +276,35 @@ describe("dispatchDialogInput", () => {
         conversationsDialogOpen: true,
         conversationsQuery: "hello",
         resetConversationsPagination,
-        setConversationsCursor,
-        setConversationsQuery,
+        setConversationsLineEdit: lineEdit.setLineEdit,
       },
     });
 
     dispatchDialogInput("\x01", deps);
 
-    expect(setConversationsCursor).toHaveBeenCalledWith(0);
-    expect(setConversationsQuery).not.toHaveBeenCalled();
+    expect(lineEdit.getState()).toEqual({ cursor: 0, query: "hello" });
     expect(resetConversationsPagination).not.toHaveBeenCalled();
   });
 
   test("ctrl+e moves the conversations cursor to the end", () => {
-    const setConversationsCursor = mock((_cursor: unknown) => {});
+    const lineEdit = makeLineEditMock({ cursor: 0, query: "hello" });
     const deps = createDeps({
       historyWorkflow: {
         ...createDeps().historyWorkflow,
         conversationsCursor: 0,
         conversationsDialogOpen: true,
         conversationsQuery: "hello",
-        setConversationsCursor,
+        setConversationsLineEdit: lineEdit.setLineEdit,
       },
     });
 
     dispatchDialogInput("\x05", deps);
 
-    expect(setConversationsCursor).toHaveBeenCalledWith(5);
+    expect(lineEdit.getState()).toEqual({ cursor: 5, query: "hello" });
   });
 
   test("ctrl+w deletes a whitespace-delimited word backward in the conversations query", () => {
-    const setConversationsQuery = mock((_query: unknown) => {});
-    const setConversationsCursor = mock((_cursor: unknown) => {});
+    const lineEdit = makeLineEditMock({ cursor: 11, query: "foo bar baz" });
     const resetConversationsPagination = mock(() => {});
     const deps = createDeps({
       historyWorkflow: {
@@ -301,70 +313,112 @@ describe("dispatchDialogInput", () => {
         conversationsDialogOpen: true,
         conversationsQuery: "foo bar baz",
         resetConversationsPagination,
-        setConversationsCursor,
-        setConversationsQuery,
+        setConversationsLineEdit: lineEdit.setLineEdit,
       },
     });
 
     dispatchDialogInput("\x17", deps);
 
-    expect(setConversationsQuery).toHaveBeenCalledWith("foo bar ");
-    expect(setConversationsCursor).toHaveBeenCalledWith(8);
+    expect(lineEdit.getState()).toEqual({ cursor: 8, query: "foo bar " });
     expect(resetConversationsPagination).toHaveBeenCalledTimes(1);
   });
 
   test("alt+b moves the conversations cursor one word backward", () => {
-    const setConversationsCursor = mock((_cursor: unknown) => {});
+    const lineEdit = makeLineEditMock({ cursor: 11, query: "foo bar baz" });
     const deps = createDeps({
       historyWorkflow: {
         ...createDeps().historyWorkflow,
         conversationsCursor: 11,
         conversationsDialogOpen: true,
         conversationsQuery: "foo bar baz",
-        setConversationsCursor,
+        setConversationsLineEdit: lineEdit.setLineEdit,
       },
     });
 
     dispatchDialogInput("\x1bb", deps);
 
-    expect(setConversationsCursor).toHaveBeenCalledWith(8);
+    expect(lineEdit.getState()).toEqual({ cursor: 8, query: "foo bar baz" });
   });
 
   test("alt+f moves the conversations cursor one word forward", () => {
-    const setConversationsCursor = mock((_cursor: unknown) => {});
+    const lineEdit = makeLineEditMock({ cursor: 0, query: "foo bar" });
     const deps = createDeps({
       historyWorkflow: {
         ...createDeps().historyWorkflow,
         conversationsCursor: 0,
         conversationsDialogOpen: true,
         conversationsQuery: "foo bar",
-        setConversationsCursor,
+        setConversationsLineEdit: lineEdit.setLineEdit,
       },
     });
 
     dispatchDialogInput("\x1bf", deps);
 
-    expect(setConversationsCursor).toHaveBeenCalledWith(3);
+    expect(lineEdit.getState()).toEqual({ cursor: 3, query: "foo bar" });
   });
 
   test("cursor-aware backspace removes the char before the cursor, not the end", () => {
-    const setConversationsQuery = mock((_query: unknown) => {});
-    const setConversationsCursor = mock((_cursor: unknown) => {});
+    const lineEdit = makeLineEditMock({ cursor: 2, query: "abcd" });
     const deps = createDeps({
       historyWorkflow: {
         ...createDeps().historyWorkflow,
         conversationsCursor: 2,
         conversationsDialogOpen: true,
         conversationsQuery: "abcd",
-        setConversationsCursor,
-        setConversationsQuery,
+        setConversationsLineEdit: lineEdit.setLineEdit,
       },
     });
 
     dispatchDialogInput("\x7f", deps);
 
-    expect(setConversationsQuery).toHaveBeenCalledWith("acd");
-    expect(setConversationsCursor).toHaveBeenCalledWith(1);
+    expect(lineEdit.getState()).toEqual({ cursor: 1, query: "acd" });
+  });
+
+  test("rapid typing accumulates correctly when the cursor/query closure is stale", () => {
+    // Reproduces the "lost keypress" bug: between two PTY events, React may
+    // not have committed the prior render, so `dialogInputRef.current` still
+    // closes over the pre-event snapshot. Reusing the same `deps` here mirrors
+    // that exact scenario — `conversationsCursor`/`conversationsQuery` never
+    // advance, only the simulated React state behind `setConversationsLineEdit`
+    // does. With a non-functional setter the second and third bytes would
+    // overwrite the first; with the functional updater they accumulate.
+    const lineEdit = makeLineEditMock({ cursor: 0, query: "" });
+    const deps = createDeps({
+      historyWorkflow: {
+        ...createDeps().historyWorkflow,
+        conversationsCursor: 0,
+        conversationsDialogOpen: true,
+        conversationsQuery: "",
+        setConversationsLineEdit: lineEdit.setLineEdit,
+      },
+    });
+
+    dispatchDialogInput("a", deps);
+    dispatchDialogInput("b", deps);
+    dispatchDialogInput("c", deps);
+
+    expect(lineEdit.getState()).toEqual({ cursor: 3, query: "abc" });
+  });
+
+  test("rapid backspace deletes the right characters even with a stale cursor closure", () => {
+    // Same stale-closure scenario as above, but for cursor-aware deletion.
+    // Without the functional updater, each backspace would re-delete from
+    // the same snapshot cursor and only one character would be removed.
+    const lineEdit = makeLineEditMock({ cursor: 4, query: "abcd" });
+    const deps = createDeps({
+      historyWorkflow: {
+        ...createDeps().historyWorkflow,
+        conversationsCursor: 4,
+        conversationsDialogOpen: true,
+        conversationsQuery: "abcd",
+        setConversationsLineEdit: lineEdit.setLineEdit,
+      },
+    });
+
+    dispatchDialogInput("\x7f", deps);
+    dispatchDialogInput("\x7f", deps);
+
+    expect(lineEdit.getState()).toEqual({ cursor: 2, query: "ab" });
   });
 
   test("tab opens the conversations search menu", () => {
