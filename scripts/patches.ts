@@ -11,9 +11,19 @@
 // Compiled packages (e.g. @opentui/core, which ships bundled JS) are
 // built in git worktrees and diffed at the dist level.
 
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "fs";
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "fs";
 import { tmpdir } from "os";
-import { dirname, join, resolve } from "path";
+import { basename, dirname, join, resolve } from "path";
 
 const ROOT = resolve(import.meta.dirname!, "..");
 const PATCHES_DIR = join(ROOT, "patches");
@@ -228,6 +238,22 @@ function resolveNativeLibrary(
   }
 
   return null;
+}
+
+function copyFileAtomic(src: string, dest: string): void {
+  const destDir = dirname(dest);
+  const temp = join(destDir, `.${basename(dest)}.${process.pid}.${Date.now()}.tmp`);
+
+  mkdirSync(destDir, { recursive: true });
+  rmSync(temp, { force: true });
+
+  try {
+    cpSync(src, temp);
+    renameSync(temp, dest);
+  } catch (err) {
+    rmSync(temp, { force: true });
+    throw err;
+  }
 }
 
 function supportedZigVersions(buildZigSource: string): string[] {
@@ -581,8 +607,7 @@ async function applyCompiled(pkg: string, config: PackageConfig): Promise<boolea
         return false;
       }
 
-      mkdirSync(dirname(nativeLib.dest), { recursive: true });
-      cpSync(nativeLib.src, nativeLib.dest);
+      copyFileAtomic(nativeLib.src, nativeLib.dest);
       console.log(`  ✓ native lib → node_modules/${nativeLib.relativeDest}`);
     }
 
