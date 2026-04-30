@@ -94,7 +94,11 @@ export function createMouseCoordinateMapper({
   let qtOwnsPress = false;
   let pressOnBorder = false;
   let tabSecondaryPressSeen = false;
-  let clickToMoveGesture = false;
+  // Pending click-to-move action. Set on press in the prompt input area;
+  // cancelled on any motion (the user is dragging, not clicking) so the
+  // gesture falls through to tmux for selection. Fired on release if still
+  // pending — so a bare click moves the cursor and a drag selects text.
+  let pendingClickToMove: { ptyX: number; ptyY: number } | null = null;
   let paneTabPressOrigin: {
     paneId: string;
     paneWidth: number;
@@ -230,11 +234,6 @@ export function createMouseCoordinateMapper({
       if (outsideMuxotron) {
         handleMuxotronDismissRef.current?.();
       }
-    }
-
-    if (clickToMoveGesture) {
-      if (suffix === "m") clickToMoveGesture = false;
-      return "consume";
     }
 
     // Sidebar resize drag — owns all events until release
@@ -478,14 +477,21 @@ export function createMouseCoordinateMapper({
 
       // PTY owns gesture tracking
       if (ptyOwnsPress.current) {
+        if (isMotion) pendingClickToMove = null;
         if (isRelease) {
           ptyOwnsPress.current = false;
+          if (pendingClickToMove) {
+            const { ptyX, ptyY } = pendingClickToMove;
+            pendingClickToMove = null;
+            clickToMoveRef.current?.(ptyX, ptyY);
+          }
         }
         if (screenY >= contentY0 && screenY <= contentY1) {
           return { x: screenX - sidebarOff, y: screenY - contentY0 + 1 };
         }
         if (isPress) {
           ptyOwnsPress.current = false;
+          pendingClickToMove = null;
           return null;
         }
         return "consume";
@@ -524,10 +530,7 @@ export function createMouseCoordinateMapper({
                 ptyX >= pane.left && ptyX < pane.left + pane.width && ptyY >= pane.top && ptyY < pane.top + pane.height,
             );
           if ((button & 3) === 0 && !pressOnPaneBorder && clickToMoveRef.current) {
-            if (clickToMoveRef.current(screenX - sidebarOff, screenY - contentY0 + 1)) {
-              clickToMoveGesture = true;
-              return "consume";
-            }
+            pendingClickToMove = { ptyX: screenX - sidebarOff, ptyY: screenY - contentY0 + 1 };
           }
           ptyOwnsPress.current = true;
         }
@@ -557,15 +560,22 @@ export function createMouseCoordinateMapper({
 
     // PTY owns the current gesture
     if (ptyOwnsPress.current) {
+      if (isMotion) pendingClickToMove = null;
       if (isRelease) {
         ptyOwnsPress.current = false;
         pressOnBorder = false;
+        if (pendingClickToMove) {
+          const { ptyX, ptyY } = pendingClickToMove;
+          pendingClickToMove = null;
+          clickToMoveRef.current?.(ptyX, ptyY);
+        }
       }
       if (screenY > 3 && screenY <= height) {
         return { x: screenX - sidebarOff, y: screenY - 3 };
       }
       if (isPress) {
         ptyOwnsPress.current = false;
+        pendingClickToMove = null;
         return null;
       }
       return "consume";
@@ -681,10 +691,7 @@ export function createMouseCoordinateMapper({
           rects.length > 1 &&
           !rects.some((p) => ptyX >= p.left && ptyX < p.left + p.width && ptyY >= p.top && ptyY < p.top + p.height);
         if ((button & 3) === 0 && !pressOnBorder && clickToMoveRef.current) {
-          if (clickToMoveRef.current(screenX - sidebarOff, screenY - 3)) {
-            clickToMoveGesture = true;
-            return "consume";
-          }
+          pendingClickToMove = { ptyX: screenX - sidebarOff, ptyY: screenY - 3 };
         }
         ptyOwnsPress.current = true;
       }
