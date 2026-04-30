@@ -4,6 +4,12 @@ import type { KeyAction } from "../util/keybindings.ts";
 
 import { routeKeyboardInput } from "./keyboard-router.ts";
 
+const codePoint = (text: string) => text.codePointAt(0)!;
+const associatedTextKey = (keyCode: number, text: string, modifier: number | string = 1) =>
+  `\x1b[${keyCode};${modifier};${[...text].map((ch) => codePoint(ch)).join(":")}u`;
+const associatedTextWithPhysicalKey = (text: string, physicalKey: string, modifier: number) =>
+  `\x1b[${codePoint(text)}::${codePoint(physicalKey)};${modifier};${codePoint(text)}u`;
+
 /** Minimal callbacks that satisfy the interface. */
 function createCallbacks(overrides: Record<string, unknown> = {}) {
   return {
@@ -342,6 +348,22 @@ describe("agent review workflow shortcuts", () => {
     expect(writeToPty).not.toHaveBeenCalled();
   });
 
+  test("agentReviewGoto still fires when CSI u includes associated text", () => {
+    const onGotoAgent = mock(() => {});
+    const writeToPty = mock(() => {});
+    const callbacks = createCallbacks({
+      isAgentPreview: () => true,
+      isMuxotronFocusActive: () => true,
+      onGotoAgent,
+    });
+    const keybindings = new Map<string, KeyAction>([["g", "agentReviewGoto"]]);
+
+    routeKeyboardInput("\x1b[103;1;103u", writeToPty, callbacks, keybindings);
+
+    expect(onGotoAgent).toHaveBeenCalledTimes(1);
+    expect(writeToPty).not.toHaveBeenCalled();
+  });
+
   test("agentReviewGoto fires from sidebar-focused preview without unfocusing first", () => {
     const onGotoAgent = mock(() => {});
     const onSidebarCancel = mock(() => {});
@@ -408,6 +430,39 @@ describe("Unicode CSI u input", () => {
     routeKeyboardInput("\x1b[54620;1:1u", writeToPty, callbacks, new Map());
 
     expect(writeToPty).toHaveBeenCalledWith("한");
+  });
+
+  test("forwards associated-text CSI u payload as UTF-8 when re-encoding is active", () => {
+    const writeToPty = mock((_data: string) => {});
+    const callbacks = createCallbacks({
+      isReEncodeActive: () => true,
+    });
+
+    routeKeyboardInput(associatedTextKey(0, "한국어!", ""), writeToPty, callbacks, new Map());
+
+    expect(writeToPty).toHaveBeenCalledWith("한국어!");
+  });
+
+  test("forwards Ctrl+L as control character when associated text is active", () => {
+    const writeToPty = mock((_data: string) => {});
+    const callbacks = createCallbacks({
+      isReEncodeActive: () => true,
+    });
+
+    routeKeyboardInput(associatedTextKey(codePoint("l"), "l", 5), writeToPty, callbacks, new Map());
+
+    expect(writeToPty).toHaveBeenCalledWith("\x0c");
+  });
+
+  test("forwards Ctrl+L as control character under non-Latin input method", () => {
+    const writeToPty = mock((_data: string) => {});
+    const callbacks = createCallbacks({
+      isReEncodeActive: () => true,
+    });
+
+    routeKeyboardInput(associatedTextWithPhysicalKey("λ", "l", 5), writeToPty, callbacks, new Map());
+
+    expect(writeToPty).toHaveBeenCalledWith("\x0c");
   });
 
   test("forwards Korean text as UTF-8 when extended keys are active", () => {
@@ -481,6 +536,17 @@ describe("Unicode CSI u input", () => {
     );
 
     expect(writeToPty).toHaveBeenCalledWith("👨‍👩‍👧‍👦");
+  });
+
+  test("drops release chunk with empty shifted alternate keys", () => {
+    const writeToPty = mock((_data: string) => {});
+    const callbacks = createCallbacks({
+      isReEncodeActive: () => true,
+    });
+
+    routeKeyboardInput("\x1b[945::97;1:3u\x1b[946::98;1:3u\x1b[947::103;1:3u", writeToPty, callbacks, new Map());
+
+    expect(writeToPty).not.toHaveBeenCalled();
   });
 });
 

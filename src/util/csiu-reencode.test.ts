@@ -2,6 +2,18 @@ import { describe, expect, test } from "bun:test";
 
 import { reEncodeChunk, reEncodeCsiU, splitSequences } from "./csiu-reencode.ts";
 
+const csiU = (code: number, suffix = "u") => `\x1b[${code}${suffix}`;
+const codePoint = (text: string) => text.codePointAt(0)!;
+const keyReleaseWithPhysicalAlternate = (text: string, physicalKey: string) =>
+  csiU(codePoint(text), `::${codePoint(physicalKey)};1:3u`);
+const keyWithAssociatedText = (text: string) => csiU(0, `;;${[...text].map((ch) => codePoint(ch)).join(":")}u`);
+const keyWithAssociatedTextAndPhysicalKey = (text: string, physicalKey: string, modifier = 1) =>
+  csiU(codePoint(text), `::${codePoint(physicalKey)};${modifier};${codePoint(text)}u`);
+const keyWithAssociatedTextForKey = (keyCode: number, text: string, modifier = 1) =>
+  csiU(keyCode, `;${modifier};${[...text].map((ch) => codePoint(ch)).join(":")}u`);
+const keyWithPhysicalAlternate = (text: string, physicalKey: string) =>
+  csiU(codePoint(text), `::${codePoint(physicalKey)}u`);
+
 describe("reEncodeCsiU", () => {
   // --- Printable ASCII ---
   test("plain 'a' press → 'a'", () => {
@@ -31,6 +43,52 @@ describe("reEncodeCsiU", () => {
 
   test("shifted Cyrillic key uses alternate shifted code", () => {
     expect(reEncodeCsiU("\x1b[1072:1040;2:1u")).toBe("А");
+  });
+
+  test("release with empty shifted alternate key is dropped", () => {
+    expect(reEncodeCsiU(keyReleaseWithPhysicalAlternate("α", "a"))).toBe(null);
+  });
+
+  test("unmodified non-ASCII key with physical alternate stays UTF-8 text", () => {
+    expect(reEncodeCsiU(keyWithPhysicalAlternate("ф", "a"))).toBe("ф");
+  });
+
+  test("associated text payload is forwarded as UTF-8 text", () => {
+    expect(reEncodeCsiU(keyWithAssociatedText("å"))).toBe("å");
+  });
+
+  test("associated text with Enter forwards committed text then Enter", () => {
+    expect(reEncodeCsiU(keyWithAssociatedTextForKey(13, "文"))).toBe("文\r");
+  });
+
+  test("associated text with Backspace forwards committed text then Backspace", () => {
+    expect(reEncodeCsiU(keyWithAssociatedTextForKey(127, "文"))).toBe("文\x7f");
+  });
+
+  test("associated text with arrow forwards committed text then arrow", () => {
+    expect(reEncodeCsiU(keyWithAssociatedTextForKey(57418, "文"))).toBe("文\x1b[C");
+  });
+
+  test("Ctrl+letter with associated text forwards control character", () => {
+    expect(reEncodeCsiU("\x1b[108;5;108u")).toBe("\x0c");
+  });
+
+  test("Ctrl+letter under non-Latin input method uses physical alternate", () => {
+    expect(reEncodeCsiU(keyWithAssociatedTextAndPhysicalKey("λ", "l", 5))).toBe("\x0c");
+    expect(reEncodeCsiU("\x1b[955::108;5:1u")).toBe("\x0c");
+  });
+
+  test("Alt+letter under non-Latin input method uses physical alternate", () => {
+    expect(reEncodeCsiU(keyWithAssociatedTextAndPhysicalKey("λ", "l", 3))).toBe("\x1bl");
+    expect(reEncodeCsiU("\x1b[955::108;3:1u")).toBe("\x1bl");
+  });
+
+  test("Ctrl+Alt+letter under non-Latin input method uses physical alternate", () => {
+    expect(reEncodeCsiU(keyWithAssociatedTextAndPhysicalKey("λ", "l", 7))).toBe("\x1b\x0c");
+  });
+
+  test("Shift-only non-Latin input method still preserves text", () => {
+    expect(reEncodeCsiU(keyWithAssociatedTextAndPhysicalKey("λ", "l", 2))).toBe("λ");
   });
 
   test("Kitty F13 PUA code stays in CSI u form", () => {
@@ -261,6 +319,32 @@ describe("reEncodeChunk", () => {
 
   test("modifier-only keys in chunk → empty string", () => {
     expect(reEncodeChunk("\x1b[57447;2:1u\x1b[57447;2:3u")).toBe("");
+  });
+
+  test("release chunk with empty shifted alternate keys is dropped", () => {
+    expect(
+      reEncodeChunk(
+        [
+          keyReleaseWithPhysicalAlternate("α", "a"),
+          keyReleaseWithPhysicalAlternate("β", "b"),
+          keyReleaseWithPhysicalAlternate("γ", "g"),
+        ].join(""),
+      ),
+    ).toBe("");
+  });
+
+  test("keeps alternate-key Unicode input when no associated text is reported", () => {
+    expect(
+      reEncodeChunk([keyWithPhysicalAlternate("α", "a"), keyWithPhysicalAlternate("β", "b"), "文!"].join("")),
+    ).toBe("αβ文!");
+  });
+
+  test("keeps alternate-key Unicode input before associated text", () => {
+    expect(
+      reEncodeChunk(
+        [keyWithPhysicalAlternate("α", "a"), keyWithPhysicalAlternate("β", "b"), keyWithAssociatedText("文")].join(""),
+      ),
+    ).toBe("αβ文");
   });
 
   test("plain bytes pass through", () => {

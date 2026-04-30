@@ -261,7 +261,7 @@ const renderer = await createCliRenderer({
     alternateKeys: true,
     disambiguate: true, // Structured modifier reporting — needed for reliable keybinding detection
     events: true,
-    reportText: false,
+    reportText: true,
   },
   useMouse: true, // Enable mouse for tab clicking; native selection still works with modifier keys
 });
