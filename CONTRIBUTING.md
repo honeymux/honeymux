@@ -20,6 +20,8 @@ To increase the likelihood of a successful merge, please ensure your contributio
 
 - **Be concise, but descriptive.** It takes next to zero effort to have an LLM prepare commit messages for you, so this project strictly requires both a summary line and body. That said, most commits should not need more than 1 or 2 paragraphs to adequately describe.
 
+- **Provide visual evidence.** For any change that has user-visible impact, please provide before and after screenshots and/or brief screen recordings to help reviewers better understand the outcome.
+
 - **When in doubt, follow existing patterns.** If this process seems daunting, don't worry -- there are plenty of existing examples to look at!
 
 Finally, please know that the author has a day job and life outside of open source, so response times to pull requests will vary accordingly.
