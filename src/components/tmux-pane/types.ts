@@ -153,7 +153,6 @@ export interface TmuxPaneSharedProps {
   dropdownInputRef?: React.MutableRefObject<((data: string) => boolean) | null>;
   keyBindings?: TmuxKeyBindings | null;
   overflowOpenRef?: React.MutableRefObject<boolean>;
-  ptyDragActiveRef?: React.MutableRefObject<((active: boolean) => void) | null>;
   showHintRef?: React.MutableRefObject<((text: string) => void) | null>;
   statusBarInfo?: StatusBarInfo | null;
   tabRightClickRef?: React.MutableRefObject<((x: number) => void) | null>;

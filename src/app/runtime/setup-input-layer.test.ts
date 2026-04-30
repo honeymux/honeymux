@@ -145,7 +145,6 @@ function createContext(overrides?: Partial<SetupTmuxRuntimeContext>): {
       paneTabDragEndRef: { current: null },
       paneTabDragMoveRef: { current: null },
       paneTabDraggingRef: { current: false },
-      ptyDragActiveRef: { current: null },
       qtResizeDragEndRef: { current: null },
       qtResizeDragMoveRef: { current: null },
       qtResizeDraggingRef: { current: false },

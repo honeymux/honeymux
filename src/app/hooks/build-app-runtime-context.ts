@@ -159,7 +159,6 @@ export function buildAppRuntimeContext({
       paneTabDragEndRef: paneTabsApi.paneTabDragEndRef,
       paneTabDragMoveRef: paneTabsApi.paneTabDragMoveRef,
       paneTabDraggingRef: paneTabsApi.paneTabDraggingRef,
-      ptyDragActiveRef: refs.ptyDragActiveRef,
       qtResizeDragEndRef: refs.qtResizeDragEndRef,
       qtResizeDragMoveRef: refs.qtResizeDragMoveRef,
       qtResizeDraggingRef: refs.qtResizeDraggingRef,

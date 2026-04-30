@@ -305,7 +305,6 @@ export const TmuxPane = memo(function TmuxPane({
       onTabReorder={onTabReorder}
       onTextInputActive={onTextInputActive}
       onToolbarToggle={onToolbarToggle}
-      ptyDragging={viewModel.ptyDragging}
       reviewLatched={reviewLatched}
       selectedSession={selectedSession}
       sessionName={sessionName}

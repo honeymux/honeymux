@@ -173,7 +173,6 @@ export interface SetupTmuxRuntimeMouseContext {
     | null
   >;
   paneTabDraggingRef: MutableRefObject<boolean>;
-  ptyDragActiveRef: MutableRefObject<((active: boolean) => void) | null>;
   qtResizeDragEndRef: MutableRefObject<(() => void) | null>;
   qtResizeDragMoveRef: MutableRefObject<((screenX: number, screenY: number) => void) | null>;
   qtResizeDraggingRef: MutableRefObject<boolean>;

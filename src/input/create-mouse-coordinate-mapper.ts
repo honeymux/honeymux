@@ -62,7 +62,6 @@ export function createMouseCoordinateMapper({
     paneTabDragEndRef,
     paneTabDragMoveRef,
     paneTabDraggingRef,
-    ptyDragActiveRef,
     qtResizeDragEndRef,
     qtResizeDragMoveRef,
     qtResizeDraggingRef,
@@ -93,7 +92,6 @@ export function createMouseCoordinateMapper({
   // A drag that starts inside the QT body stays routed to the QT PTY even if
   // motion strays outside the body.
   let qtOwnsPress = false;
-  let ptyHintFired = false;
   let pressOnBorder = false;
   let tabSecondaryPressSeen = false;
   let clickToMoveGesture = false;
@@ -166,9 +164,7 @@ export function createMouseCoordinateMapper({
           if (p.active) {
             paneTabBorderClickRef.current?.(p.id, ptyX - p.left, p.width, screenX, screenY);
             // Always consume left-clicks on the active pane's border row
-            // so they don't leak into the PTY gesture tracker (which would
-            // activate ptyDragging on subsequent motion, hiding header
-            // controls).
+            // so they don't leak into the PTY gesture tracker.
             return "consume";
           }
           break;
@@ -418,10 +414,6 @@ export function createMouseCoordinateMapper({
       if (ptyOwnsPress.current) {
         if (isRelease) {
           ptyOwnsPress.current = false;
-          if (ptyHintFired) {
-            ptyHintFired = false;
-            ptyDragActiveRef.current?.(false);
-          }
         }
         return { x: screenX - sidebarOff, y: screenY };
       }
@@ -457,10 +449,6 @@ export function createMouseCoordinateMapper({
         const borderResult = handlePaneBorderPress(button, ptyX, ptyY, screenX, screenY);
         if (borderResult) return borderResult;
         ptyOwnsPress.current = true;
-        if ((button & 8) !== 0 && !ptyHintFired) {
-          ptyHintFired = true;
-          ptyDragActiveRef.current?.(true);
-        }
       }
       return { x: screenX - sidebarOff, y: screenY };
     }
@@ -492,20 +480,12 @@ export function createMouseCoordinateMapper({
       if (ptyOwnsPress.current) {
         if (isRelease) {
           ptyOwnsPress.current = false;
-          if (ptyHintFired) {
-            ptyHintFired = false;
-            ptyDragActiveRef.current?.(false);
-          }
         }
         if (screenY >= contentY0 && screenY <= contentY1) {
           return { x: screenX - sidebarOff, y: screenY - contentY0 + 1 };
         }
         if (isPress) {
           ptyOwnsPress.current = false;
-          if (ptyHintFired) {
-            ptyHintFired = false;
-            ptyDragActiveRef.current?.(false);
-          }
           return null;
         }
         return "consume";
@@ -550,10 +530,6 @@ export function createMouseCoordinateMapper({
             }
           }
           ptyOwnsPress.current = true;
-          if ((button & 8) !== 0 && !ptyHintFired && !pressOnPaneBorder) {
-            ptyHintFired = true;
-            ptyDragActiveRef.current?.(true);
-          }
         }
         return { x: screenX - sidebarOff, y: screenY - contentY0 + 1 };
       }
@@ -584,24 +560,12 @@ export function createMouseCoordinateMapper({
       if (isRelease) {
         ptyOwnsPress.current = false;
         pressOnBorder = false;
-        if (ptyHintFired) {
-          ptyHintFired = false;
-          ptyDragActiveRef.current?.(false);
-        }
       }
       if (screenY > 3 && screenY <= height) {
-        if (isMotion && !ptyHintFired && !pressOnBorder && (button & 3) === 0) {
-          ptyHintFired = true;
-          ptyDragActiveRef.current?.(true);
-        }
         return { x: screenX - sidebarOff, y: screenY - 3 };
       }
       if (isPress) {
         ptyOwnsPress.current = false;
-        if (ptyHintFired) {
-          ptyHintFired = false;
-          ptyDragActiveRef.current?.(false);
-        }
         return null;
       }
       return "consume";
@@ -723,12 +687,6 @@ export function createMouseCoordinateMapper({
           }
         }
         ptyOwnsPress.current = true;
-        // Alt/Option modifier on press — immediately activate drag hint
-        // (skip if on a pane border — user is resizing, not selecting)
-        if ((button & 8) !== 0 && !ptyHintFired && !pressOnBorder) {
-          ptyHintFired = true;
-          ptyDragActiveRef.current?.(true);
-        }
       }
       return { x: screenX - sidebarOff, y: screenY - 3 };
     }
