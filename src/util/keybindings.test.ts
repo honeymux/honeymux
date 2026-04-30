@@ -2,6 +2,12 @@ import { describe, expect, test } from "bun:test";
 
 import { formatBinding, identifyKeySequence, parseRawKeyEvent } from "./keybindings.ts";
 
+const codePoint = (text: string) => text.codePointAt(0)!;
+const keyWithAssociatedTextAndPhysicalKey = (text: string, physicalKey: string, modifier: number, eventType = 1) =>
+  `\x1b[${codePoint(text)}::${codePoint(physicalKey)};${modifier}:${eventType};${codePoint(text)}u`;
+const keyWithPhysicalAlternate = (text: string, physicalKey: string, modifier: number, eventType = 1) =>
+  `\x1b[${codePoint(text)}::${codePoint(physicalKey)};${modifier}:${eventType}u`;
+
 describe("identifyKeySequence", () => {
   test("formats shifted kitty CSI u letters without duplicating shift", () => {
     expect(identifyKeySequence("\x1b[65;6u")).toBe("ctrl+shift+a");
@@ -207,12 +213,51 @@ describe("parseRawKeyEvent", () => {
     expect(evt!.isModifierOnly).toBe(false);
   });
 
+  test("parses release with empty shifted alternate key", () => {
+    const evt = parseRawKeyEvent("\x1b[945::97;1:3u");
+    expect(evt).not.toBeNull();
+    expect(evt!.code).toBe(945);
+    expect(evt!.eventType).toBe(3);
+    expect(evt!.isModifierOnly).toBe(false);
+  });
+
   test("parses plain CSI u without modifiers", () => {
     const evt = parseRawKeyEvent("\x1b[97u");
     expect(evt).not.toBeNull();
     expect(evt!.code).toBe(97);
     expect(evt!.mods).toBe(0);
     expect(evt!.eventType).toBe(1);
+  });
+
+  test("parses CSI u with associated text payload", () => {
+    expect(identifyKeySequence("\x1b[103;1;103u")).toBe("g");
+
+    const evt = parseRawKeyEvent("\x1b[103;1:1;103u");
+    expect(evt).not.toBeNull();
+    expect(evt!.code).toBe(103);
+    expect(evt!.mods).toBe(0);
+    expect(evt!.eventType).toBe(1);
+  });
+
+  test("parses modified CSI u with associated text payload", () => {
+    expect(identifyKeySequence("\x1b[71;2;71u")).toBe("shift+g");
+
+    const evt = parseRawKeyEvent("\x1b[71;2:1;71u");
+    expect(evt).not.toBeNull();
+    expect(evt!.code).toBe(71);
+    expect(evt!.mods).toBe(1);
+  });
+
+  test("uses physical alternate key for modified non-ASCII CSI u", () => {
+    expect(identifyKeySequence(keyWithPhysicalAlternate("λ", "l", 5))).toBe("ctrl+l");
+    expect(identifyKeySequence(keyWithPhysicalAlternate("λ", "l", 3))).toBe("alt+l");
+    expect(identifyKeySequence(keyWithPhysicalAlternate("λ", "l", 7))).toBe("ctrl+alt+l");
+    expect(identifyKeySequence(keyWithPhysicalAlternate("λ", "l", 1))).toBeNull();
+  });
+
+  test("uses physical alternate key for modified associated-text CSI u", () => {
+    expect(identifyKeySequence(keyWithAssociatedTextAndPhysicalKey("λ", "l", 5))).toBe("ctrl+l");
+    expect(identifyKeySequence(keyWithAssociatedTextAndPhysicalKey("λ", "l", 3))).toBe("alt+l");
   });
 
   test("parses plain CSI u with event type", () => {
