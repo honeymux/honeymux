@@ -27,10 +27,16 @@ export async function syncActivePaneRef({
   fallbackPaneId = null,
   windowId,
 }: SyncActivePaneRefOptions): Promise<void> {
+  const startingPaneId = activePaneIdRef.current;
   try {
     const panes = windowId ? await client.listPanesInWindow(windowId) : await client.getAllPaneInfo();
-    activePaneIdRef.current = resolveActivePaneId(panes) ?? fallbackPaneId;
+    const nextPaneId = resolveActivePaneId(panes) ?? fallbackPaneId;
+    if (activePaneIdRef.current === startingPaneId) {
+      activePaneIdRef.current = nextPaneId;
+    }
   } catch {
-    activePaneIdRef.current = fallbackPaneId;
+    if (activePaneIdRef.current === startingPaneId) {
+      activePaneIdRef.current = fallbackPaneId;
+    }
   }
 }
