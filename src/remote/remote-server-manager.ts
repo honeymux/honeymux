@@ -115,8 +115,6 @@ export class RemoteServerManager extends EventEmitter {
    * with a proxy process.
    */
   async convertPane(localPaneId: string, serverName: string): Promise<void> {
-    log("remote", `convertPane start: local=${localPaneId} server=${this.serverTag(serverName)}`);
-
     const client = this.clients.get(serverName);
     const mirror = this.mirrors.get(serverName);
     if (!client || !mirror || !client.isConnected) {
@@ -153,8 +151,6 @@ export class RemoteServerManager extends EventEmitter {
     });
     this.proxyServer.expectProxy(localPaneId, proxyToken);
 
-    log("remote", `convertPane: remotePaneId=${remotePaneId}, respawning remote pane`);
-
     try {
       // Respawn the remote pane with a shell
       await client.sendCommand(`respawn-pane -k -t ${remotePaneId}`);
@@ -176,7 +172,6 @@ export class RemoteServerManager extends EventEmitter {
       await this.updatePaneBorder(localPaneId, serverName);
 
       // Respawn the local pane with the proxy process
-      log("remote", `convertPane: spawning proxy in local pane ${localPaneId}`);
       await this.localClient.respawnPane(localPaneId, buildRemoteProxyProcessArgv(localPaneId, proxyToken));
     } catch (error) {
       this.proxyServer.forgetProxy(localPaneId);
@@ -188,7 +183,6 @@ export class RemoteServerManager extends EventEmitter {
       throw error;
     }
 
-    log("remote", `convertPane done: local=${localPaneId} → remote=${remotePaneId} on ${this.serverTag(serverName)}`);
     this.emit("pane-converted", localPaneId, serverName);
   }
 
@@ -305,10 +299,6 @@ export class RemoteServerManager extends EventEmitter {
         try {
           await this.setLocalPaneOption(localPaneId, "@hmx-remote-pane", remotePaneId);
           await this.updatePaneBorder(localPaneId, serverName);
-          log(
-            "remote",
-            `recovered (token-reuse): local=${localPaneId} → remote=${remotePaneId} on ${this.serverTag(serverName)}`,
-          );
           this.emit("pane-converted", localPaneId, serverName);
         } catch (err) {
           this.proxyServer.forgetProxy(localPaneId);
@@ -329,10 +319,6 @@ export class RemoteServerManager extends EventEmitter {
         await this.setLocalPaneOption(localPaneId, "@hmx-remote-token", newToken);
         await this.updatePaneBorder(localPaneId, serverName);
         await this.localClient.respawnPane(localPaneId, buildRemoteProxyProcessArgv(localPaneId, newToken));
-        log(
-          "remote",
-          `recovered (legacy-respawn): local=${localPaneId} → remote=${remotePaneId} on ${this.serverTag(serverName)}`,
-        );
         this.emit("pane-converted", localPaneId, serverName);
       } catch (err) {
         this.proxyServer.forgetProxy(localPaneId);
@@ -371,7 +357,6 @@ export class RemoteServerManager extends EventEmitter {
     const mapping = this.paneMappings.get(localPaneId);
     if (!mapping) return;
 
-    log("remote", `revertPane: local=${localPaneId} server=${this.serverTag(mapping.serverName)}`);
     this.proxyServer.forgetProxy(localPaneId);
 
     // Respawn local pane with a shell
@@ -503,7 +488,6 @@ export class RemoteServerManager extends EventEmitter {
         this.handleRemoteTmuxExit(config.name);
       });
       client.on("warning", (message: string) => {
-        log("remote", `server ${config.name} warning: ${message}`);
         this.emit("warning", `Remote server ${config.name}: ${message}`);
       });
       // Plain SSH disconnects do not emit "tmux-exit", so pane mappings survive
@@ -511,9 +495,7 @@ export class RemoteServerManager extends EventEmitter {
       // so the mapped local proxy panes must be torn down.
 
       // Track status changes
-      client.on("status-change", (status: RemoteConnectionStatus, error?: string, sshPid?: number) => {
-        const pidSuffix = sshPid ? ` ssh_pid=${sshPid}` : "";
-        log("remote", `server ${config.name}: status=${status}${pidSuffix}${error ? ` error=${error}` : ""}`);
+      client.on("status-change", (status: RemoteConnectionStatus, error?: string, _sshPid?: number) => {
         const s = this.servers.get(config.name);
         if (s) {
           s.status = status;
@@ -807,7 +789,6 @@ export class RemoteServerManager extends EventEmitter {
   }
 
   private handleRemoteTmuxExit(serverName: string): void {
-    log("remote", `handleRemoteTmuxExit: ${this.serverTag(serverName)}`);
     for (const [localPaneId, mapping] of [...this.paneMappings]) {
       if (mapping.serverName !== serverName) continue;
       this.killLocalProxyPane(localPaneId);
@@ -850,7 +831,6 @@ export class RemoteServerManager extends EventEmitter {
 
   /** Clean up a local proxy pane whose remote pane died. */
   private killLocalProxyPane(localPaneId: string): void {
-    log("remote", `killLocalProxyPane: ${localPaneId} (remote pane died)`);
     this.endRemoteSessionsForLocalPane(localPaneId);
     this.paneMappings.delete(localPaneId);
     this.proxyServer.forgetProxy(localPaneId);

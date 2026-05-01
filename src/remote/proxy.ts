@@ -10,13 +10,10 @@
  */
 import type { Socket } from "bun";
 
-import { log } from "../util/log.ts";
 import { getRemoteProxySocketPath } from "./proxy-server.ts";
 import { TmuxQueryStripper } from "./query-stripper.ts";
 
 export async function runRemoteProxyProcess(localPaneId: string, proxyToken: string): Promise<void> {
-  log("proxy", `started: paneId=${localPaneId}`);
-
   // The proxy's pty is in canonical mode with echo by default. Raw mode
   // disables kernel-side echo, which is what kept tmux's replies to query
   // escape sequences from being re-rendered as `^[` in the pane.
@@ -51,12 +48,10 @@ export async function runRemoteProxyProcess(localPaneId: string, proxyToken: str
       Bun.connect({
         socket: {
           close() {
-            log("proxy", `socket closed (pane=${localPaneId})`);
             activeSocket = null;
             resolve();
           },
           connectError(_sock, error) {
-            log("proxy", `connect error (pane=${localPaneId}): ${error.message}`);
             activeSocket = null;
             reject(error);
           },
@@ -69,7 +64,6 @@ export async function runRemoteProxyProcess(localPaneId: string, proxyToken: str
             resolve();
           },
           open(sock) {
-            log("proxy", `connected to honeymux socket (pane=${localPaneId})`);
             sock.write(JSON.stringify({ paneId: localPaneId, token: proxyToken }) + "\n");
             activeSocket = sock;
             retry = 0;
