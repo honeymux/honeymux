@@ -8,8 +8,8 @@ describe("config", () => {
     expect(defaultConfig().policyLocalOtherOscPassthrough).toBe("allow");
   });
 
-  test("defaults to the built-in dracula theme selection", () => {
-    expect(defaultConfig().themeBuiltin).toBe("dracula");
+  test("defaults to the built-in spacemacs theme selection", () => {
+    expect(defaultConfig().themeBuiltin).toBe("spacemacs");
     expect(defaultConfig().themeMode).toBe("built-in");
   });
 

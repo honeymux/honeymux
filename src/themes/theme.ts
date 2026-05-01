@@ -76,7 +76,7 @@ export function rgbToHex([r, g, b]: RGB): string {
 // ---------------------------------------------------------------------------
 
 /** The built-in scheme used before initTheme() is called and as fallback. */
-export const DEFAULT_SCHEME: Base16SchemeName = "dracula";
+export const DEFAULT_SCHEME: Base16SchemeName = "spacemacs";
 
 export interface Theme {
   accent: string;
