@@ -28,7 +28,7 @@ export interface MainPaneModelApi {
 
 interface UseMainPaneModelOptions {
   activePaneId: null | string;
-  activePaneRect: import("./use-dim-inactive-panes.ts").DimPaneRect | null;
+  activePaneRect: import("./use-active-pane-rect.ts").ActivePaneRect | null;
   agentActions: AgentActionsApi;
   agentDialogState: AgentDialogState;
   agentLatchBindingLabel: string | undefined;

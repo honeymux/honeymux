@@ -9,6 +9,7 @@ import type { KeybindingConfig } from "./util/keybindings.ts";
 import { useHarnessHooks } from "./app/harness/use-harness-hooks.ts";
 import { useHarnessRenamePaneTabsRef } from "./app/harness/use-harness-rename-pane-tabs-ref.ts";
 import { buildAppRuntimeContext } from "./app/hooks/build-app-runtime-context.ts";
+import { useActivePaneRect } from "./app/hooks/use-active-pane-rect.ts";
 import { useAgentActions } from "./app/hooks/use-agent-actions.ts";
 import { useAgentBinaryDetection } from "./app/hooks/use-agent-binary-detection.ts";
 import { useAgentPaneActivity } from "./app/hooks/use-agent-pane-activity.ts";
@@ -373,7 +374,12 @@ export function App({ sessionName }: AppProps) {
 
   const dimTargetSession = currentSessionName;
   const dimEnabled = config.dimInactivePanes ?? false;
-  const { activePaneRect, inactivePaneRects } = useDimInactivePanes({
+  const activePaneRect = useActivePaneRect({
+    clientRef,
+    connected,
+    targetSession: dimTargetSession,
+  });
+  const inactivePaneRects = useDimInactivePanes({
     clientRef,
     connected,
     enabled: dimEnabled,

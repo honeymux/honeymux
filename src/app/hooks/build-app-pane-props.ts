@@ -34,7 +34,7 @@ export interface ClosePaneDropdownOptions {
 
 interface BuildAppPanePropsOptions {
   activePaneId?: null | string;
-  activePaneRect?: import("./use-dim-inactive-panes.ts").DimPaneRect | null;
+  activePaneRect?: import("./use-active-pane-rect.ts").ActivePaneRect | null;
   agentActions: AgentActionsApi;
   agentDialogState: AgentDialogState;
   /** Human-readable label for the agentLatch binding (e.g. "right shift"). */
@@ -420,7 +420,7 @@ export function buildMainPaneToolbarProps({
   toolbarItemCountRef,
   toolbarOpen,
 }: {
-  activePaneRect?: import("./use-dim-inactive-panes.ts").DimPaneRect | null;
+  activePaneRect?: import("./use-active-pane-rect.ts").ActivePaneRect | null;
   bufferZoomBinding?: string;
   clientRef?: MutableRefObject<TmuxControlClient | null>;
   currentSessionName?: string;
