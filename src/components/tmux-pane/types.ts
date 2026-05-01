@@ -3,8 +3,8 @@ import type { GhosttyTerminalRenderable } from "ghostty-opentui/terminal-buffer"
 import type { CodingAgentPaneActivity, CodingAgentPaneOutputSample } from "../../agents/pane-activity.ts";
 import type { AgentProviderRegistry } from "../../agents/provider.ts";
 import type { AgentSession, HookSnifferEntry } from "../../agents/types.ts";
+import type { ActivePaneRect } from "../../app/hooks/use-active-pane-rect.ts";
 import type { StatusBarInfo } from "../../app/hooks/use-app-state-groups.ts";
-import type { DimPaneRect } from "../../app/hooks/use-dim-inactive-panes.ts";
 import type { PaneTabGroup } from "../../app/pane-tabs/types.ts";
 import type { TmuxControlClient } from "../../tmux/control-client.ts";
 import type { LayoutProfile, TmuxKeyBindings, TmuxSession, TmuxWindow } from "../../tmux/types.ts";
@@ -161,7 +161,7 @@ export interface TmuxPaneSharedProps {
 }
 
 export interface TmuxPaneToolbarProps {
-  activePaneRect?: DimPaneRect | null;
+  activePaneRect?: ActivePaneRect | null;
   bufferZoomBinding?: string;
   dimInactivePanesEnabled?: boolean;
   dimInactivePanesOpacity?: number;
