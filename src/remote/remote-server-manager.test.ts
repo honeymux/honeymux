@@ -236,7 +236,12 @@ describe("RemoteServerManager remote hook ingress", () => {
     expect(manager.hasConvertibleRemoteServer("%10")).toBe(true);
   });
 
-  it("routes remote pane input through send-keys -H", () => {
+  it("declines plain typing so it flows through local tmux's input layer", () => {
+    // Plain keystrokes route through writeToPty → local tmux → focused pane
+    // (the proxy) → proxy-server "proxy-input" → send-keys -H. routeInput
+    // only intercepts what cannot work that way, so prefix combos and capture
+    // states (command-prompt, copy-mode, etc.) are processed by local tmux
+    // natively rather than being injected past it via send-keys.
     const runCommandArgs = mock(async () => {});
     const sendCommand = mock(async () => "");
     const manager = new RemoteServerManager({ runCommandArgs } as any, [{ host: "dev-box", name: "dev-box" }]);
@@ -251,19 +256,16 @@ describe("RemoteServerManager remote hook ingress", () => {
       serverName: "dev-box",
     });
 
-    expect(manager.routeInput("%10", "ab")).toBe(true);
-
-    expect(sendCommand).toHaveBeenCalledWith("send-keys -H -t '%77' 61 62");
+    expect(manager.routeInput("%10", "ab")).toBe(false);
+    expect(manager.routeInput("%10", "\x02")).toBe(false); // Ctrl+B (a tmux prefix)
+    expect(manager.routeInput("%10", "\x1b")).toBe(false); // Escape — tmux handles copy-mode exit
+    expect(manager.routeInput("%10", "\x1b[<0;177;3M")).toBe(false); // SGR mouse press
+    expect(manager.routeInput("%10", "\r")).toBe(false);
+    expect(sendCommand).not.toHaveBeenCalled();
     expect(runCommandArgs).not.toHaveBeenCalled();
   });
 
-  it("declines SGR mouse events so the caller forwards them to local tmux", () => {
-    // `send-keys -H` injects bytes directly into the remote pane's stdin,
-    // bypassing remote tmux's mouse parser. Forwarding raw mouse SGR
-    // sequences makes shells like bash echo `^[[<0;177;3M` as visible
-    // text. Returning false lets the caller fall through to the local PTY,
-    // where local tmux dispatches clicks (including cross-pane focus
-    // changes when the active pane is remote-backed).
+  it("forwards stdin emitted by the proxy server to the remote pane via send-keys -H", () => {
     const runCommandArgs = mock(async () => {});
     const sendCommand = mock(async () => "");
     const manager = new RemoteServerManager({ runCommandArgs } as any, [{ host: "dev-box", name: "dev-box" }]);
@@ -278,11 +280,9 @@ describe("RemoteServerManager remote hook ingress", () => {
       serverName: "dev-box",
     });
 
-    expect(manager.routeInput("%10", "\x1b[<0;177;3M")).toBe(false); // press
-    expect(manager.routeInput("%10", "\x1b[<0;177;3m")).toBe(false); // release
-    expect(manager.routeInput("%10", "\x1b[<32;50;10M")).toBe(false); // motion+button
+    (manager as any).handleProxyInput("%10", new Uint8Array([0x61, 0x62]));
 
-    expect(sendCommand).not.toHaveBeenCalled();
+    expect(sendCommand).toHaveBeenCalledWith("send-keys -H -t '%77' 61 62");
     expect(runCommandArgs).not.toHaveBeenCalled();
   });
 
@@ -315,7 +315,7 @@ describe("RemoteServerManager remote hook ingress", () => {
     expect(runCommandArgs).not.toHaveBeenCalled();
   });
 
-  it("preserves paste-then-keystroke order on the wire", async () => {
+  it("serializes a paste followed by a proxy-input keystroke onto a single client", async () => {
     const runCommandArgs = mock(async () => {});
     const sendCalls: string[] = [];
     const sendCommand = mock(async (cmd: string) => {
@@ -335,33 +335,11 @@ describe("RemoteServerManager remote hook ingress", () => {
     });
 
     expect(manager.routeInput("%10", "\x1b[200~paste\x1b[201~")).toBe(true);
-    expect(manager.routeInput("%10", "\r")).toBe(true);
+    (manager as any).handleProxyInput("%10", new Uint8Array([0x0d]));
 
     expect(sendCalls).toHaveLength(2);
     expect(sendCalls[0]!).toMatch(/^set-buffer -b 'hmx-paste-[0-9a-f]+' "paste" ; paste-buffer /);
     expect(sendCalls[1]!).toBe("send-keys -H -t '%77' 0d");
-  });
-
-  it("cancels stray local copy mode before forwarding Escape to a remote pane", async () => {
-    const runCommandArgs = mock(async () => {});
-    const sendCommand = mock(async () => "");
-    const manager = new RemoteServerManager({ runCommandArgs } as any, [{ host: "dev-box", name: "dev-box" }]);
-
-    (manager as any).clients.set("dev-box", {
-      isConnected: true,
-      sendCommand,
-    });
-    (manager as any).paneMappings.set("%10", {
-      localPaneId: "%10",
-      remotePaneId: "%77",
-      serverName: "dev-box",
-    });
-
-    expect(manager.routeInput("%10", "\x1b")).toBe(true);
-    await Promise.resolve();
-
-    expect(runCommandArgs).toHaveBeenCalledWith(["send-keys", "-X", "-t", "%10", "cancel"]);
-    expect(sendCommand).toHaveBeenCalledWith("send-keys -H -t '%77' 1b");
   });
 
   it("forces a mirror sync during conversion when the pane mapping is missing", async () => {

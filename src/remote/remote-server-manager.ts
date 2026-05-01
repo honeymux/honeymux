@@ -28,9 +28,6 @@ const REMOTE_TTY_CACHE_MS = 1_000;
 const REMOTE_PID_BINDING_CACHE_MS = 1_000;
 const LOCAL_PANE_METADATA_CACHE_MS = 1_000;
 const REMOTE_HOOK_SOCKET_TMUX_OPTION = "@hmx-agent-socket-path";
-// SGR mouse sequence: ESC [ < <button> ; <col> ; <row> M|m
-// eslint-disable-next-line no-control-regex
-const SGR_MOUSE_RE = /^\x1b\[<\d+;\d+;\d+[Mm]$/;
 const REMOTE_PID_BINDING_SCRIPT = [
   'pid="$1"',
   'tty="$2"',
@@ -393,8 +390,16 @@ export class RemoteServerManager extends EventEmitter {
   }
 
   /**
-   * Route keyboard input to a remote pane.
-   * Returns true if the pane is remote and input was consumed.
+   * Intercept keyboard input that needs special handling before reaching the
+   * remote pane. Returns true when the input was consumed and must NOT also
+   * be written to the local PTY.
+   *
+   * Plain typing flows through local tmux's input layer instead — local tmux
+   * processes its prefix combos, command-prompt, copy-mode, and other capture
+   * states natively, then forwards whatever it didn't consume into the local
+   * proxy pane, which forwards stdin to the remote via "proxy-input". Bracket
+   * paste is the one case that still needs out-of-band handling because
+   * `send-keys` cannot reliably carry long binary payloads.
    */
   routeInput(paneId: string, data: string): boolean {
     const mapping = this.paneMappings.get(paneId);
@@ -403,40 +408,17 @@ export class RemoteServerManager extends EventEmitter {
     const client = this.clients.get(mapping.serverName);
     if (!client || !client.isConnected) return false;
 
-    // Decline SGR mouse events so they fall through to the local PTY where
-    // local tmux dispatches the click to whichever pane it lands on
-    // (including cross-pane focus changes when the active pane is remote).
-    // `send-keys -H` would otherwise inject the raw mouse bytes into the
-    // remote pane's stdin, bypassing remote tmux's mouse parser and showing
-    // up as `^[[<0;177;3M` echo in shells that aren't mouse-aware.
-    if (SGR_MOUSE_RE.test(data)) return false;
-
     const pasteText = extractBracketedPastePayload(data);
-    if (pasteText !== null) {
-      pasteTextIntoRemotePane(client, mapping.remotePaneId, pasteText).catch((err) => {
-        const message = err instanceof Error ? err.message : String(err);
-        log(
-          "remote",
-          `remote paste failed for ${this.serverTag(mapping.serverName)} pane=${mapping.remotePaneId}: ${message}`,
-        );
-        this.emit("warning", `Remote paste failed for ${mapping.serverName}: ${message}`);
-      });
-      return true;
-    }
+    if (pasteText === null) return false;
 
-    if (data === "\x1b") {
-      // Remote-backed panes can still leave the local proxy pane's tmux in a
-      // stray copy mode (for example after local mouse-wheel scroll). Cancel
-      // that local mode opportunistically before forwarding Escape remotely.
-      // This is a blind best-effort cancel on every plain Escape; we do not
-      // currently cache `#{pane_in_mode}`. If this ever shows up as noisy or
-      // expensive, the better optimization is to track pane mode in memory via
-      // a tmux format subscription instead of adding a per-Escape query here.
-      this.localClient.runCommandArgs(["send-keys", "-X", "-t", paneId, "cancel"]).catch(() => {});
-    }
-
-    const hex = Buffer.from(data).toString("hex").match(/.{2}/g)!.join(" ");
-    client.sendCommand(`send-keys -H -t ${quoteTmuxArg("remotePaneId", mapping.remotePaneId)} ${hex}`).catch(() => {});
+    pasteTextIntoRemotePane(client, mapping.remotePaneId, pasteText).catch((err) => {
+      const message = err instanceof Error ? err.message : String(err);
+      log(
+        "remote",
+        `remote paste failed for ${this.serverTag(mapping.serverName)} pane=${mapping.remotePaneId}: ${message}`,
+      );
+      this.emit("warning", `Remote paste failed for ${mapping.serverName}: ${message}`);
+    });
     return true;
   }
 
@@ -446,6 +428,7 @@ export class RemoteServerManager extends EventEmitter {
     this.started = true;
 
     this.proxyServer.start();
+    this.proxyServer.on("proxy-input", this.handleProxyInput);
     this.wireLocalEvents();
 
     for (const config of this.configs) {
@@ -585,6 +568,7 @@ export class RemoteServerManager extends EventEmitter {
     this.remotePaneIdentityCache.clear();
     this.remotePidBindingCache.clear();
     this.localPaneMetadataCache = { at: 0, mappings: new Map() };
+    this.proxyServer.off("proxy-input", this.handleProxyInput);
     this.proxyServer.stop();
   }
 
@@ -792,6 +776,26 @@ export class RemoteServerManager extends EventEmitter {
       return undefined;
     }
   }
+
+  /**
+   * Forward stdin bytes from a local proxy pane to its mapped remote pane.
+   *
+   * `data` has already passed through local tmux's input layer (so prefix
+   * combos and capture states like command-prompt and copy-mode were handled
+   * locally) and is whatever local tmux let through to the focused pane.
+   */
+  private handleProxyInput = (paneId: string, data: Uint8Array): void => {
+    const mapping = this.paneMappings.get(paneId);
+    if (!mapping) return;
+    const client = this.clients.get(mapping.serverName);
+    if (!client || !client.isConnected) return;
+    if (data.length === 0) return;
+    const hex = Buffer.from(data).toString("hex").match(/.{2}/g);
+    if (!hex || hex.length === 0) return;
+    client
+      .sendCommand(`send-keys -H -t ${quoteTmuxArg("remotePaneId", mapping.remotePaneId)} ${hex.join(" ")}`)
+      .catch(() => {});
+  };
 
   /**
    * Handle a remote window closing. Since each mirror window maps to a local
