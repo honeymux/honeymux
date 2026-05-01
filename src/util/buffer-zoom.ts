@@ -4,12 +4,12 @@ import type { MutableRefObject } from "react";
 
 import type { TmuxControlClient } from "../tmux/control-client.ts";
 
+import { softWrapContent } from "./buffer-zoom-content.ts";
 import {
   type AltScreenFadeHandle,
   fadeInPrimaryScreen,
   fadeOutAltScreen,
   supportsFadeTransitions,
-  wrapContentToTermCols,
 } from "./buffer-zoom-fade.ts";
 import { splitSequences } from "./csiu-reencode.ts";
 import { parseRawKeyEvent } from "./keybindings.ts";
@@ -184,14 +184,17 @@ export async function enterBufferZoom({
     writeTerminalOutput("\x1b[?2026l");
     if (fadeEnabled) {
       await fadeInPrimaryScreen({ content, termCols, termRows });
+      // The fade animation lays out cells with explicit `\n` at each wrap
+      // point so per-frame redraws stay within termRows; the terminal then
+      // marks those rows as hard-broken, which makes select+copy across a
+      // wrapped line yield a literal newline. Re-render once more via
+      // softWrapContent so cells carry the soft-wrap attribute, wrapped in a
+      // synchronized-update block to avoid any visible flicker.
+      writeTerminalOutput(
+        "\x1b[?2026h" + CLEAR_SCREEN_AND_SCROLLBACK + softWrapContent(content) + "\x1b[0m\n\x1b[?2026l",
+      );
     } else {
-      // Wrap the raw capture to termCols so the outer terminal never has to
-      // auto-wrap a long line while reverse/bg state is still active — that
-      // auto-wrap is the origin of the reverse bleed on the right edge when
-      // the original pane is narrower than the outer terminal. The wrap
-      // helper also emits ESC[0m ESC[K before every original newline, which
-      // cleans up any cells past the written text with default attributes.
-      writeTerminalOutput(wrapContentToTermCols(content, termCols));
+      writeTerminalOutput(softWrapContent(content));
       writeTerminalOutput("\x1b[0m\n");
     }
 
