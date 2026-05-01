@@ -70,9 +70,12 @@ or
 curl -fsSL https://get.hmx.dev | bash
 ```
 
-> [!WARNING]
-> This is new, pre-1.0 release software and is yet to be pressure-tested in a wider variety of environments. Give it a try but expect bugs and YMMV on stability depending on the subset of features you use.
+> [!CAUTION]
+> Please restart both tmux and hmx entirely after upgrading. Neither program guarantees backward compatibility with existing tmux server state after upgrades.
 
 ## Documentation
 
 See the [documentation](https://docs.hmx.dev) on the Honeymux website.
+
+> [!WARNING]
+> This is new, pre-1.0 release software and is yet to be pressure-tested in a wider variety of environments. Give it a try but expect bugs and YMMV on stability depending on the subset of features you use.
