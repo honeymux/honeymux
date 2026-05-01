@@ -10,6 +10,7 @@ import { stripAndForwardFocusEvents } from "./focus-event-forwarder.ts";
 // M = press/motion, m = release
 const SGR_MOUSE_RE = /\x1b\[<(\d+);(\d+);(\d+)([Mm])/g;
 const MAX_PENDING_CONTROL_CHARS = 128;
+const MAX_PENDING_CONTROL_STRING_CHARS = 64 * 1024;
 
 export interface MouseForwardConfig {
   /** True when a dialog with custom input handling is open (e.g. conversations dialog).
@@ -106,28 +107,58 @@ export function installRawStdinInterceptor(
     return false;
   };
 
+  const isControlStringStartAt = (text: string, start: number): boolean => {
+    const introducer = text[start + 1];
+    return (
+      text[start] === "\x1b" && (introducer === "P" || introducer === "]" || introducer === "_" || introducer === "^")
+    );
+  };
+
+  const findControlStringTerminatorEnd = (text: string, start: number): number => {
+    const introducer = text[start + 1];
+    for (let i = start + 2; i < text.length; i += 1) {
+      if (introducer === "]" && text.charCodeAt(i) === 0x07) return i + 1;
+      if (text.charCodeAt(i) !== 0x1b) continue;
+      if (i + 1 >= text.length) return -1;
+      if (text.charCodeAt(i + 1) === 0x5c) return i + 2;
+    }
+    return -1;
+  };
+
+  const takeTrailingControlStringPrefix = (text: string): string => {
+    const minStart = Math.max(0, text.length - MAX_PENDING_CONTROL_STRING_CHARS);
+    let start = text.lastIndexOf("\x1b");
+    while (start >= minStart) {
+      if (isControlStringStartAt(text, start)) {
+        const terminatorEnd = findControlStringTerminatorEnd(text, start);
+        if (terminatorEnd === -1) return text.slice(start);
+        if (terminatorEnd >= text.length) return "";
+      }
+      if (start === 0) break;
+      start = text.lastIndexOf("\x1b", start - 1);
+    }
+    return "";
+  };
+
   const isIncompleteCsiSequence = (text: string): boolean => {
     if (!text.startsWith("\x1b[")) return false;
     if (text === "\x1b[") return true;
 
-    // A CSI sequence is: ESC [ <params> <final-letter>
-    // Find the first letter after ESC [ — that's the CSI final byte.
-    // If we haven't seen a letter yet, the sequence is incomplete.
+    // A CSI sequence is: ESC [ <params> <intermediates> <final>.
+    // The final byte is in 0x40-0x7e, not only A-Z/a-z; keys such as Delete
+    // end in "~", and DECRPM replies use "$" as an intermediate before "y".
     for (let i = 2; i < text.length; i += 1) {
       const ch = text.charCodeAt(i);
-      // Check if it's a letter (A-Z: 65-90, a-z: 97-122)
-      if ((ch >= 65 && ch <= 90) || (ch >= 97 && ch <= 122)) {
-        // CSI sequence is complete, but there's extra content after it.
-        // Return false to stop carrying — the sequence ends here.
-        return false;
-      }
+      if (ch >= 0x40 && ch <= 0x7e) return false;
     }
 
-    // No final byte found, sequence is incomplete.
     return true;
   };
 
   const takeTrailingControlPrefix = (text: string): string => {
+    const trailingControlStringPrefix = takeTrailingControlStringPrefix(text);
+    if (trailingControlStringPrefix.length > 0) return trailingControlStringPrefix;
+
     // Lone ESC at end is the most common incomplete sequence. Handle it first.
     if (text.endsWith("\x1b")) return "\x1b";
 
@@ -146,37 +177,7 @@ export function installRawStdinInterceptor(
     return "";
   };
 
-  /** Route completed paste content to the right destination. */
-  const deliverPaste = (text: string): void => {
-    if (mouseConfig.isTextInputActive?.()) {
-      originalEmit("data", Buffer.from(`\x1b[200~${text}\x1b[201~`, "utf-8"));
-      return;
-    }
-    if (mouseConfig.isDialogOpen?.() && mouseConfig.onDialogInput) {
-      for (const ch of text) {
-        mouseConfig.onDialogInput(ch);
-      }
-      return;
-    }
-    if (mouseConfig.isDropdownOpen?.() && mouseConfig.onDropdownInput) {
-      for (const ch of text) {
-        mouseConfig.onDropdownInput(ch);
-      }
-      return;
-    }
-    (mouseConfig.writePaste ?? writeToPty)(`\x1b[200~${text}\x1b[201~`);
-  };
-
-  const emitOriginalText = (text: string): void => {
-    if (text.length === 0) return;
-    originalEmit("data", Buffer.from(text, "utf-8"));
-  };
-
-  const forwardCompleteText = (text: string): void => {
-    if (text.length === 0) return;
-    const cleaned = stripAndForwardFocusEvents(text, writeToPty);
-    if (cleaned.length === 0) return;
-
+  const forwardNonStringText = (cleaned: string): void => {
     let lastIdx = 0;
     const re = new RegExp(SGR_MOUSE_RE.source, "g");
     let match: RegExpExecArray | null;
@@ -213,6 +214,67 @@ export function installRawStdinInterceptor(
     if (lastIdx < cleaned.length) {
       emitOriginalText(cleaned.slice(lastIdx));
     }
+  };
+
+  const forwardPlainText = (text: string): void => {
+    if (text.length === 0) return;
+    const cleaned = stripAndForwardFocusEvents(text, writeToPty);
+    if (cleaned.length > 0) forwardNonStringText(cleaned);
+  };
+
+  /** Route completed paste content to the right destination. */
+  const deliverPaste = (text: string): void => {
+    if (mouseConfig.isTextInputActive?.()) {
+      originalEmit("data", Buffer.from(`\x1b[200~${text}\x1b[201~`, "utf-8"));
+      return;
+    }
+    if (mouseConfig.isDialogOpen?.() && mouseConfig.onDialogInput) {
+      for (const ch of text) {
+        mouseConfig.onDialogInput(ch);
+      }
+      return;
+    }
+    if (mouseConfig.isDropdownOpen?.() && mouseConfig.onDropdownInput) {
+      for (const ch of text) {
+        mouseConfig.onDropdownInput(ch);
+      }
+      return;
+    }
+    (mouseConfig.writePaste ?? writeToPty)(`\x1b[200~${text}\x1b[201~`);
+  };
+
+  const emitOriginalText = (text: string): void => {
+    if (text.length === 0) return;
+    originalEmit("data", Buffer.from(text, "utf-8"));
+  };
+
+  const forwardCompleteText = (text: string): void => {
+    if (text.length === 0) return;
+
+    let plainStart = 0;
+    let cursor = 0;
+    while (cursor < text.length) {
+      const escIdx = text.indexOf("\x1b", cursor);
+      if (escIdx === -1) break;
+
+      if (!isControlStringStartAt(text, escIdx)) {
+        cursor = escIdx + 1;
+        continue;
+      }
+
+      const csEnd = findControlStringTerminatorEnd(text, escIdx);
+      // takeTrailingControlPrefix should have buffered any incomplete trailing
+      // control string; -1 here means the carry timer flushed an unfinished
+      // one. Fall back to plain-text processing for the remainder.
+      if (csEnd === -1) break;
+
+      if (escIdx > plainStart) forwardPlainText(text.slice(plainStart, escIdx));
+      emitOriginalText(text.slice(escIdx, csEnd));
+      plainStart = csEnd;
+      cursor = csEnd;
+    }
+
+    if (plainStart < text.length) forwardPlainText(text.slice(plainStart));
   };
 
   const flushCarry = (): void => {

@@ -195,6 +195,143 @@ describe("raw stdin interceptor", () => {
     expect(forwarded).toEqual(["prompt", "\x1b[5A"]);
   });
 
+  test("does not delay complete CSI sequences with non-letter final bytes", () => {
+    const forwarded = captureForwardedInput();
+
+    cleanup = installRawStdinInterceptor(() => {}, {
+      mapCoordinates: () => null,
+    });
+
+    (process.stdin as any).emit("data", Buffer.from("\x1b[3", "utf-8"));
+    (process.stdin as any).emit("data", Buffer.from("~", "utf-8"));
+
+    expect(forwarded).toEqual(["\x1b[3~"]);
+  });
+
+  test("preserves split DCS responses as a complete sequence", () => {
+    const forwarded = captureForwardedInput();
+    const writes: string[] = [];
+
+    cleanup = installRawStdinInterceptor(
+      (data) => {
+        writes.push(data);
+      },
+      {
+        mapCoordinates: () => null,
+      },
+    );
+
+    (process.stdin as any).emit("data", Buffer.from("pre\x1bP>|Ghostty", "utf-8"));
+    expect(forwarded).toEqual(["pre"]);
+
+    (process.stdin as any).emit("data", Buffer.from(" 1.2.0\x1b\\post", "utf-8"));
+
+    expect(writes).toEqual([]);
+    expect(forwarded).toEqual(["pre", "\x1bP>|Ghostty 1.2.0\x1b\\", "post"]);
+  });
+
+  test("preserves split OSC responses as a complete sequence", () => {
+    const forwarded = captureForwardedInput();
+    const writes: string[] = [];
+
+    cleanup = installRawStdinInterceptor(
+      (data) => {
+        writes.push(data);
+      },
+      {
+        mapCoordinates: () => null,
+      },
+    );
+
+    (process.stdin as any).emit("data", Buffer.from("\x1b]10;rgb:cccc", "utf-8"));
+    expect(forwarded).toEqual([]);
+
+    (process.stdin as any).emit("data", Buffer.from("/cccc/cccc\x07", "utf-8"));
+
+    expect(writes).toEqual([]);
+    expect(forwarded).toEqual(["\x1b]10;rgb:cccc/cccc/cccc\x07"]);
+  });
+
+  test("preserves split APC responses as a complete sequence", () => {
+    const forwarded = captureForwardedInput();
+    const writes: string[] = [];
+
+    cleanup = installRawStdinInterceptor(
+      (data) => {
+        writes.push(data);
+      },
+      {
+        mapCoordinates: () => null,
+      },
+    );
+
+    (process.stdin as any).emit("data", Buffer.from("\x1b_Gi=31337;", "utf-8"));
+    expect(forwarded).toEqual([]);
+
+    (process.stdin as any).emit("data", Buffer.from("OK\x1b\\", "utf-8"));
+
+    expect(writes).toEqual([]);
+    expect(forwarded).toEqual(["\x1b_Gi=31337;OK\x1b\\"]);
+  });
+
+  test("does not strip focus-like bytes inside DCS responses", () => {
+    const forwarded = captureForwardedInput();
+    const writes: string[] = [];
+
+    cleanup = installRawStdinInterceptor(
+      (data) => {
+        writes.push(data);
+      },
+      {
+        mapCoordinates: () => null,
+      },
+    );
+
+    (process.stdin as any).emit("data", Buffer.from("\x1bPpayload\x1b[I", "utf-8"));
+    (process.stdin as any).emit("data", Buffer.from("\x1b\\", "utf-8"));
+
+    expect(writes).toEqual([]);
+    expect(forwarded).toEqual(["\x1bPpayload\x1b[I\x1b\\"]);
+  });
+
+  test("does not strip focus-like bytes inside OSC responses", () => {
+    const forwarded = captureForwardedInput();
+    const writes: string[] = [];
+
+    cleanup = installRawStdinInterceptor(
+      (data) => {
+        writes.push(data);
+      },
+      {
+        mapCoordinates: () => null,
+      },
+    );
+
+    (process.stdin as any).emit("data", Buffer.from("\x1b]52;c;\x1b[I\x07", "utf-8"));
+
+    expect(writes).toEqual([]);
+    expect(forwarded).toEqual(["\x1b]52;c;\x1b[I\x07"]);
+  });
+
+  test("does not strip focus-like bytes inside APC responses", () => {
+    const forwarded = captureForwardedInput();
+    const writes: string[] = [];
+
+    cleanup = installRawStdinInterceptor(
+      (data) => {
+        writes.push(data);
+      },
+      {
+        mapCoordinates: () => null,
+      },
+    );
+
+    (process.stdin as any).emit("data", Buffer.from("\x1b_G\x1b[I\x1b\\", "utf-8"));
+
+    expect(writes).toEqual([]);
+    expect(forwarded).toEqual(["\x1b_G\x1b[I\x1b\\"]);
+  });
+
   test("flushes lone ESC after carry timeout", async () => {
     const forwarded = captureForwardedInput();
 
