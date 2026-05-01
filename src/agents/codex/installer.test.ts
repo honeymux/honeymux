@@ -1,6 +1,11 @@
 import { describe, expect, it } from "bun:test";
 
-import { buildCodexHookCommand, resolveCodexHookPython, upsertCodexHookSettings } from "./installer.ts";
+import {
+  buildCodexHookCommand,
+  ensureCodexHooksFeature,
+  resolveCodexHookPython,
+  upsertCodexHookSettings,
+} from "./installer.ts";
 
 describe("resolveCodexHookPython", () => {
   it("prefers python3 when available", () => {
@@ -126,5 +131,33 @@ describe("upsertCodexHookSettings", () => {
     const once = upsertCodexHookSettings({}, command);
     const twice = upsertCodexHookSettings(once, command);
     expect(twice).toEqual(once);
+  });
+});
+
+describe("ensureCodexHooksFeature", () => {
+  it("adds the features section to an empty config without leading blank lines", () => {
+    expect(ensureCodexHooksFeature("")).toBe("[features]\ncodex_hooks = true\n");
+  });
+
+  it("preserves existing config and appends a features section with one separator", () => {
+    expect(ensureCodexHooksFeature("[other]\nkey = 1\n")).toBe("[other]\nkey = 1\n\n[features]\ncodex_hooks = true\n");
+  });
+
+  it("is idempotent — does not accumulate trailing newlines on repeat runs", () => {
+    const initial = "[features]\ncodex_hooks = true\n";
+    const once = ensureCodexHooksFeature(initial);
+    const twice = ensureCodexHooksFeature(once);
+    const thrice = ensureCodexHooksFeature(twice);
+    expect(once).toBe(initial);
+    expect(twice).toBe(initial);
+    expect(thrice).toBe(initial);
+  });
+
+  it("normalizes pre-existing trailing whitespace down to a single newline", () => {
+    expect(ensureCodexHooksFeature("[features]\ncodex_hooks = true\n\n\n\n")).toBe("[features]\ncodex_hooks = true\n");
+  });
+
+  it("inserts codex_hooks into an existing empty [features] section", () => {
+    expect(ensureCodexHooksFeature("[features]\n")).toBe("[features]\ncodex_hooks = true\n");
   });
 });

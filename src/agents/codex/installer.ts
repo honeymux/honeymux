@@ -49,6 +49,46 @@ export function buildCodexHookCommand(
   return formatArgv([interpreter, scriptPath]);
 }
 
+export function ensureCodexHooksFeature(configText: string): string {
+  const lines = configText.split(/\r?\n/);
+  while (lines.length > 0 && lines[lines.length - 1] === "") lines.pop();
+
+  let inFeatures = false;
+  let inserted = false;
+
+  for (let i = 0; i < lines.length; i += 1) {
+    const trimmed = lines[i]!.trim();
+    if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+      if (inFeatures && !inserted) {
+        lines.splice(i, 0, "codex_hooks = true");
+        inserted = true;
+        break;
+      }
+      inFeatures = trimmed === "[features]";
+      continue;
+    }
+    if (inFeatures && /^codex_hooks\s*=/.test(trimmed)) {
+      lines[i] = "codex_hooks = true";
+      inserted = true;
+      break;
+    }
+  }
+
+  if (!inserted) {
+    if (inFeatures) {
+      lines.push("codex_hooks = true");
+    } else {
+      if (lines.length > 0) {
+        lines.push("");
+      }
+      lines.push("[features]");
+      lines.push("codex_hooks = true");
+    }
+  }
+
+  return `${lines.join("\n")}\n`;
+}
+
 export async function installCodexHooks(host: InstallHost = localInstallHost): Promise<boolean> {
   try {
     const hooksDir = await getHooksDir(host);
@@ -143,44 +183,6 @@ function containsOurHook(obj: unknown): boolean {
   if (Array.isArray(obj)) return obj.some(containsOurHook);
   if (obj && typeof obj === "object") return Object.values(obj).some(containsOurHook);
   return false;
-}
-
-function ensureCodexHooksFeature(configText: string): string {
-  const lines = configText.split(/\r?\n/);
-  let inFeatures = false;
-  let inserted = false;
-
-  for (let i = 0; i < lines.length; i += 1) {
-    const trimmed = lines[i]!.trim();
-    if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
-      if (inFeatures && !inserted) {
-        lines.splice(i, 0, "codex_hooks = true");
-        inserted = true;
-        break;
-      }
-      inFeatures = trimmed === "[features]";
-      continue;
-    }
-    if (inFeatures && /^codex_hooks\s*=/.test(trimmed)) {
-      lines[i] = "codex_hooks = true";
-      inserted = true;
-      break;
-    }
-  }
-
-  if (!inserted) {
-    if (inFeatures) {
-      lines.push("codex_hooks = true");
-    } else {
-      if (lines.length > 0 && lines[lines.length - 1] !== "") {
-        lines.push("");
-      }
-      lines.push("[features]");
-      lines.push("codex_hooks = true");
-    }
-  }
-
-  return `${lines.join("\n")}\n`;
 }
 
 async function getConfigFile(host: InstallHost): Promise<string> {
