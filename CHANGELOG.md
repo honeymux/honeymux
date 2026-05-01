@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+## v0.104.0 - 2026-05-01
+
+- Change the default theme from dracula to spacemacs
+- Fix focus/input mismatch during cross-session jumps to remote-backed panes
+- Fix issue that caused a newline to be gratuitously added to the Codex config.toml on every hmx startup
+- Fix keystroke loss during search query entry in conversations dialog
+- Fix regression causing high latency of cursor positioning during window switch
+- In the sidebar tmux server view, highlight the full path to the currently active pane
+- Keep Mux-o-Tron and session dropdown visible during pane drags
+- Pass mouse clicks to tmux before handling click-to-move cursor positioning
+- Preserve soft line wraps in buffer zoom view
+- Reduce verbosity of event log for remote-backed pane interactions
+- Refactor remote input path to give the local tmux server priority
+- Upgrade ghostty-opentui to v1.4.12
+- Upgrade opentui to v0.2.1
+
 ## v0.103.2 - 2026-04-29
 
 - Fix screenshots feature by bundling the required fonts into distribution binaries
