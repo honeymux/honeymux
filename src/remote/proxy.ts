@@ -8,29 +8,43 @@
  *
  * Usage: bun src/remote/proxy.ts <localPaneId> <token>
  */
+import type { Socket } from "bun";
+
 import { log } from "../util/log.ts";
 import { getRemoteProxySocketPath } from "./proxy-server.ts";
+import { TmuxQueryStripper } from "./query-stripper.ts";
 
 export async function runRemoteProxyProcess(localPaneId: string, proxyToken: string): Promise<void> {
   log("proxy", `started: paneId=${localPaneId}`);
 
-  // The proxy's pty is in canonical mode with echo by default. When local
-  // tmux responds to query escape sequences it sees in the pane output we
-  // forward (e.g. XTVERSION, DA1, DSR), it writes its reply bytes into our
-  // pty — and the kernel line discipline echoes those bytes back out in
-  // caret-notation (ESC → "^["), which tmux reads as pane output and
-  // renders as literal text. Disabling raw-mode echo stops the round trip,
-  // and draining stdin keeps the kernel pty buffer from filling up and
-  // blocking tmux's writes.
+  // The proxy's pty is in canonical mode with echo by default. Raw mode
+  // disables kernel-side echo, which is what kept tmux's replies to query
+  // escape sequences from being re-rendered as `^[` in the pane.
+  //
+  // We additionally strip query sequences from the forwarded output before
+  // they reach local tmux (see TmuxQueryStripper) so local tmux never has a
+  // query to reply to, then forward stdin to the remote pane via honeymux.
+  // This puts local tmux's input layer in the loop: the user's keystrokes
+  // are processed by local tmux (prefix combos, command-prompt, copy-mode,
+  // etc.) before whatever tmux didn't consume falls through to this proxy
+  // and out to the remote.
   const stdin = process.stdin as { setRawMode?: (mode: boolean) => unknown } & NodeJS.ReadStream;
   if (stdin.isTTY && typeof stdin.setRawMode === "function") {
     stdin.setRawMode(true);
   }
   stdin.resume();
-  stdin.on("data", () => {});
 
   const socketPath = getRemoteProxySocketPath();
+  const queryStripper = new TmuxQueryStripper();
+  let activeSocket: Socket<unknown> | null = null;
   let retry = 0;
+
+  const onStdinData = (chunk: Buffer): void => {
+    const sock = activeSocket;
+    if (!sock) return; // dropped while disconnected — kernel buffer keeps draining via resume()
+    sock.write(chunk);
+  };
+  stdin.on("data", onStdinData);
 
   async function connectToHoneymux(): Promise<void> {
     return new Promise<void>((resolve, reject) => {
@@ -38,22 +52,26 @@ export async function runRemoteProxyProcess(localPaneId: string, proxyToken: str
         socket: {
           close() {
             log("proxy", `socket closed (pane=${localPaneId})`);
+            activeSocket = null;
             resolve();
           },
           connectError(_sock, error) {
             log("proxy", `connect error (pane=${localPaneId}): ${error.message}`);
+            activeSocket = null;
             reject(error);
           },
           data(_sock, data) {
-            // Remote-pane escape handling is delegated to the local tmux pane.
-            process.stdout.write(data);
+            const filtered = queryStripper.filter(data);
+            if (filtered.length > 0) process.stdout.write(filtered);
           },
           error() {
+            activeSocket = null;
             resolve();
           },
           open(sock) {
             log("proxy", `connected to honeymux socket (pane=${localPaneId})`);
             sock.write(JSON.stringify({ paneId: localPaneId, token: proxyToken }) + "\n");
+            activeSocket = sock;
             retry = 0;
           },
         },
