@@ -57,6 +57,7 @@ export interface SetupTmuxRuntimeContext {
 export interface SetupTmuxRuntimeDialogsContext {
   agentInstallDialogRef: MutableRefObject<boolean>;
   dialogInputRef: MutableRefObject<(data: string) => void>;
+  dialogMenuToggleRef: MutableRefObject<(() => void) | null>;
   dropdownInputRef: MutableRefObject<((data: string) => boolean) | null>;
   mainMenuCapturingRef: MutableRefObject<boolean>;
   optionsDialogCapturingRef: MutableRefObject<boolean>;

@@ -19,6 +19,7 @@ export function setupInputLayer(ctx: SetupTmuxRuntimeContext): () => void {
     dialogs: {
       agentInstallDialogRef,
       dialogInputRef,
+      dialogMenuToggleRef,
       dropdownInputRef,
       mainMenuCapturingRef,
       optionsDialogCapturingRef,
@@ -130,6 +131,7 @@ export function setupInputLayer(ctx: SetupTmuxRuntimeContext): () => void {
       (data: string) => writeFnRef.current(data),
       {
         getActiveZoomAction: () => zoomActionRef.current,
+        hasDialogHamburger: () => dialogMenuToggleRef.current !== null,
         isAgentPreview: () => agentPreviewRef.current,
         isDialogCapturing: () => mainMenuCapturingRef.current || optionsDialogCapturingRef.current,
         isDialogOpen: () => agentInstallDialogRef.current,

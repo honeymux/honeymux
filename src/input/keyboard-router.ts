@@ -24,6 +24,11 @@ const REVIEW_FALLTHROUGH_ACTIONS = new Set<KeyAction>([
 
 export interface InputRouterCallbacks {
   getActiveZoomAction?: () => KeyAction | null;
+  /** Returns true when the active dialog has registered a hamburger menu
+   *  toggle. When false, the activateMenu hotkey is routed to the dialog
+   *  input handler so it acts as a no-op rather than opening the pane menu
+   *  underneath the dialog. */
+  hasDialogHamburger?: () => boolean;
   /** True when a tree-selected agent is being previewed in the muxotron focus surface. */
   isAgentPreview?: () => boolean;
   /** When true, the dialog is in key-capture mode (e.g. main menu dialog rebinding zoom keys).
@@ -286,9 +291,12 @@ export function routeKeyboardInput(
   }
 
   // Dialog mode: forward all input to the dialog handler.
-  // Allow activateMenu to toggle the active dialog's hamburger menu.
+  // Allow activateMenu to toggle the active dialog's hamburger menu, but only
+  // when one is registered — otherwise the key would fall through to the
+  // pane-border menu underneath, which is inconsistent with how other hotkeys
+  // are consumed by the dialog as no-ops.
   if (owner === "dialog" || owner === "dialogCapture") {
-    if (owner === "dialog" && canonicalAction === "activateMenu") {
+    if (owner === "dialog" && canonicalAction === "activateMenu" && (callbacks.hasDialogHamburger?.() ?? false)) {
       callbacks.onActivateMenu?.();
       return true;
     }

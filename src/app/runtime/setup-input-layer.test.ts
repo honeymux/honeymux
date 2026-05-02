@@ -83,6 +83,7 @@ function createContext(overrides?: Partial<SetupTmuxRuntimeContext>): {
     dialogs: {
       agentInstallDialogRef: { current: false },
       dialogInputRef: { current: onDialogInputMock },
+      dialogMenuToggleRef: { current: null },
       dropdownInputRef: { current: onDropdownInputMock },
       mainMenuCapturingRef: { current: false },
       optionsDialogCapturingRef: { current: false },

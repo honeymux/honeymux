@@ -98,6 +98,7 @@ function createContext(): {
     dialogs: {
       agentInstallDialogRef: { current: false },
       dialogInputRef: { current: (_data: string) => {} },
+      dialogMenuToggleRef: { current: null },
       dropdownInputRef: { current: null },
       mainMenuCapturingRef: { current: false },
       optionsDialogCapturingRef: { current: false },
