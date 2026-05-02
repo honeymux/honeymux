@@ -13,10 +13,11 @@ function createCallbacks(overrides: Record<string, unknown> = {}) {
 }
 
 describe("activateMenu in dialog mode", () => {
-  test("activateMenu triggers onActivateMenu when a dialog is open", () => {
+  test("activateMenu triggers onActivateMenu when a dialog with a hamburger is open", () => {
     const onActivateMenu = mock(() => {});
     const onDialogInput = mock((_data: string) => {});
     const callbacks = createCallbacks({
+      hasDialogHamburger: () => true,
       isDialogOpen: () => true,
       onActivateMenu,
       onDialogInput,
@@ -31,10 +32,29 @@ describe("activateMenu in dialog mode", () => {
     expect(onDialogInput).not.toHaveBeenCalled();
   });
 
+  test("activateMenu routes to dialog handler when no hamburger is registered", () => {
+    const onActivateMenu = mock(() => {});
+    const onDialogInput = mock((_data: string) => {});
+    const callbacks = createCallbacks({
+      hasDialogHamburger: () => false,
+      isDialogOpen: () => true,
+      onActivateMenu,
+      onDialogInput,
+    });
+    const keybindings = new Map<string, KeyAction>([["alt+v", "activateMenu"]]);
+
+    const handled = routeKeyboardInput("\x1bv", () => {}, callbacks, keybindings);
+
+    expect(handled).toBe(true);
+    expect(onActivateMenu).not.toHaveBeenCalled();
+    expect(onDialogInput).toHaveBeenCalledWith("\x1bv");
+  });
+
   test("non-activateMenu keys route to dialog handler normally", () => {
     const onActivateMenu = mock(() => {});
     const onDialogInput = mock((_data: string) => {});
     const callbacks = createCallbacks({
+      hasDialogHamburger: () => true,
       isDialogOpen: () => true,
       onActivateMenu,
       onDialogInput,
@@ -51,6 +71,7 @@ describe("activateMenu in dialog mode", () => {
     const onActivateMenu = mock(() => {});
     const onDialogInput = mock((_data: string) => {});
     const callbacks = createCallbacks({
+      hasDialogHamburger: () => true,
       isDialogCapturing: () => true,
       isDialogOpen: () => true,
       onActivateMenu,

@@ -64,6 +64,7 @@ export function buildAppRuntimeContext({
     dialogs: {
       agentInstallDialogRef: refs.agentInstallDialogRef,
       dialogInputRef: refs.dialogInputRef,
+      dialogMenuToggleRef: refs.dialogMenuToggleRef,
       dropdownInputRef: refs.dropdownInputRef,
       mainMenuCapturingRef: refs.mainMenuCapturingRef,
       optionsDialogCapturingRef: refs.optionsDialogCapturingRef,
