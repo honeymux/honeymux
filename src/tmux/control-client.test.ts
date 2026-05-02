@@ -198,7 +198,7 @@ describe("TmuxControlClient new-window cwd inheritance", () => {
 
     await client.newWindow();
 
-    expect(sendCommand).toHaveBeenCalledWith(`new-window -c '#{pane_current_path}'`);
+    expect(sendCommand).toHaveBeenCalledWith(`new-window -a -t '{end}' -c '#{pane_current_path}'`);
   });
 
   test("newDetachedWindow inherits cwd from the active pane", async () => {

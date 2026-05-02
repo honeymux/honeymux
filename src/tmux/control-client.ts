@@ -642,7 +642,7 @@ export class TmuxControlClient extends EventEmitter {
    * Create a new window in the current session.
    */
   async newWindow(): Promise<void> {
-    await this.sendCommand("new-window -c '#{pane_current_path}'");
+    await this.sendCommand("new-window -a -t '{end}' -c '#{pane_current_path}'");
   }
 
   /**
