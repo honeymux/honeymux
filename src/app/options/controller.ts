@@ -21,6 +21,7 @@ import {
   TAB_ORDER,
   TAB_ROWS,
   cycleBuiltinTheme,
+  cycleCursorBlink,
   cycleCursorShape,
   cycleDimOpacity,
   cycleQuickSize,
@@ -201,6 +202,9 @@ export function routeOptionsDialogInput(
       if (kind === "agentAlertWatermark") {
         return update({ ...draft, agentAlertWatermark: cycleWatermark(draft.agentAlertWatermark, direction) }, false);
       }
+      if (kind === "agentAlertCursorBlink") {
+        return update({ ...draft, agentAlertCursorBlink: cycleCursorBlink(agentAlertCursorBlink, direction) }, false);
+      }
       if (kind === "agentAlertCursorShape") {
         return update({ ...draft, agentAlertCursorShape: cycleCursorShape(agentAlertCursorShape, direction) }, false);
       }
@@ -339,7 +343,7 @@ export function routeOptionsDialogInput(
       case "agentAlertCursorAlert":
         return update({ ...draft, agentAlertCursorAlert: !agentAlertCursorAlert }, false);
       case "agentAlertCursorBlink":
-        return update({ ...draft, agentAlertCursorBlink: !agentAlertCursorBlink }, false);
+        return update({ ...draft, agentAlertCursorBlink: cycleCursorBlink(agentAlertCursorBlink, 1) }, false);
       case "agentAlertCursorColor":
         return update({ ...draft, cursorColorPickerOpen: true }, false);
       case "agentAlertCursorShape":

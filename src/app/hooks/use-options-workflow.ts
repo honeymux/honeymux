@@ -1,7 +1,7 @@
 import { useCallback, useRef, useState } from "react";
 
 import type { Base16SchemeName, ThemeMode } from "../../themes/theme.ts";
-import type { CursorAlertShape, HoneymuxConfig, UIMode, WatermarkShape } from "../../util/config.ts";
+import type { CursorAlertBlink, CursorAlertShape, HoneymuxConfig, UIMode, WatermarkShape } from "../../util/config.ts";
 import type { OptionsDialogState, RemoteServer } from "../options/model.ts";
 import type { UiChromeState } from "./use-app-state-groups.ts";
 
@@ -27,7 +27,7 @@ export interface OptionsWorkflowApi extends OptionsWorkflowSessionApi {
     agentAlertAnimEqualizer?: boolean,
     agentAlertCursorAlert?: boolean,
     agentAlertCursorShape?: CursorAlertShape,
-    agentAlertCursorBlink?: boolean,
+    agentAlertCursorBlink?: CursorAlertBlink,
     agentAlertCursorColor?: string,
     remoteServers?: RemoteServer[],
   ) => Promise<void>;
@@ -46,7 +46,7 @@ interface OptionsConfirmOverrides {
   agentAlertAnimGlow?: boolean;
   agentAlertAnimScribble?: boolean;
   agentAlertCursorAlert?: boolean;
-  agentAlertCursorBlink?: boolean;
+  agentAlertCursorBlink?: CursorAlertBlink;
   agentAlertCursorColor?: string;
   agentAlertCursorShape?: CursorAlertShape;
   agentAlertWatermark?: WatermarkShape;
@@ -133,7 +133,7 @@ export function useOptionsWorkflow({ setDropdownOpen }: UseOptionsWorkflowOption
       agentAlertAnimEqualizer?: boolean,
       agentAlertCursorAlert?: boolean,
       agentAlertCursorShape?: CursorAlertShape,
-      agentAlertCursorBlink?: boolean,
+      agentAlertCursorBlink?: CursorAlertBlink,
       agentAlertCursorColor?: string,
       remoteServers?: RemoteServer[],
     ) => {

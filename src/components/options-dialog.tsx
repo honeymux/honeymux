@@ -4,7 +4,7 @@ import { useRenderer } from "@opentui/react";
 import { useCallback, useEffect, useRef } from "react";
 
 import type { Base16SchemeName, ThemeMode } from "../themes/theme.ts";
-import type { CursorAlertShape, UIMode, WatermarkShape } from "../util/config.ts";
+import type { CursorAlertBlink, CursorAlertShape, UIMode, WatermarkShape } from "../util/config.ts";
 
 import { buildOptionsDialogState } from "../app/options/bridge.ts";
 import {
@@ -92,7 +92,7 @@ type OptionsDialogConfirmAction = (
   agentAlertAnimEqualizer?: boolean,
   agentAlertCursorAlert?: boolean,
   agentAlertCursorShape?: CursorAlertShape,
-  agentAlertCursorBlink?: boolean,
+  agentAlertCursorBlink?: CursorAlertBlink,
   agentAlertCursorColor?: string,
   remoteServers?: RemoteServer[],
 ) => Promise<void> | void;
@@ -118,7 +118,7 @@ interface OptionsDialogWorkflow {
   configAgentAlertAnimGlow: boolean;
   configAgentAlertAnimScribble: boolean;
   configAgentAlertCursorAlert: boolean;
-  configAgentAlertCursorBlink: boolean;
+  configAgentAlertCursorBlink: CursorAlertBlink;
   configAgentAlertCursorColor: string;
   configAgentAlertCursorShape: CursorAlertShape;
   configAgentAlertWatermark: WatermarkShape;
@@ -170,7 +170,7 @@ interface OptionsDialogWorkflow {
   setConfigAgentAlertAnimGlow: (value: boolean) => void;
   setConfigAgentAlertAnimScribble: (value: boolean) => void;
   setConfigAgentAlertCursorAlert: (value: boolean) => void;
-  setConfigAgentAlertCursorBlink: (value: boolean) => void;
+  setConfigAgentAlertCursorBlink: (value: CursorAlertBlink) => void;
   setConfigAgentAlertCursorColor: (value: string) => void;
   setConfigAgentAlertCursorShape: (value: CursorAlertShape) => void;
   setConfigAgentAlertWatermark: (value: WatermarkShape) => void;
@@ -195,6 +195,7 @@ interface OptionsDialogWorkflow {
 }
 
 const MULTI_SELECT_KINDS: ReadonlySet<RowKind> = new Set([
+  "agentAlertCursorBlink",
   "agentAlertCursorShape",
   "agentAlertWatermark",
   "quickTerminalSize",

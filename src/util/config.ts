@@ -7,7 +7,8 @@ import { validateSshDestination } from "../remote/ssh.ts";
 import { BASE16_SCHEME_NAMES, DEFAULT_SCHEME, THEME_MODES } from "../themes/theme.ts";
 import { MODIFIER_KEY_NAMES } from "./keybindings.ts";
 
-export type CursorAlertShape = "bar" | "block" | "underline";
+export type CursorAlertBlink = "default" | "off" | "on";
+export type CursorAlertShape = "bar" | "block" | "default" | "underline";
 export type Osc52Passthrough = "all" | "off" | "write-only";
 export type OtherOscPassthrough = "allow" | "off";
 export type UIMode = "adaptive" | "marquee-bottom" | "marquee-top" | "raw";
@@ -34,7 +35,7 @@ export interface HoneymuxConfig {
   agentAlertAnimGlow: boolean;
   agentAlertAnimScribble: boolean;
   agentAlertCursorAlert: boolean;
-  agentAlertCursorBlink: boolean;
+  agentAlertCursorBlink: CursorAlertBlink;
   agentAlertCursorColor: string;
   agentAlertCursorShape: CursorAlertShape;
   agentAlertWatermark: WatermarkShape;
@@ -93,10 +94,10 @@ export function defaultConfig(): HoneymuxConfig {
     agentAlertAnimEqualizer: false,
     agentAlertAnimGlow: false,
     agentAlertAnimScribble: false,
-    agentAlertCursorAlert: false,
-    agentAlertCursorBlink: true,
+    agentAlertCursorAlert: true,
+    agentAlertCursorBlink: "default",
     agentAlertCursorColor: "#ff0000",
-    agentAlertCursorShape: "underline",
+    agentAlertCursorShape: "default",
     agentAlertWatermark: "off",
     bufferZoomFade: true,
     bufferZoomMaxLines: 50_000,
@@ -160,6 +161,11 @@ export function mergeLoadedConfig(parsed: LoadedHoneymuxConfig): HoneymuxConfig 
   const loaded = Object.fromEntries(
     Object.entries(parsed).filter(([key]) => key in defaults),
   ) as Partial<HoneymuxConfig>;
+  // Migrate legacy boolean agentAlertCursorBlink to the 3-way enum.
+  const rawBlink = (loaded as { agentAlertCursorBlink?: unknown }).agentAlertCursorBlink;
+  if (typeof rawBlink === "boolean") {
+    loaded.agentAlertCursorBlink = rawBlink ? "on" : "off";
+  }
   return {
     ...defaults,
     ...loaded,
