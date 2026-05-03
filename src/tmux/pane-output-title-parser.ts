@@ -4,7 +4,7 @@ export interface PaneOutputTitleParserState {
   discardingOsc: boolean;
 }
 
-export interface PaneOutputTitleUpdate {
+interface PaneOutputTitleUpdate {
   state: PaneOutputTitleParserState;
   title?: string;
 }

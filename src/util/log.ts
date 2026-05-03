@@ -8,10 +8,6 @@ const MAX_ARCHIVES = 5; // honeymux.log.0 through honeymux.log.4
 
 let ensuredDir: null | string = null;
 
-export function getHoneymuxLogDir(): string {
-  return join(getHoneymuxStateDir(), "logs");
-}
-
 export function getHoneymuxLogPath(): string {
   return join(getHoneymuxLogDir(), "honeymux.log");
 }
@@ -31,6 +27,10 @@ function ensureDir() {
   if (ensuredDir === logDir) return;
   ensurePrivateDir(logDir);
   ensuredDir = logDir;
+}
+
+function getHoneymuxLogDir(): string {
+  return join(getHoneymuxStateDir(), "logs");
 }
 
 function rotate() {

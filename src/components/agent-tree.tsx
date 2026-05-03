@@ -34,7 +34,31 @@ import {
   MUXOTRON_SINE_WAVE_WIDTH,
 } from "./tab-bar/muxotron-sine-wave.ts";
 
-export interface AgentTreeRow {
+interface AgentTreeProps {
+  activateRef?: MutableRefObject<((index: number) => void) | null>;
+  agentAlertAnimConfusables?: boolean;
+  agentAlertAnimCycleCount?: number;
+  agentAlertAnimDelay?: number;
+  agentAlertAnimEqualizer?: boolean;
+  agentAlertAnimGlow?: boolean;
+  agentAlertAnimScribble?: boolean;
+  configAgentsPreview?: null | string;
+  focusedRow?: number;
+  height: number;
+  /** Ref to per-pane activity samples used by the imperative spinner. */
+  lastOutputByPaneRef?: RefObject<ReadonlyMap<string, CodingAgentPaneOutputSample>>;
+  onSelect: (session: AgentSession) => void;
+  /** Optional secondary activation (e.g. spacebar from the sidebar view). */
+  onZoom?: (session: AgentSession) => void;
+  registryRef?: MutableRefObject<AgentProviderRegistry | null>;
+  rowCountRef?: MutableRefObject<number>;
+  sessions: AgentSession[];
+  width: number;
+  /** External handle that, when called with a row index, invokes `onZoom`. */
+  zoomRef?: MutableRefObject<((index: number) => void) | null>;
+}
+
+interface AgentTreeRow {
   active: boolean; // unanswered status (for coloring)
   /** Brand color for the agent-name segment of `label`, if any. */
   agentColor?: string;
@@ -61,30 +85,6 @@ export interface AgentTreeRow {
   session?: AgentSession;
   sid?: string; // first UUID segment of sessionId
   type: "root" | "session" | "teammate";
-}
-
-interface AgentTreeProps {
-  activateRef?: MutableRefObject<((index: number) => void) | null>;
-  agentAlertAnimConfusables?: boolean;
-  agentAlertAnimCycleCount?: number;
-  agentAlertAnimDelay?: number;
-  agentAlertAnimEqualizer?: boolean;
-  agentAlertAnimGlow?: boolean;
-  agentAlertAnimScribble?: boolean;
-  configAgentsPreview?: null | string;
-  focusedRow?: number;
-  height: number;
-  /** Ref to per-pane activity samples used by the imperative spinner. */
-  lastOutputByPaneRef?: RefObject<ReadonlyMap<string, CodingAgentPaneOutputSample>>;
-  onSelect: (session: AgentSession) => void;
-  /** Optional secondary activation (e.g. spacebar from the sidebar view). */
-  onZoom?: (session: AgentSession) => void;
-  registryRef?: MutableRefObject<AgentProviderRegistry | null>;
-  rowCountRef?: MutableRefObject<number>;
-  sessions: AgentSession[];
-  width: number;
-  /** External handle that, when called with a row index, invokes `onZoom`. */
-  zoomRef?: MutableRefObject<((index: number) => void) | null>;
 }
 
 export function AgentTree({

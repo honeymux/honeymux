@@ -13,13 +13,6 @@ export interface PaneBorderMenuState {
   screenY: number;
 }
 
-export interface PaneBorderRemoteServer {
-  availability: PaneBorderRemoteServerAvailability;
-  name: string;
-}
-
-export type PaneBorderRemoteServerAvailability = "ready" | "unavailable" | "waiting";
-
 interface BuildPaneBorderMainMenuItemsOptions {
   hasReadyRemoteServers: boolean;
   hasRemoteServers: boolean;
@@ -59,6 +52,13 @@ interface PaneBorderMenuProps {
   remotePaneServer: null | string; // non-null if this pane is already remote
   remoteServers: PaneBorderRemoteServer[];
 }
+
+interface PaneBorderRemoteServer {
+  availability: PaneBorderRemoteServerAvailability;
+  name: string;
+}
+
+type PaneBorderRemoteServerAvailability = "ready" | "unavailable" | "waiting";
 
 // --- Main Menu ---
 

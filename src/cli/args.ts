@@ -1,6 +1,6 @@
 import { getInternalRemoteProxyFlag } from "../remote/proxy-command.ts";
 
-export type CliParseResult =
+type CliParseResult =
   | {
       explicitServer: string | undefined;
       kind: "run";

@@ -260,12 +260,6 @@ export function hitTestPaneTab(tabs: PaneTab[], xOffset: number, maxWidth = 0, a
 
 // ── Border format builders ────────────────────────────────────────────
 
-/** Width of a single tab in terminal columns: "┤ label ├─" */
-export function paneTabWidth(label: string): number {
-  label = stripNonPrintingControlChars(label);
-  return TAB_CHROME + stringWidth(label);
-}
-
 /**
  * Compute display labels for a set of visible tabs within available space.
  * Returns the (possibly truncated) labels using water-fill distribution.
@@ -283,6 +277,12 @@ function computeDisplayLabels(labels: string[], available: number, overflowCost:
 function minTabWidth(label: string): number {
   label = stripNonPrintingControlChars(label);
   return TAB_CHROME + Math.min(stringWidth(label), PROTECTED_LABEL_LEN);
+}
+
+/** Width of a single tab in terminal columns: "┤ label ├─" */
+function paneTabWidth(label: string): number {
+  label = stripNonPrintingControlChars(label);
+  return TAB_CHROME + stringWidth(label);
 }
 
 /** Truncate a label so its display width never exceeds maxLen. */

@@ -1,18 +1,18 @@
 import type { UIMode } from "../../util/config.ts";
 
-export interface ReservedRightChromeMask {
-  height: number;
-  left: number;
-  top: number;
-  width: number;
-}
-
 interface ComputeReservedRightChromeMaskOptions {
   sidebarOpen?: boolean;
   sidebarWidth?: number;
   terminalCols: number;
   terminalRows: number;
   uiMode: UIMode;
+  width: number;
+}
+
+interface ReservedRightChromeMask {
+  height: number;
+  left: number;
+  top: number;
   width: number;
 }
 

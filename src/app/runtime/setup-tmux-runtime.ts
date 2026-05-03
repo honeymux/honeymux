@@ -5,18 +5,6 @@ import { bootstrapConnectedSession } from "./bootstrap-connected-session.ts";
 import { registerSessionEventHandlers } from "./register-session-event-handlers.ts";
 import { setupInputLayer } from "./setup-input-layer.ts";
 
-export type {
-  RuntimeDims,
-  SetupTmuxRuntimeAgentRuntimeContext,
-  SetupTmuxRuntimeConfigRuntimeContext,
-  SetupTmuxRuntimeContext,
-  SetupTmuxRuntimeDialogsContext,
-  SetupTmuxRuntimeInputContext,
-  SetupTmuxRuntimeMouseContext,
-  SetupTmuxRuntimeSessionRuntimeContext,
-  SetupTmuxRuntimeSessionStateContext,
-} from "./runtime-context.ts";
-
 export function setupTmuxRuntime(ctx: SetupTmuxRuntimeContext): () => void {
   const {
     agentRuntime: { registryRef, storeRef },

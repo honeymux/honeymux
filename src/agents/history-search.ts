@@ -11,8 +11,6 @@ import { collectGeminiHistory, globGeminiFiles } from "./gemini/history";
 import { compileHistorySearchMatcher } from "./history-search-query.ts";
 import { collectOpenCodeHistory } from "./opencode/history";
 
-export type HistoryAgentType = "claude" | "codex" | "gemini" | "opencode";
-
 export interface HistoryEntry {
   agentType: HistoryAgentType;
   filePath: string;
@@ -22,16 +20,18 @@ export interface HistoryEntry {
   timestamp: number;
 }
 
-export interface HistoryQueryOptions extends HistorySearchOptions {
-  limit?: number;
-  offset?: number;
-}
-
 export interface HistoryQueryResult {
   error?: string;
   hasMore: boolean;
   results: HistoryEntry[];
   total: number;
+}
+
+type HistoryAgentType = "claude" | "codex" | "gemini" | "opencode";
+
+interface HistoryQueryOptions extends HistorySearchOptions {
+  limit?: number;
+  offset?: number;
 }
 
 const HOME = process.env.HOME ?? "/root";
@@ -50,7 +50,7 @@ interface CacheFile {
 
 // --- File system helpers ---
 
-export class HistoryIndex {
+class HistoryIndex {
   /** Per-agent conversation counts from the most recent index. */
   agentCounts: Partial<Record<HistoryAgentType, number>> = {};
   onReady?: () => void;

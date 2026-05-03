@@ -22,19 +22,19 @@ import { identifyKeySequence } from "../../util/keybindings.ts";
  *   printable codepoint  insert at cursor
  */
 
-export interface LineEditResult {
+export interface LineEditState {
+  /** Codepoint index in [0, codepoints(query).length]. */
+  cursor: number;
+  query: string;
+}
+
+interface LineEditResult {
   /** Whether `applyLineEdit` consumed this key. */
   handled: boolean;
   /** New state (same object if unchanged). */
   next: LineEditState;
   /** Whether the query string changed (cursor-only motion → false). */
   queryChanged: boolean;
-}
-
-export interface LineEditState {
-  /** Codepoint index in [0, codepoints(query).length]. */
-  cursor: number;
-  query: string;
 }
 
 export function applyLineEdit(state: LineEditState, data: string): LineEditResult {

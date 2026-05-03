@@ -44,8 +44,6 @@ const PANE_ID_RE = /^%\d+$/;
 const USER_OPTION_NAME_RE = /^@\S+$/;
 const SUBSCRIPTION_NAME_RE = /^[^\s:]+$/;
 
-export { unescapeTmuxOutput } from "./control-mode-parser.ts";
-
 export class TmuxClientClosedError extends Error {
   override name = "TmuxClientClosedError";
 }

@@ -4,7 +4,7 @@ import type { UIMode } from "../util/config.ts";
 import { theme } from "../themes/theme.ts";
 import { stringWidth } from "../util/text.ts";
 
-export interface RecoveringPanesOverlayProps {
+interface RecoveringPanesOverlayProps {
   /** Visible content columns (termCols) — clamps overlay width so toolbar isn't tinted. */
   contentCols?: number;
   recoveringPanes: RecoveringPaneRect[];

@@ -30,12 +30,12 @@ import {
   toggleThemeMode,
 } from "./model.ts";
 
-export interface OptionsDialogRouteEnv {
+interface OptionsDialogRouteEnv {
   sequenceMap: Map<string, KeyAction>;
   suppressModifierRelease: boolean;
 }
 
-export type OptionsDialogRouteResult =
+type OptionsDialogRouteResult =
   | { draft: OptionsDialogState; kind: "confirm"; suppressModifierRelease: boolean }
   | { draft: OptionsDialogState; kind: "update"; suppressModifierRelease: boolean }
   | { kind: "noop"; suppressModifierRelease: boolean };

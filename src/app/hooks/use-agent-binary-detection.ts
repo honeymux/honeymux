@@ -26,7 +26,7 @@ import { type AgentType, detectRunningAgentTypes } from "./agent-binary-detectio
 
 export type { AgentType } from "./agent-binary-detection-core.ts";
 
-export interface AgentBinaryInfo {
+interface AgentBinaryInfo {
   displayName: string;
   installLabel: "hooks" | "plugin";
   isConsented: () => boolean;

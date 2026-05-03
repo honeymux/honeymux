@@ -14,8 +14,6 @@ const UPGRADE_HINTS =
   "  sudo apt install tmux    # Debian/Ubuntu (may need a newer repo)\n" +
   "  sudo dnf install tmux    # Fedora";
 
-export type TmuxStartupCheckResult = { message: string; ok: false } | { ok: true; version: string };
-
 type ResolveExecutable = (name: string) => null | string;
 
 type SpawnVersionProcess = (tmuxPath: string) => SpawnedVersionProcess;
@@ -24,6 +22,8 @@ type SpawnedVersionProcess = {
   exited: Promise<number>;
   stdout: ReadableStream<Uint8Array> | null;
 };
+
+type TmuxStartupCheckResult = { message: string; ok: false } | { ok: true; version: string };
 
 export async function checkTmuxStartupRequirements(
   resolveExecutable: ResolveExecutable = (name) => Bun.which(name),

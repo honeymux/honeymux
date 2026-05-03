@@ -11,9 +11,9 @@ import { tabIndexFromX } from "./layout.ts";
 const LEFT_MOUSE_BUTTON = 0;
 const RIGHT_MOUSE_BUTTON = 2;
 
-export type MuxotronClickZone = "agents" | "notifications" | null;
+type MuxotronClickZone = "agents" | "notifications" | null;
 
-export interface TabBarDragState {
+interface TabBarDragState {
   dragFrom: null | number;
   dragOver: null | number;
   dragX: null | number;

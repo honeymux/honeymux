@@ -26,12 +26,6 @@ import { writeFatalReport } from "../../util/fatal-report.ts";
 let handler: ((report: FatalReport) => void) | null = null;
 let reported = false;
 
-/** Test-only: reset module state between runs. */
-export function __resetFatalErrorHandlerForTests(): void {
-  handler = null;
-  reported = false;
-}
-
 export function registerFatalErrorHandler(fn: (report: FatalReport) => void): () => void {
   handler = fn;
   return () => {

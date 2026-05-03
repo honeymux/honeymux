@@ -38,15 +38,6 @@ export async function areGeminiHooksInstalled(host: InstallHost = localInstallHo
   return buildGeminiHookCommand(scriptPath, resolver) !== null;
 }
 
-export function buildGeminiHookCommand(
-  scriptPath: string,
-  resolveExecutable: ResolveExecutable = (name) => Bun.which(name),
-): null | string {
-  const interpreter = resolveGeminiHookPython(resolveExecutable);
-  if (!interpreter) return null;
-  return formatArgv([interpreter, scriptPath]);
-}
-
 export async function installGeminiHooks(host: InstallHost = localInstallHost): Promise<boolean> {
   try {
     const hooksDir = await getHooksDir(host);
@@ -86,12 +77,6 @@ export async function refreshGeminiHooksIfConsented(host: InstallHost = localIns
   }
 }
 
-export function resolveGeminiHookPython(
-  resolveExecutable: ResolveExecutable = (name) => Bun.which(name),
-): null | string {
-  return resolveExecutable("python3") ?? resolveExecutable("python") ?? null;
-}
-
 export async function saveGeminiConsent(consented: boolean, hostId: string = "local"): Promise<void> {
   const consent: HostConsent = { consented, savedAt: Date.now() };
   writeHostConsent(CONSENT_FILE, hostId, consent);
@@ -102,29 +87,13 @@ export async function saveGeminiIgnored(hostId: string = "local"): Promise<void>
   writeHostConsent(CONSENT_FILE, hostId, consent);
 }
 
-export function upsertGeminiHookSettings(settings: GeminiSettings, command: string): GeminiSettings {
-  const next: GeminiSettings = {
-    ...settings,
-    hooks: { ...(settings.hooks ?? {}) },
-  };
-
-  for (const event of HOOK_EVENTS) {
-    const existing = Array.isArray(next.hooks?.[event]) ? next.hooks[event] : [];
-    const filtered = existing.filter((group: unknown) => !containsOurHook(group));
-    next.hooks![event] = [
-      ...filtered,
-      {
-        hooks: [
-          {
-            command,
-            type: "command",
-          },
-        ],
-      },
-    ];
-  }
-
-  return next;
+function buildGeminiHookCommand(
+  scriptPath: string,
+  resolveExecutable: ResolveExecutable = (name) => Bun.which(name),
+): null | string {
+  const interpreter = resolveGeminiHookPython(resolveExecutable);
+  if (!interpreter) return null;
+  return formatArgv([interpreter, scriptPath]);
 }
 
 async function buildHostResolver(host: InstallHost): Promise<ResolveExecutable> {
@@ -146,6 +115,10 @@ async function getHooksDir(host: InstallHost): Promise<string> {
 
 async function getSettingsFile(host: InstallHost): Promise<string> {
   return `${await host.homeDir()}/.gemini/settings.json`;
+}
+
+function resolveGeminiHookPython(resolveExecutable: ResolveExecutable = (name) => Bun.which(name)): null | string {
+  return resolveExecutable("python3") ?? resolveExecutable("python") ?? null;
 }
 
 function safeParseJson(text: string): GeminiSettings {
@@ -186,4 +159,29 @@ async function syncGeminiHookInstall(host: InstallHost, scriptPath: string): Pro
   }
 
   return true;
+}
+
+function upsertGeminiHookSettings(settings: GeminiSettings, command: string): GeminiSettings {
+  const next: GeminiSettings = {
+    ...settings,
+    hooks: { ...(settings.hooks ?? {}) },
+  };
+
+  for (const event of HOOK_EVENTS) {
+    const existing = Array.isArray(next.hooks?.[event]) ? next.hooks[event] : [];
+    const filtered = existing.filter((group: unknown) => !containsOurHook(group));
+    next.hooks![event] = [
+      ...filtered,
+      {
+        hooks: [
+          {
+            command,
+            type: "command",
+          },
+        ],
+      },
+    ];
+  }
+
+  return next;
 }

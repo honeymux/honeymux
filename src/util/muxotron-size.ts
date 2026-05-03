@@ -4,7 +4,7 @@ import { isMarqueeMode } from "./config.ts";
 
 /** Collapsed muxotronEnabled width (adaptive mode, no expansion). */
 export const COLLAPSED_MUXOTRON_WIDTH = 27;
-export const COLLAPSED_MUXOTRON_WIDTH_NARROW = 12;
+const COLLAPSED_MUXOTRON_WIDTH_NARROW = 12;
 
 /**
  * Maximum expanded-muxotronEnabled width that still leaves room for the overflow tab

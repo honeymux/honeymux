@@ -3,7 +3,7 @@ import type { MouseEvent } from "@opentui/core";
 import { theme } from "../themes/theme.ts";
 import { isDismissKey } from "../util/keybindings.ts";
 
-export interface DisablePaneTabsDialogProps {
+interface DisablePaneTabsDialogProps {
   buttonCol: number; // 0=Disable, 1=Cancel
   inactivePaneCount: number;
   onCancel: () => void;

@@ -19,7 +19,7 @@ import type { RGB } from "../themes/theme.ts";
 
 import { OSC_TERMINATOR } from "./terminal-sequences.ts";
 
-export interface ProbeOptions {
+interface ProbeOptions {
   /** Query cursor style via DECRQSS (for non-"auto" themes) */
   queryCursorStyle: boolean;
   /** Query the full 16-color palette via OSC 4 (for "auto" theme) */
@@ -28,7 +28,7 @@ export interface ProbeOptions {
   timeout?: number;
 }
 
-export interface TerminalProbeResult {
+interface TerminalProbeResult {
   /** Background color from OSC 11 */
   bg: RGB | null;
   /** Terminal capabilities from XTGETTCAP */

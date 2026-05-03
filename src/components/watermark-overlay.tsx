@@ -2,7 +2,7 @@ import type { UIMode, WatermarkShape } from "../util/config.ts";
 
 import { theme } from "../themes/theme.ts";
 
-export interface WatermarkOverlayProps {
+interface WatermarkOverlayProps {
   shape: WatermarkShape;
   sidebarOffset?: number;
   termCols: number;

@@ -47,19 +47,6 @@ import {
   listWindowNameMap,
 } from "./window-policy.ts";
 
-export interface CreatePaneTabOpsOptions {
-  activeWindowIdRef: MutableRefObject<null | string>;
-  borderLinesRef: MutableRefObject<string>;
-  clientRef: MutableRefObject<TmuxControlClient | null>;
-  commitGroups: (groups: Map<string, PaneTabGroup>) => void;
-  currentSessionName: string;
-  emitLayoutChange: () => void;
-  getActiveSlotKey: () => Promise<ActiveSlotInfo | null>;
-  groupsRef: MutableRefObject<Map<string, PaneTabGroup>>;
-  loadPaneTabState?: (session: string) => Promise<PaneTabPersistState | null>;
-  log: (msg: string) => void;
-}
-
 export interface PaneTabOps {
   doBootstrapUngroupedPanes: () => Promise<void>;
   doClosePaneTabAt: (slotKey: string, tabIndex: number) => Promise<boolean>;
@@ -94,6 +81,19 @@ interface ActiveSlotInfo {
   paneId: string;
   slotKey: string;
   width: number;
+}
+
+interface CreatePaneTabOpsOptions {
+  activeWindowIdRef: MutableRefObject<null | string>;
+  borderLinesRef: MutableRefObject<string>;
+  clientRef: MutableRefObject<TmuxControlClient | null>;
+  commitGroups: (groups: Map<string, PaneTabGroup>) => void;
+  currentSessionName: string;
+  emitLayoutChange: () => void;
+  getActiveSlotKey: () => Promise<ActiveSlotInfo | null>;
+  groupsRef: MutableRefObject<Map<string, PaneTabGroup>>;
+  loadPaneTabState?: (session: string) => Promise<PaneTabPersistState | null>;
+  log: (msg: string) => void;
 }
 
 export function createPaneTabOps({

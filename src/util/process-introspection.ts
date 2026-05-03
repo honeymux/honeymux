@@ -4,7 +4,7 @@ export interface ProcessSnapshotEntry extends ProcessTreeEntry {
   tty: null | string;
 }
 
-export interface ProcessTreeEntry {
+interface ProcessTreeEntry {
   command: string;
   parentPid: number;
   pid: number;
@@ -46,25 +46,6 @@ export function collectProcessSubtreeCommandLines(rootPid: number, entries: Proc
   return commands;
 }
 
-export function getProcessCommandLineSync(pid: number): string {
-  if (!Number.isInteger(pid) || pid <= 1) return "";
-
-  if (process.platform === "linux") {
-    try {
-      const raw = readFileSync(`/proc/${pid}/cmdline`, "utf-8");
-      const parts = raw
-        .split("\u0000")
-        .map((part) => part.trim())
-        .filter((part) => part.length > 0);
-      if (parts.length > 0) {
-        return parts.join(" ");
-      }
-    } catch {}
-  }
-
-  return parsePsCommandOutput(runPsSync(["-ww", "-o", "command=", "-p", String(pid)]).stdout);
-}
-
 export function getProcessParentPidSync(pid: number): null | number {
   if (!Number.isInteger(pid) || pid <= 1) return null;
 
@@ -95,21 +76,6 @@ export function getProcessStdinTtySync(pid: number): null | string {
   return parsePsTtyOutput(runPsSync(["-ww", "-o", "tty=", "-p", String(pid)]).stdout);
 }
 
-export function getProcessSubtreeCommandLinesSync(rootPid: number): string[] {
-  if (!Number.isInteger(rootPid) || rootPid <= 1) return [];
-
-  const rootCommand = getProcessCommandLineSync(rootPid);
-  const commands = new Set<string>();
-  if (rootCommand) commands.add(rootCommand);
-
-  const psOutput = runPsSync(["-axww", "-o", "pid=", "-o", "ppid=", "-o", "command="]).stdout;
-  for (const command of collectProcessSubtreeCommandLines(rootPid, parsePsProcessTableOutput(psOutput))) {
-    if (command) commands.add(command);
-  }
-
-  return [...commands];
-}
-
 export function normalizeTtyPath(raw: null | string | undefined): null | string {
   const trimmed = raw?.trim();
   if (!trimmed || trimmed === "-" || trimmed === "?" || trimmed === "??") return null;
@@ -126,10 +92,6 @@ export function parseProcStatParentPid(statLine: string): null | number {
     .split(/\s+/);
   const parentPid = parseInt(fields[1] ?? "", 10);
   return Number.isInteger(parentPid) && parentPid > 0 ? parentPid : null;
-}
-
-export function parsePsCommandOutput(output: string): string {
-  return output.trim();
 }
 
 export function parsePsParentPidOutput(output: string): null | number {

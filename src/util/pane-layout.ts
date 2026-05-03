@@ -1,15 +1,15 @@
 import type { UIMode } from "./config.ts";
 
-export interface ComputeTerminalMetricsOptions {
-  height: number;
-  uiMode: UIMode;
-  width: number;
-}
-
 export interface TerminalMetrics {
   cols: number;
   rows: number;
   tooSmall: boolean;
+}
+
+interface ComputeTerminalMetricsOptions {
+  height: number;
+  uiMode: UIMode;
+  width: number;
 }
 
 export function computeTerminalMetrics({ height, uiMode, width }: ComputeTerminalMetricsOptions): TerminalMetrics {

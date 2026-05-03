@@ -4,27 +4,11 @@ export interface TeamConfig {
   name: string; // derived from directory name
 }
 
-export interface TeamMember {
-  agentId: string;
-  agentType?: string;
-  backendType?: string;
-  color?: string;
-  cwd?: string;
-  joinedAt?: string;
-  model?: string;
-  name: string;
-  prompt?: string;
-  teamRole?: TeamRole;
-  tmuxPaneId?: string;
-}
-
 export interface TeamMembership {
   teamName: string;
   teamRole: TeamRole;
   teammateName?: string;
 }
-
-export type TeamRole = "lead" | "teammate";
 
 export interface TeamState {
   config: TeamConfig;
@@ -39,3 +23,19 @@ export interface TeamTask {
   status: "completed" | "in_progress" | "pending";
   subject: string;
 }
+
+interface TeamMember {
+  agentId: string;
+  agentType?: string;
+  backendType?: string;
+  color?: string;
+  cwd?: string;
+  joinedAt?: string;
+  model?: string;
+  name: string;
+  prompt?: string;
+  teamRole?: TeamRole;
+  tmuxPaneId?: string;
+}
+
+type TeamRole = "lead" | "teammate";

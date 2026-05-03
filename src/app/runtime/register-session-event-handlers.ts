@@ -6,7 +6,7 @@ import { disableInputModesBeforeShutdown, shutdownRenderer } from "../../util/sh
 import { syncActivePaneRef } from "./active-pane-sync.ts";
 import { reportFatalError } from "./fatal-error-handler.ts";
 
-export interface SessionEventHandlers {
+interface SessionEventHandlers {
   applyPendingRenames: (windows: TmuxWindow[]) => void;
 }
 

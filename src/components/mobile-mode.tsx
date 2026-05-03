@@ -6,7 +6,7 @@ import { useMemo } from "react";
 import { hexToRgb, lerpRgb, rgbToHex, theme } from "../themes/theme.ts";
 import { centerToWidth, stringWidth } from "../util/text.ts";
 
-export interface MobileModeProps {
+interface MobileModeProps {
   height: number;
   onExitMobileMode: () => void;
   width: number;

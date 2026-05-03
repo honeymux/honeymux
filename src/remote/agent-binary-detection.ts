@@ -8,7 +8,7 @@ import { parsePsProcessSnapshotOutput } from "../util/process-introspection.ts";
 const PANE_LIST_FORMAT = "#{pane_current_command}\t#{pane_pid}\t#{pane_tty}";
 const PS_ARGS = ["ps", "-axww", "-o", "pid=", "-o", "ppid=", "-o", "tty=", "-o", "command="];
 
-export interface RemoteDetectionSource {
+interface RemoteDetectionSource {
   controlClient: Pick<RemoteControlClient, "sendCommand">;
   exec: RemoteExec;
 }

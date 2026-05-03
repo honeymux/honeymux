@@ -36,7 +36,7 @@ export interface RemotePermissionRoute {
   key: string;
 }
 
-export class ForwardedRemoteAgentIngress implements RemoteAgentIngress {
+class ForwardedRemoteAgentIngress implements RemoteAgentIngress {
   readonly localSocketPath: string;
 
   private socketServer: HookSocketServer;
@@ -83,7 +83,7 @@ export class ForwardedRemoteAgentIngressFactory implements RemoteAgentIngressFac
   }
 }
 
-export function getRemoteAgentIngressSocketPath(serverName: string): string {
+function getRemoteAgentIngressSocketPath(serverName: string): string {
   const tmuxServer = getTmuxServer();
   const digest = createHash("sha256").update(`${tmuxServer}\0${serverName}`).digest("hex").slice(0, 16);
   return getPrivateSocketPath(`hmx-remote-hook-${digest}`);

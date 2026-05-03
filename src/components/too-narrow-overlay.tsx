@@ -4,7 +4,7 @@ import { version } from "../../package.json";
 import { theme } from "../themes/theme.ts";
 import { HoneycombBackground } from "./honeycomb-background.tsx";
 
-export interface TooNarrowOverlayProps {
+interface TooNarrowOverlayProps {
   height: number;
   reason?: "narrow" | "short";
   width: number;

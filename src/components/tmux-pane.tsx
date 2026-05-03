@@ -11,17 +11,6 @@ import { TmuxPaneNormalMode } from "./tmux-pane/normal-mode.tsx";
 import { TmuxPaneOverlayLayer } from "./tmux-pane/overlay-layer.tsx";
 import { useTmuxPaneViewModel } from "./tmux-pane/use-tmux-pane-view-model.ts";
 
-export type {
-  TmuxPaneAgentProps,
-  TmuxPaneCoreProps,
-  TmuxPaneHistoryProps,
-  TmuxPaneLayoutProps,
-  TmuxPaneProps,
-  TmuxPaneSessionDropdownProps,
-  TmuxPaneSharedProps,
-  TmuxPaneToolbarProps,
-} from "./tmux-pane/types.ts";
-
 export const TmuxPane = memo(function TmuxPane({
   agent,
   core,

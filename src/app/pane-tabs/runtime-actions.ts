@@ -15,7 +15,7 @@ import {
 import { planNewTabGroup } from "./transitions.ts";
 import { resolveHostWindowRenameState } from "./window-policy.ts";
 
-export interface ApplyGroupTabsOptions {
+interface ApplyGroupTabsOptions {
   activeIndex: number;
   borderLinesRef: BorderLinesState;
   client: TmuxControlClient;
@@ -26,7 +26,7 @@ export interface ApplyGroupTabsOptions {
   windowId?: string;
 }
 
-export interface ApplyValidateGroupPlanOptions {
+interface ApplyValidateGroupPlanOptions {
   borderLinesRef: BorderLinesState;
   client: TmuxControlClient;
   groups: Map<string, PaneTabGroup>;
@@ -35,11 +35,11 @@ export interface ApplyValidateGroupPlanOptions {
   plan: ValidateGroupPlan;
 }
 
-export interface BorderLinesState {
+interface BorderLinesState {
   current: string;
 }
 
-export interface BuildHostedTabGroupOptions {
+interface BuildHostedTabGroupOptions {
   client: TmuxControlClient;
   currentLabel: string;
   currentPaneId: string;
@@ -55,7 +55,7 @@ export interface BuildHostedTabGroupOptions {
   width: number;
 }
 
-export interface ExecuteTabRemovalOptions {
+interface ExecuteTabRemovalOptions {
   borderLinesRef: BorderLinesState;
   client: TmuxControlClient;
   group: PaneTabGroup;
@@ -64,7 +64,7 @@ export interface ExecuteTabRemovalOptions {
   resizePromotedPane?: boolean;
 }
 
-export interface MaterializePaneTabsOptions {
+interface MaterializePaneTabsOptions {
   borderLinesRef: BorderLinesState;
   clearSiblingWindowId?: string;
   client: TmuxControlClient;
@@ -81,7 +81,7 @@ export interface MaterializePaneTabsOptions {
   visiblePaneIds?: Set<string>;
 }
 
-export interface MaterializeWindowTabSwitchOptions {
+interface MaterializeWindowTabSwitchOptions {
   borderLinesRef: BorderLinesState;
   client: TmuxControlClient;
   currentPaneId: string;
@@ -102,7 +102,7 @@ export interface MaterializeWindowTabSwitchOptions {
   targetWindowId: string;
 }
 
-export interface PromotePaneIntoSlotOptions {
+interface PromotePaneIntoSlotOptions {
   borderLinesRef: BorderLinesState;
   client: TmuxControlClient;
   currentVisiblePaneId: string;
@@ -117,12 +117,12 @@ export interface PromotePaneIntoSlotOptions {
   targetWindowId: string;
 }
 
-export interface PromotePaneIntoSlotResult {
+interface PromotePaneIntoSlotResult {
   promotedIntoVisibleSlot: boolean;
   windowId: string;
 }
 
-export interface RefreshValidatedWindowsOptions {
+interface RefreshValidatedWindowsOptions {
   borderLinesRef: BorderLinesState;
   client: TmuxControlClient;
   groups: Map<string, PaneTabGroup>;
@@ -463,30 +463,6 @@ export async function promotePaneIntoSlot({
   return { promotedIntoVisibleSlot: false, windowId };
 }
 
-export async function reduceToSingleTabGroup(options: {
-  borderLinesRef: BorderLinesState;
-  client: TmuxControlClient;
-  group: PaneTabGroup;
-  groups: Map<string, PaneTabGroup>;
-  slotKey: string;
-  tab: PaneTab;
-  windowId?: string;
-}): Promise<void> {
-  const { borderLinesRef, client, group, groups, slotKey, tab, windowId } = options;
-
-  await uninstallExitHook(client, tab.paneId);
-  await disableRemainOnExit(client, tab.paneId);
-
-  const singleGroup: PaneTabGroup = {
-    ...group,
-    activeIndex: 0,
-    tabs: [tab],
-    windowId: windowId ?? group.windowId,
-  };
-  groups.set(slotKey, singleGroup);
-  await setPaneFormatForTabs(client, tab.paneId, [tab], 0, group.slotWidth, borderLinesRef.current);
-}
-
 export async function refreshValidatedWindows({
   borderLinesRef,
   client,
@@ -529,4 +505,28 @@ export async function refreshValidatedWindows({
   }
 
   return changed;
+}
+
+async function reduceToSingleTabGroup(options: {
+  borderLinesRef: BorderLinesState;
+  client: TmuxControlClient;
+  group: PaneTabGroup;
+  groups: Map<string, PaneTabGroup>;
+  slotKey: string;
+  tab: PaneTab;
+  windowId?: string;
+}): Promise<void> {
+  const { borderLinesRef, client, group, groups, slotKey, tab, windowId } = options;
+
+  await uninstallExitHook(client, tab.paneId);
+  await disableRemainOnExit(client, tab.paneId);
+
+  const singleGroup: PaneTabGroup = {
+    ...group,
+    activeIndex: 0,
+    tabs: [tab],
+    windowId: windowId ?? group.windowId,
+  };
+  groups.set(slotKey, singleGroup);
+  await setPaneFormatForTabs(client, tab.paneId, [tab], 0, group.slotWidth, borderLinesRef.current);
 }

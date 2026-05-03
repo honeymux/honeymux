@@ -1,4 +1,9 @@
-export interface ControlModeNotificationHandlers {
+export interface ControlModePendingCommand {
+  reject: (error: Error) => void;
+  resolve: (output: string) => void;
+}
+
+interface ControlModeNotificationHandlers {
   onExit?: () => void;
   onLayoutChange?: (windowId: string, layoutString: string) => void;
   onPaneOutput?: (paneId: string, data: string) => void;
@@ -14,12 +19,14 @@ export interface ControlModeNotificationHandlers {
   onWindowRenamed?: (windowId: string, newName: string) => void;
 }
 
-export interface ControlModePendingCommand {
-  reject: (error: Error) => void;
-  resolve: (output: string) => void;
+interface ControlModeParserOptions {
+  getPendingQueue: () => ControlModePendingCommand[];
+  isClosed: () => boolean;
+  notifications?: ControlModeNotificationHandlers;
+  onReady?: () => void;
 }
 
-export interface SubscriptionChangedNotification {
+interface SubscriptionChangedNotification {
   name: string;
   paneId: string;
   sessionId: string;
@@ -28,18 +35,11 @@ export interface SubscriptionChangedNotification {
   windowIndex: string;
 }
 
-interface ControlModeParserOptions {
-  getPendingQueue: () => ControlModePendingCommand[];
-  isClosed: () => boolean;
-  notifications?: ControlModeNotificationHandlers;
-  onReady?: () => void;
-}
-
 const PANE_ID_RE = /^%\d+$/;
 const UTF8_DECODER = new TextDecoder();
 export const MAX_CONTROL_LINE_BYTES = 256 * 1024;
-export const MAX_CONTROL_RESPONSE_BYTES = 16 * 1024 * 1024;
-export const MAX_CONTROL_RESPONSE_LINES = 100_000;
+const MAX_CONTROL_RESPONSE_BYTES = 16 * 1024 * 1024;
+const MAX_CONTROL_RESPONSE_LINES = 100_000;
 
 export class ControlModeParser {
   private currentResponse: {

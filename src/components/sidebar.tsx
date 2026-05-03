@@ -16,8 +16,6 @@ import { ServerTree } from "./server-tree.tsx";
 
 export const SIDEBAR_DEFAULT_WIDTH = 32;
 export const SIDEBAR_MIN_WIDTH = 20;
-export type SideBarView = "agents" | "hook-sniffer" | "server";
-
 interface SideBarProps {
   agentAlertAnimConfusables?: boolean;
   agentAlertAnimCycleCount?: number;
@@ -57,6 +55,8 @@ interface SideBarProps {
   viewZoomRef?: MutableRefObject<((index: number) => void) | null>;
   width: number;
 }
+
+type SideBarView = "agents" | "hook-sniffer" | "server";
 
 export function SideBar({
   agentAlertAnimConfusables,

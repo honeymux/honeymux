@@ -1,7 +1,7 @@
 import type { DimPaneRect } from "../app/hooks/use-dim-inactive-panes.ts";
 import type { UIMode } from "../util/config.ts";
 
-export interface DimInactivePanesOverlayProps {
+interface DimInactivePanesOverlayProps {
   /** Visible content columns (termCols) — used to clamp overlays so the tool bar isn't tinted. */
   contentCols?: number;
   inactivePanes: DimPaneRect[];

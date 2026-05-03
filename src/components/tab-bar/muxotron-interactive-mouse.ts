@@ -1,6 +1,6 @@
 import type { MouseEvent } from "@opentui/core";
 
-export interface InteractiveMouseFrame {
+interface InteractiveMouseFrame {
   height: number;
   left: number;
   top: number;

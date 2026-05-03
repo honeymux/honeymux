@@ -468,50 +468,6 @@ export function buildConversationsPositionLabel(
   return ` ${absolutePosition}/${totalResults} `;
 }
 
-/**
- * Lay out the query field around a cursor position so the cursor cell stays
- * visible even when the query exceeds the field width. Widths are measured in
- * terminal cells; `cursor` is a codepoint index in [0, codepoints(query)].
- *
- * Returns three pieces: text before the cursor, the single cell under the
- * cursor (rendered inverted by the caller), and text after the cursor padded
- * to fill the remaining field width.
- */
-export function buildConversationsQueryField(
-  query: string,
-  cursor: number,
-  availWidth: number,
-): { after: string; atCursor: string; before: string } {
-  if (availWidth <= 0) return { after: "", atCursor: "", before: "" };
-  const cps = [...query];
-  const cursorCp = Math.max(0, Math.min(cps.length, cursor));
-  const beforeText = cps.slice(0, cursorCp).join("");
-  const atText = cps[cursorCp] ?? " ";
-  const afterText = cps.slice(cursorCp + 1).join("");
-  const atWidth = Math.max(1, stringWidth(atText));
-
-  // If the cursor cell itself is wider than the field there is nothing we can
-  // show without clipping the cursor; fall back to a single-space cursor.
-  if (atWidth >= availWidth) {
-    return { after: "", atCursor: " ", before: "" };
-  }
-
-  const beforeWidth = stringWidth(beforeText);
-  const scroll = Math.max(0, beforeWidth + atWidth - availWidth);
-  const [, visibleBeforeRaw] = splitAtColumn(beforeText, scroll);
-  const visibleBeforeWidth = stringWidth(visibleBeforeRaw);
-  const remainingForAfter = Math.max(0, availWidth - visibleBeforeWidth - atWidth);
-  const visibleAfterRaw = truncateToWidth(afterText, remainingForAfter);
-  const visibleAfterWidth = stringWidth(visibleAfterRaw);
-  const paddingWidth = Math.max(0, availWidth - visibleBeforeWidth - atWidth - visibleAfterWidth);
-
-  return {
-    after: visibleAfterRaw + " ".repeat(paddingWidth),
-    atCursor: atText,
-    before: visibleBeforeRaw,
-  };
-}
-
 export function buildConversationsStatusLine(shown: number, total: number, hasMore: boolean, width: number): string {
   const noun = total === 1 ? "conversation" : "conversations";
   const status = ` Showing ${shown} of ${total} ${noun}${hasMore ? "  ↓ loads more" : ""}`;
@@ -573,6 +529,50 @@ function buildConversationsHeaderParts(
     center: safeIdText,
     left: agentPart + " ".repeat(leftPad),
     right: " ".repeat(rightPad) + rightPart,
+  };
+}
+
+/**
+ * Lay out the query field around a cursor position so the cursor cell stays
+ * visible even when the query exceeds the field width. Widths are measured in
+ * terminal cells; `cursor` is a codepoint index in [0, codepoints(query)].
+ *
+ * Returns three pieces: text before the cursor, the single cell under the
+ * cursor (rendered inverted by the caller), and text after the cursor padded
+ * to fill the remaining field width.
+ */
+function buildConversationsQueryField(
+  query: string,
+  cursor: number,
+  availWidth: number,
+): { after: string; atCursor: string; before: string } {
+  if (availWidth <= 0) return { after: "", atCursor: "", before: "" };
+  const cps = [...query];
+  const cursorCp = Math.max(0, Math.min(cps.length, cursor));
+  const beforeText = cps.slice(0, cursorCp).join("");
+  const atText = cps[cursorCp] ?? " ";
+  const afterText = cps.slice(cursorCp + 1).join("");
+  const atWidth = Math.max(1, stringWidth(atText));
+
+  // If the cursor cell itself is wider than the field there is nothing we can
+  // show without clipping the cursor; fall back to a single-space cursor.
+  if (atWidth >= availWidth) {
+    return { after: "", atCursor: " ", before: "" };
+  }
+
+  const beforeWidth = stringWidth(beforeText);
+  const scroll = Math.max(0, beforeWidth + atWidth - availWidth);
+  const [, visibleBeforeRaw] = splitAtColumn(beforeText, scroll);
+  const visibleBeforeWidth = stringWidth(visibleBeforeRaw);
+  const remainingForAfter = Math.max(0, availWidth - visibleBeforeWidth - atWidth);
+  const visibleAfterRaw = truncateToWidth(afterText, remainingForAfter);
+  const visibleAfterWidth = stringWidth(visibleAfterRaw);
+  const paddingWidth = Math.max(0, availWidth - visibleBeforeWidth - atWidth - visibleAfterWidth);
+
+  return {
+    after: visibleAfterRaw + " ".repeat(paddingWidth),
+    atCursor: atText,
+    before: visibleBeforeRaw,
   };
 }
 

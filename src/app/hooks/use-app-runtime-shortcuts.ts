@@ -307,7 +307,7 @@ export function useAppRuntimeShortcuts({
   };
 }
 
-export function waitForActivePane({
+function waitForActivePane({
   activePaneIdRef,
   paneId,
   pollMs = 10,

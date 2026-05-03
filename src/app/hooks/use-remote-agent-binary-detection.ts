@@ -61,7 +61,7 @@ export interface RemoteAgentBinaryDetectionApi {
   undeferRemoteAgent: (agent: AgentType, hostId: string) => void;
 }
 
-export interface RemoteDeferredAgent {
+interface RemoteDeferredAgent {
   agent: AgentType;
   hostId: string;
 }

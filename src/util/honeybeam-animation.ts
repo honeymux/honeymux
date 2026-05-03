@@ -1,12 +1,14 @@
 import { type RGB } from "../themes/theme.ts";
 import { writeTerminalOutput } from "./terminal-output.ts";
 
-export interface HoneybeamDims {
+export type PaneBorderLines = "double" | "heavy" | "number" | "simple" | "single";
+
+interface HoneybeamDims {
   height: number;
   rows: number;
 }
 
-export interface HoneybeamOptions {
+interface HoneybeamOptions {
   accentColor: string;
   /** tmux pane-border-lines style, defaults to "single". */
   borderLines?: PaneBorderLines;
@@ -25,11 +27,9 @@ export interface HoneybeamOptions {
   rowOffset: number;
 }
 
-export interface HoneybeamViewport {
+interface HoneybeamViewport {
   width: number;
 }
-
-export type PaneBorderLines = "double" | "heavy" | "number" | "simple" | "single";
 
 /** Map tmux pane-border-lines style to vertical and horizontal characters. */
 export function borderCharsForStyle(style: PaneBorderLines): { horizontal: string; vertical: string } {
@@ -67,7 +67,7 @@ export function displayKeyToSequence(key: string): null | string {
   return key.length === 1 ? key : null;
 }
 
-export const HONEYBEAM_TOOLBAR_WIDTH = 7;
+const HONEYBEAM_TOOLBAR_WIDTH = 7;
 
 /**
  * When the right-side toolbar is open, clip beam drawing so direct ANSI output

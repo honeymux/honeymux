@@ -18,12 +18,6 @@ const EMPTY_HISTORY_QUERY_RESULT: HistoryQueryResult = {
   total: 0,
 };
 
-export interface ConversationsAbsoluteIndexView {
-  loadedCount: number;
-  offset: number;
-  resultIndex: number;
-}
-
 export interface HistoryWorkflowApi {
   closeConversationsDialog: () => void;
   closeConversationsMenu: () => void;
@@ -66,6 +60,12 @@ export interface HistoryWorkflowApi {
   toggleConversationsMenu: () => void;
   toggleConversationsSearchCaseSensitive: () => void;
   toggleConversationsSearchRegex: () => void;
+}
+
+interface ConversationsAbsoluteIndexView {
+  loadedCount: number;
+  offset: number;
+  resultIndex: number;
 }
 
 interface UseHistoryWorkflowOptions {

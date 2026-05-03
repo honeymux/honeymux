@@ -42,7 +42,7 @@ import {
  * │ ʕ·ᴥ·ʔ          000/001 │
  * ╰────────────────────────╯
  */
-export interface MuxotronProps {
+interface MuxotronProps {
   activePaneId?: null | string;
   agentAlertAnimConfusables?: boolean;
   /** Number of animation cycles to play before each delay (minimum 1). */

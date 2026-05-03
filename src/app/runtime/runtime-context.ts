@@ -22,28 +22,6 @@ export interface RuntimeDims {
   width: number;
 }
 
-export interface SetupTmuxRuntimeAgentRuntimeContext {
-  activePaneIdRef: MutableRefObject<null | string>;
-  muxotronExpandedRef: MutableRefObject<boolean>;
-  registryRef: MutableRefObject<AgentProviderRegistry | null>;
-  setAgentSessions: Dispatch<SetStateAction<AgentSession[]>>;
-  setClaudeDialogPending: Dispatch<SetStateAction<boolean>>;
-  setCodexDialogPending: Dispatch<SetStateAction<boolean>>;
-  setGeminiDialogPending: Dispatch<SetStateAction<boolean>>;
-  setHookSnifferEvents: Dispatch<SetStateAction<HookSnifferEntry[]>>;
-  setOpenCodeDialogPending: Dispatch<SetStateAction<boolean>>;
-  storeRef: MutableRefObject<AgentSessionStore | null>;
-  uiModeRef: MutableRefObject<UIMode>;
-}
-
-export interface SetupTmuxRuntimeConfigRuntimeContext {
-  setConfig: (value: HoneymuxConfig) => void;
-  setConfigThemeBuiltin: (value: Base16SchemeName) => void;
-  setConfigThemeMode: (value: ThemeMode) => void;
-  setConfigUIMode: (value: UIMode) => void;
-  setToolbarOpen: (value: boolean) => void;
-}
-
 export interface SetupTmuxRuntimeContext {
   agentRuntime: SetupTmuxRuntimeAgentRuntimeContext;
   configRuntime: SetupTmuxRuntimeConfigRuntimeContext;
@@ -216,7 +194,29 @@ export interface SetupTmuxRuntimeSessionRuntimeContext {
   tooNarrowRef: MutableRefObject<boolean>;
 }
 
-export interface SetupTmuxRuntimeSessionStateContext {
+interface SetupTmuxRuntimeAgentRuntimeContext {
+  activePaneIdRef: MutableRefObject<null | string>;
+  muxotronExpandedRef: MutableRefObject<boolean>;
+  registryRef: MutableRefObject<AgentProviderRegistry | null>;
+  setAgentSessions: Dispatch<SetStateAction<AgentSession[]>>;
+  setClaudeDialogPending: Dispatch<SetStateAction<boolean>>;
+  setCodexDialogPending: Dispatch<SetStateAction<boolean>>;
+  setGeminiDialogPending: Dispatch<SetStateAction<boolean>>;
+  setHookSnifferEvents: Dispatch<SetStateAction<HookSnifferEntry[]>>;
+  setOpenCodeDialogPending: Dispatch<SetStateAction<boolean>>;
+  storeRef: MutableRefObject<AgentSessionStore | null>;
+  uiModeRef: MutableRefObject<UIMode>;
+}
+
+interface SetupTmuxRuntimeConfigRuntimeContext {
+  setConfig: (value: HoneymuxConfig) => void;
+  setConfigThemeBuiltin: (value: Base16SchemeName) => void;
+  setConfigThemeMode: (value: ThemeMode) => void;
+  setConfigUIMode: (value: UIMode) => void;
+  setToolbarOpen: (value: boolean) => void;
+}
+
+interface SetupTmuxRuntimeSessionStateContext {
   historyLoadStartedRef: MutableRefObject<boolean>;
   setActiveIndex: Dispatch<SetStateAction<number>>;
   setConnected: Dispatch<SetStateAction<boolean>>;

@@ -704,6 +704,6 @@ export function dispatchDialogInput(data: string, deps: DialogInputDispatchDeps)
   }
 }
 
-export function shouldLoadMoreConversations(nextIndex: number, loadedCount: number, hasMore: boolean): boolean {
+function shouldLoadMoreConversations(nextIndex: number, loadedCount: number, hasMore: boolean): boolean {
   return hasMore && loadedCount > 0 && nextIndex >= Math.max(0, loadedCount - CONVERSATIONS_LOAD_MORE_THRESHOLD);
 }

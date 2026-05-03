@@ -4,7 +4,7 @@ import { DEFAULT_LOCAL_OSC52_PASSTHROUGH, DEFAULT_LOCAL_OTHER_OSC_PASSTHROUGH } 
 import { writeTerminalOutput } from "./terminal-output.ts";
 import { OSC_TERMINATOR } from "./terminal-sequences.ts";
 
-export type CleanEnv = {
+type CleanEnv = {
   HOME?: string;
   LANG?: string;
   LC_ALL?: string;
@@ -32,13 +32,6 @@ export type CleanEnv = {
 const PASSTHROUGH_OSC = new Set([0, 1, 2, 777, 9, 99]);
 const MAX_BUFFERED_OSC_BYTES = 1024 * 1024;
 
-export interface PassthroughForwarderOptions {
-  maxBufferedOscBytes?: number;
-  policyOsc52Passthrough?: Osc52Passthrough;
-  policyOtherOscPassthrough?: OtherOscPassthrough;
-  write?: (data: Uint8Array | string) => void;
-}
-
 export interface PtyBridge {
   exited: Promise<number>;
   kill(): void;
@@ -59,6 +52,13 @@ interface OscStreamProcessorOptions {
   normalizeOscTerminatorToBel?: boolean;
   shouldWriteOsc: (data: ArrayLike<number>) => boolean;
   write: (data: Uint8Array | string) => void;
+}
+
+interface PassthroughForwarderOptions {
+  maxBufferedOscBytes?: number;
+  policyOsc52Passthrough?: Osc52Passthrough;
+  policyOtherOscPassthrough?: OtherOscPassthrough;
+  write?: (data: Uint8Array | string) => void;
 }
 
 /**

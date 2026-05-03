@@ -3,12 +3,7 @@ import type { CliRenderer } from "@opentui/core";
 import type { KeyAction } from "../util/keybindings.ts";
 
 import { type InputRouterCallbacks, routeKeyboardInput } from "./keyboard-router.ts";
-import { type MouseForwardConfig, installRawStdinInterceptor } from "./raw-stdin-interceptor.ts";
-
-export type { InputRouterCallbacks } from "./keyboard-router.ts";
-export type { MouseForwardConfig } from "./raw-stdin-interceptor.ts";
-
-/**
+import { type MouseForwardConfig, installRawStdinInterceptor } from "./raw-stdin-interceptor.ts"; /**
  * Intercepts raw keyboard input.
  *
  * - Shift+Left/Right: switch tabs (our UI)

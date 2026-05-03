@@ -17,13 +17,6 @@ import {
   hitTestPaneTab,
 } from "./layout.ts";
 
-export interface PaneTabContextMenuState {
-  screenX: number;
-  screenY: number;
-  slotKey: string;
-  tabIndex: number;
-}
-
 export interface PaneTabDragFloatState {
   label: string;
   screenX: number;
@@ -71,16 +64,23 @@ export interface PaneTabInteractionsApi {
   paneTabOverflow: PaneTabOverflowState | null;
 }
 
-export interface PaneTabOverflowState {
+interface DragTarget {
+  slotKey: string;
+  tabIndex: number;
+}
+
+interface PaneTabContextMenuState {
+  screenX: number;
+  screenY: number;
+  slotKey: string;
+  tabIndex: number;
+}
+
+interface PaneTabOverflowState {
   screenX: number;
   screenY: number;
   slotKey: string;
   visibleCount: number;
-}
-
-interface DragTarget {
-  slotKey: string;
-  tabIndex: number;
 }
 
 interface UsePaneTabInteractionsOptions {

@@ -78,7 +78,7 @@ export function rgbToHex([r, g, b]: RGB): string {
 /** The built-in scheme used before initTheme() is called and as fallback. */
 export const DEFAULT_SCHEME: Base16SchemeName = "spacemacs";
 
-export interface Theme {
+interface Theme {
   accent: string;
   accentRgb: RGB;
   backdropOverlay: string;
@@ -341,7 +341,7 @@ export const theme: Theme = deriveTheme(BUILTIN_PALETTES[DEFAULT_SCHEME]);
 // ---------------------------------------------------------------------------
 
 /** Data from the terminal probe needed for theme initialization. */
-export interface ThemeProbeData {
+interface ThemeProbeData {
   bg: RGB | null;
   cursorStyle: null | number;
   fg: RGB | null;

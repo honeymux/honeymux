@@ -13,14 +13,6 @@ export function buildRemoteShellCommand(argv: string[]): string {
   return argv.map(quotePosixShellArg).join(" ");
 }
 
-/**
- * Quote a single argument for execution by a POSIX shell on the remote host.
- * SSH's exec request carries a command string, not an argv vector.
- */
-export function quotePosixShellArg(value: string): string {
-  return `'${value.replaceAll("'", `'"'"'`)}'`;
-}
-
 export function validateSshDestination(host: string): null | string {
   if (typeof host !== "string") return "must be a string";
   if (host.length === 0) return "cannot be empty";
@@ -29,4 +21,12 @@ export function validateSshDestination(host: string): null | string {
   if (WHITESPACE_RE.test(host)) return "cannot contain whitespace";
   if (host.startsWith("-")) return "cannot start with '-'";
   return null;
+}
+
+/**
+ * Quote a single argument for execution by a POSIX shell on the remote host.
+ * SSH's exec request carries a command string, not an argv vector.
+ */
+function quotePosixShellArg(value: string): string {
+  return `'${value.replaceAll("'", `'"'"'`)}'`;
 }

@@ -1,11 +1,22 @@
 import type { PaneTab, PaneTabGroup } from "./types.ts";
 
-export interface InsertTabPlan {
+export interface TabRemovalPlan {
+  nextActiveIndex: number;
+  nextActivePaneId: null | string;
+  nextMode: "empty" | "multi" | "single";
+  remainingTabs: PaneTab[];
+  removedIndex: number;
+  removedTab: PaneTab;
+  removedWasActive: boolean;
+  updatedGroup: PaneTabGroup | null;
+}
+
+interface InsertTabPlan {
   insertIndex: number;
   updatedGroup: PaneTabGroup;
 }
 
-export interface NewTabGroupPlanInput {
+interface NewTabGroupPlanInput {
   currentLabel: string;
   currentPaneId: string;
   existingGroup?: PaneTabGroup;
@@ -21,23 +32,12 @@ export interface NewTabGroupPlanInput {
   windowId: null | string;
 }
 
-export interface ReorderTabsPlan {
+interface ReorderTabsPlan {
   activePaneId: string;
   updatedGroup: PaneTabGroup;
 }
 
-export interface TabRemovalPlan {
-  nextActiveIndex: number;
-  nextActivePaneId: null | string;
-  nextMode: "empty" | "multi" | "single";
-  remainingTabs: PaneTab[];
-  removedIndex: number;
-  removedTab: PaneTab;
-  removedWasActive: boolean;
-  updatedGroup: PaneTabGroup | null;
-}
-
-export interface TabSwitchPlan {
+interface TabSwitchPlan {
   currentPaneId: string;
   targetPaneId: string;
   updatedGroup: PaneTabGroup;

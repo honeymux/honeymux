@@ -7,8 +7,8 @@
  */
 import { hexToRgb, lerpRgb, rgbToHex } from "../themes/theme.ts";
 
-export const EQ_BRIGHT = "#ff0000";
-export const EQ_DIM = "#330000";
+const EQ_BRIGHT = "#ff0000";
+const EQ_DIM = "#330000";
 export const EQ_BORDER = "#881111";
 
 const TRAIL_LENGTH = 8;

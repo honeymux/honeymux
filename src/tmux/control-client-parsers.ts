@@ -1,18 +1,18 @@
 import type { TmuxKeyBindings, TmuxPaneTtyMapping, TmuxSession, TmuxWindow } from "./types.ts";
 
-export interface TmuxActivePaneGeometry {
+interface TmuxActivePaneGeometry {
   height: number;
   left: number;
   top: number;
   width: number;
 }
 
-export interface TmuxActivePaneScreenshotInfo extends TmuxActivePaneGeometry {
+interface TmuxActivePaneScreenshotInfo extends TmuxActivePaneGeometry {
   cwd: string;
   paneId: string;
 }
 
-export interface TmuxPaneContext {
+interface TmuxPaneContext {
   paneId: string;
   paneName: string;
   sessionId: string;
@@ -21,7 +21,7 @@ export interface TmuxPaneContext {
   windowName: string;
 }
 
-export interface TmuxPaneInfo extends TmuxActivePaneGeometry {
+interface TmuxPaneInfo extends TmuxActivePaneGeometry {
   active: boolean;
   command: string;
   id: string;
@@ -29,7 +29,7 @@ export interface TmuxPaneInfo extends TmuxActivePaneGeometry {
   tty: string;
 }
 
-export interface TmuxSessionInfo {
+interface TmuxSessionInfo {
   paneTabActive: Set<string>;
   paneTabMembers: Set<string>;
   paneWindowIds: Map<string, string>;
@@ -37,18 +37,18 @@ export interface TmuxSessionInfo {
   windowPanes: Map<string, number>;
 }
 
-export interface TmuxSessionSummary {
+interface TmuxSessionSummary {
   panes: number;
   sessions: number;
   windows: number;
 }
 
-export interface TmuxStatusBarInfo {
+interface TmuxStatusBarInfo {
   lines: number;
   position: "bottom" | "top";
 }
 
-export interface TmuxTreePane {
+interface TmuxTreePane {
   active: boolean;
   command: string;
   cwd?: string;
@@ -61,7 +61,7 @@ export interface TmuxTreePane {
   windowId: string;
 }
 
-export interface TmuxTreeWindow {
+interface TmuxTreeWindow {
   active: boolean;
   id: string;
   index: number;
@@ -69,7 +69,7 @@ export interface TmuxTreeWindow {
   sessionName: string;
 }
 
-export interface TmuxWindowPaneInfo {
+interface TmuxWindowPaneInfo {
   active: boolean;
   height: number;
   id: string;

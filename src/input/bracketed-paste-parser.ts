@@ -4,14 +4,14 @@ const MIN_SHARED_MARKER_PREFIX = 2;
 
 // Keep parser state explicitly bounded so malformed or hostile streams cannot
 // grow memory indefinitely while waiting for a closing marker.
-export const MAX_BRACKETED_PASTE_CHARS = 1024 * 1024;
+const MAX_BRACKETED_PASTE_CHARS = 1024 * 1024;
 
-export interface BracketedPasteParser {
+interface BracketedPasteParser {
   push: (chunk: string) => RawInputSegment[];
   reset: () => void;
 }
 
-export type RawInputSegment = { text: string; type: "paste" } | { text: string; type: "text" };
+type RawInputSegment = { text: string; type: "paste" } | { text: string; type: "text" };
 
 export function createBracketedPasteParser(maxChars: number = MAX_BRACKETED_PASTE_CHARS): BracketedPasteParser {
   let pasteAccum: null | string = null;

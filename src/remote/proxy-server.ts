@@ -194,7 +194,11 @@ export function appendPendingProxyOutput(
   return Buffer.concat([current.slice(current.byteLength - keepFromExisting), chunk]);
 }
 
-export function appendUntilLimit(prefix: Uint8Array, chunk: Uint8Array, maxBytes: number): Uint8Array | null {
+export function getRemoteProxySocketPath(): string {
+  return getPrivateSocketPath("hmx-remote-proxy");
+}
+
+function appendUntilLimit(prefix: Uint8Array, chunk: Uint8Array, maxBytes: number): Uint8Array | null {
   const total = prefix.byteLength + chunk.byteLength;
   if (total > maxBytes) return null;
   if (prefix.byteLength === 0) return chunk;
@@ -204,11 +208,7 @@ export function appendUntilLimit(prefix: Uint8Array, chunk: Uint8Array, maxBytes
   return out;
 }
 
-export function getRemoteProxySocketPath(): string {
-  return getPrivateSocketPath("hmx-remote-proxy");
-}
-
-export function indexOfByte(buf: Uint8Array, byte: number): number {
+function indexOfByte(buf: Uint8Array, byte: number): number {
   for (let i = 0; i < buf.length; i++) if (buf[i] === byte) return i;
   return -1;
 }

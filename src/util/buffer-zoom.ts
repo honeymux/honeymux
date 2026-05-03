@@ -23,7 +23,7 @@ import {
 } from "./terminal-sequences.ts";
 import { stripNonPrintingControlChars } from "./text.ts";
 
-export interface BufferZoomOptions {
+interface BufferZoomOptions {
   clientRef: MutableRefObject<TmuxControlClient | null>;
   /** When true (and the terminal supports truecolor), use the fade transition. */
   fade: boolean;

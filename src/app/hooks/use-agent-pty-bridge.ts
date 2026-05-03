@@ -13,7 +13,7 @@ import { prepareGhosttyTerminalForTmux } from "../../util/ghostty-terminal.ts";
 import { createPassthroughForwarder, spawnPty } from "../../util/pty.ts";
 import { tmuxCmd } from "../../util/tmux-server.ts";
 
-export interface UseAgentPtyBridgeApi {
+interface UseAgentPtyBridgeApi {
   /** True once the PTY has produced its first frame. */
   isReady: boolean;
   /** Wire onto the TerminalView's `onReady` prop. */

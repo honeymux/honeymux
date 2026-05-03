@@ -17,7 +17,14 @@ import { TmuxControlClient } from "../../tmux/control-client.ts";
 
 const CODING_AGENT_ACTIVITY_COMMIT_THROTTLE_MS = 100;
 
-export interface UseAgentPaneActivityResult {
+interface UseAgentPaneActivityOptions {
+  agentSessions: AgentSession[];
+  clientRef: MutableRefObject<TmuxControlClient | null>;
+  connected: boolean;
+  currentSessionName: string;
+}
+
+interface UseAgentPaneActivityResult {
   activity: CodingAgentPaneActivity;
   /**
    * Ref-based snapshot of the same data that backs `activity`, keyed by
@@ -26,13 +33,6 @@ export interface UseAgentPaneActivityResult {
    * paying a React re-render.  Mutated in-place when samples update.
    */
   lastOutputByPaneRef: RefObject<ReadonlyMap<string, CodingAgentPaneOutputSample>>;
-}
-
-interface UseAgentPaneActivityOptions {
-  agentSessions: AgentSession[];
-  clientRef: MutableRefObject<TmuxControlClient | null>;
-  connected: boolean;
-  currentSessionName: string;
 }
 
 /**

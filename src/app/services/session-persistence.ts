@@ -40,7 +40,7 @@ export async function saveLayoutProfiles(profiles: LayoutProfile[]): Promise<voi
 
 const UI_STATE_FILE = `${STATE_DIR}/ui-state.json`;
 
-export interface UIState {
+interface UIState {
   conversationsSearchCaseSensitive?: boolean;
   conversationsSearchRegex?: boolean;
   sidebarOpen: boolean;

@@ -19,9 +19,9 @@ import { useRef } from "react";
 
 import type { PaneTabsApi } from "../pane-tabs/use-pane-tabs.ts";
 
-export type RenameAllPaneTabsFn = (prefix: string, minTabsPerGroup: number) => Promise<void>;
+type RenameAllPaneTabsFn = (prefix: string, minTabsPerGroup: number) => Promise<void>;
 
-export type RenameAllPaneTabsRef = MutableRefObject<RenameAllPaneTabsFn | null>;
+type RenameAllPaneTabsRef = MutableRefObject<RenameAllPaneTabsFn | null>;
 
 interface UseHarnessRenamePaneTabsRefOptions {
   activeWindowIdRef: MutableRefObject<null | string>;

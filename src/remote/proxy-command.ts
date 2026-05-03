@@ -1,7 +1,7 @@
 const BUNDLED_ENTRY_PREFIX = "/$bunfs/";
 const INTERNAL_REMOTE_PROXY_FLAG = "--internal-remote-proxy";
 
-export interface RemoteProxyProcessRuntime {
+interface RemoteProxyProcessRuntime {
   execPath: string;
   mainPath: string;
 }
@@ -18,17 +18,17 @@ export function buildRemoteProxyProcessArgv(
   return [runtime.execPath, runtime.mainPath, INTERNAL_REMOTE_PROXY_FLAG, localPaneId, proxyToken];
 }
 
-export function currentRemoteProxyProcessRuntime(): RemoteProxyProcessRuntime {
-  return {
-    execPath: process.execPath,
-    mainPath: Bun.main,
-  };
-}
-
 export function getInternalRemoteProxyFlag(): string {
   return INTERNAL_REMOTE_PROXY_FLAG;
 }
 
 export function isBundledEntryPath(path: string): boolean {
   return path.startsWith(BUNDLED_ENTRY_PREFIX);
+}
+
+function currentRemoteProxyProcessRuntime(): RemoteProxyProcessRuntime {
+  return {
+    execPath: process.execPath,
+    mainPath: Bun.main,
+  };
 }

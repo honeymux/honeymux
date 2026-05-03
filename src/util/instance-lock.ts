@@ -18,7 +18,7 @@ import { chmodSync, unlinkSync } from "node:fs";
 import { appendBoundedLines } from "./bounded-line-buffer.ts";
 import { getPrivateSocketPath } from "./runtime-paths.ts";
 
-export interface InstanceInfo {
+interface InstanceInfo {
   pid: number;
   startedAt: number;
 }

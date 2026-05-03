@@ -1,21 +1,21 @@
 import type { PaneTabGroup } from "./types.ts";
 
-export interface PaneCycleEntry {
-  paneId: string;
-  slotKey?: string;
-  tabIndex?: number;
-}
-
-export interface PaneCycleModel {
-  currentIndex: number;
-  entries: PaneCycleEntry[];
-}
-
 interface BuildPaneCycleModelOptions {
   activePaneIndex: number;
   enabled: boolean;
   groups: Map<string, PaneTabGroup>;
   panes: Array<{ id: string }>;
+}
+
+interface PaneCycleEntry {
+  paneId: string;
+  slotKey?: string;
+  tabIndex?: number;
+}
+
+interface PaneCycleModel {
+  currentIndex: number;
+  entries: PaneCycleEntry[];
 }
 
 export function buildPaneCycleModel({

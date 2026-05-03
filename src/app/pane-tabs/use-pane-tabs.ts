@@ -24,8 +24,7 @@ import { createPaneTabOpQueue } from "./op-queue.ts";
 import { type PaneTabOps, createPaneTabOps } from "./ops.ts";
 import { findPaneTabGroupByPaneId, findPaneTabGroupForWindow, hasRefreshablePaneTabLabels } from "./selectors.ts";
 
-export { hasRefreshablePaneTabLabels, paneNeedsPaneTabLabelRefresh } from "./selectors.ts";
-export type { PaneTab, PaneTabGroup } from "./types.ts";
+export type { PaneTabGroup } from "./types.ts";
 
 export interface PaneTabsApi extends PaneTabInteractionsApi {
   getPaneTabGroup: (paneId: string) => PaneTabGroup | undefined;

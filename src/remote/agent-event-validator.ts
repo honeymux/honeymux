@@ -6,7 +6,7 @@ export interface RemotePaneBinding {
   remotePaneId: string;
 }
 
-export interface ValidateRemoteAgentEventDeps {
+interface ValidateRemoteAgentEventDeps {
   resolvePaneBinding(tty: string): Promise<RemotePaneBinding | undefined>;
   validateProcessBinding(pid: number, tty: string, panePid: number): Promise<boolean>;
 }

@@ -15,8 +15,8 @@ export type UIMode = "adaptive" | "marquee-bottom" | "marquee-top" | "raw";
 export type WatermarkShape = "bear face" | "bear paw" | "honeycomb" | "off" | "unanswered count";
 export const DEFAULT_LOCAL_OSC52_PASSTHROUGH: Osc52Passthrough = "write-only";
 export const DEFAULT_LOCAL_OTHER_OSC_PASSTHROUGH: OtherOscPassthrough = "allow";
-export const OTHER_OSC_PASSTHROUGH_MODES: OtherOscPassthrough[] = ["off", "allow"];
-export const OSC52_PASSTHROUGH_MODES: Osc52Passthrough[] = ["off", "write-only", "all"];
+const OTHER_OSC_PASSTHROUGH_MODES: OtherOscPassthrough[] = ["off", "allow"];
+const OSC52_PASSTHROUGH_MODES: Osc52Passthrough[] = ["off", "write-only", "all"];
 
 /** Returns true for both "marquee-top" and "marquee-bottom". */
 export function isMarqueeMode(mode: UIMode): boolean {
@@ -82,7 +82,7 @@ export const CONFIG_FILE = `${CONFIG_DIR}/config.json`;
 /**
  * Returns null if no config file exists (first run).
  */
-export type LoadedHoneymuxConfig = Partial<HoneymuxConfig>;
+type LoadedHoneymuxConfig = Partial<HoneymuxConfig>;
 
 export function defaultConfig(): HoneymuxConfig {
   return {

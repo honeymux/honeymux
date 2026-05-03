@@ -27,11 +27,6 @@ import type { UiActionsApi } from "./use-ui-actions.ts";
 import { isMarqueeMode } from "../../util/config.ts";
 import { TAB_ROWS } from "../options/model.ts";
 
-export interface ClosePaneDropdownOptions {
-  dropdownInputRef: MutableRefObject<((data: string) => boolean) | null>;
-  setOpen: ((open: boolean) => void) | Dispatch<SetStateAction<boolean>>;
-}
-
 interface BuildAppPanePropsOptions {
   activePaneId?: null | string;
   activePaneRect?: import("./use-active-pane-rect.ts").ActivePaneRect | null;
@@ -93,6 +88,11 @@ interface BuildAppPanePropsOptions {
   uiChromeState: UiChromeState;
   warningCount?: number;
   width: number;
+}
+
+interface ClosePaneDropdownOptions {
+  dropdownInputRef: MutableRefObject<((data: string) => boolean) | null>;
+  setOpen: ((open: boolean) => void) | Dispatch<SetStateAction<boolean>>;
 }
 
 export function buildAppPaneProps({

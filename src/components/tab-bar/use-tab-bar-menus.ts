@@ -13,11 +13,28 @@ export interface TabBarContextMenuEntry {
   key: TabBarContextMenuItem;
   label: string;
 }
-export type TabBarContextMenuItem = "close" | "move" | "rename";
-
 export type TabBarContextMenuMode = "menu" | "move";
 
-export interface UseTabBarMenusResult {
+type TabBarContextMenuItem = "close" | "move" | "rename";
+
+interface UseTabBarMenusOptions {
+  dropdownInputRef?: MutableRefObject<((data: string) => boolean) | null>;
+  hasOverflow: boolean;
+  onCloseWindow?: (index: number) => void;
+  onMoveWindowToSession?: (index: number, targetSession: string) => void;
+  onTabRename?: (index: number, newName: string) => void;
+  onTextInputActive?: (active: boolean) => void;
+  resolveTabIndexFromX?: (x: number) => number;
+  sessionName?: string;
+  sessions?: TmuxSession[];
+  tabRightClickRef?: MutableRefObject<((x: number) => void) | null>;
+  textInputEscapeHandlerRef?: MutableRefObject<(() => void) | null>;
+  visibleCount: number;
+  width: number;
+  windows: TmuxWindow[];
+}
+
+interface UseTabBarMenusResult {
   canMoveToSession: boolean;
   closeContextMenu: () => void;
   closeRenameEditor: () => void;
@@ -38,23 +55,6 @@ export interface UseTabBarMenusResult {
   renameItemWidth: number;
   renameWindowId: null | string;
   submitRename: () => void;
-}
-
-interface UseTabBarMenusOptions {
-  dropdownInputRef?: MutableRefObject<((data: string) => boolean) | null>;
-  hasOverflow: boolean;
-  onCloseWindow?: (index: number) => void;
-  onMoveWindowToSession?: (index: number, targetSession: string) => void;
-  onTabRename?: (index: number, newName: string) => void;
-  onTextInputActive?: (active: boolean) => void;
-  resolveTabIndexFromX?: (x: number) => number;
-  sessionName?: string;
-  sessions?: TmuxSession[];
-  tabRightClickRef?: MutableRefObject<((x: number) => void) | null>;
-  textInputEscapeHandlerRef?: MutableRefObject<(() => void) | null>;
-  visibleCount: number;
-  width: number;
-  windows: TmuxWindow[];
 }
 
 const CONTEXT_MENU_ORDER: TabBarContextMenuItem[] = ["move", "rename", "close"];

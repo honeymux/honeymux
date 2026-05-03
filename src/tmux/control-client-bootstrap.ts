@@ -52,7 +52,7 @@ export async function applyControlClientBootstrap(
  * `-c`, removed binding) is left alone so users with non-default tmux configs
  * are not surprised.
  */
-export async function applyControlClientCwdBindings(sendCommand: SendCommand): Promise<void> {
+async function applyControlClientCwdBindings(sendCommand: SendCommand): Promise<void> {
   for (const { defaultAction, keyArg, keyMarker, rebind } of DEFAULT_PREFIX_BINDINGS) {
     let current = "";
     try {
@@ -119,12 +119,6 @@ export async function applyControlClientPaneBorderColors(sendCommand: SendComman
   await sendCommand(`set-option -g pane-active-border-style '${style}'`);
 }
 
-export async function applyControlClientTerminalColors(sendCommand: SendCommand, fg: RGB): Promise<void> {
-  const style = buildControlClientWindowStyle(fg);
-  await sendCommand(`set-option -g window-style '${style}'`);
-  await sendCommand(`set-option -g window-active-style '${style}'`);
-}
-
 export function buildControlClientWindowStyle(fg: RGB): string {
   const fgHex = `#${fg.map((c) => c.toString(16).padStart(2, "0")).join("")}`;
   return `fg=${fgHex},bg=terminal`;
@@ -150,4 +144,10 @@ export function clampControlClientSize(size: ControlClientSize): ControlClientSi
 export async function setControlClientSize(sendCommand: SendCommand, size: ControlClientSize): Promise<void> {
   const { cols, rows } = clampControlClientSize(size);
   await sendCommand(`refresh-client -C ${cols},${rows}`);
+}
+
+async function applyControlClientTerminalColors(sendCommand: SendCommand, fg: RGB): Promise<void> {
+  const style = buildControlClientWindowStyle(fg);
+  await sendCommand(`set-option -g window-style '${style}'`);
+  await sendCommand(`set-option -g window-active-style '${style}'`);
 }
