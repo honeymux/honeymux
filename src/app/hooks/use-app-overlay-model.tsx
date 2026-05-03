@@ -182,9 +182,9 @@ export function useAppOverlayModel({
     unansweredCount,
   });
 
-  const cursorAlertEnabled = config.agentAlertCursorAlert ?? false;
-  const cursorShape = config.agentAlertCursorShape ?? "underline";
-  const cursorBlink = config.agentAlertCursorBlink ?? true;
+  const cursorAlertEnabled = config.agentAlertCursorAlert ?? true;
+  const cursorShape = config.agentAlertCursorShape ?? "default";
+  const cursorBlink = config.agentAlertCursorBlink ?? "default";
   const cursorColor = config.agentAlertCursorColor ?? "#ff0000";
   useEffect(() => {
     setCursorAlertActive(cursorAlertEnabled && unansweredCount > 0, cursorShape, cursorBlink, cursorColor);

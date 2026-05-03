@@ -1,5 +1,5 @@
 import type { Base16SchemeName, ThemeMode } from "../../themes/theme.ts";
-import type { CursorAlertShape, UIMode, WatermarkShape } from "../../util/config.ts";
+import type { CursorAlertBlink, CursorAlertShape, UIMode, WatermarkShape } from "../../util/config.ts";
 
 import { BASE16_SCHEME_NAMES } from "../../themes/theme.ts";
 import { WATERMARK_SHAPES } from "../../util/config.ts";
@@ -101,7 +101,7 @@ export interface OptionsDialogState {
   agentAlertAnimGlow: boolean;
   agentAlertAnimScribble: boolean;
   agentAlertCursorAlert: boolean;
-  agentAlertCursorBlink: boolean;
+  agentAlertCursorBlink: CursorAlertBlink;
   agentAlertCursorColor: string;
   agentAlertCursorShape: CursorAlertShape;
   agentAlertWatermark: WatermarkShape;
@@ -172,7 +172,14 @@ export function toggleThemeMode(current: ThemeMode): ThemeMode {
   return current === "custom" ? "built-in" : "custom";
 }
 
-const CURSOR_ALERT_SHAPES: CursorAlertShape[] = ["block", "bar", "underline"];
+const CURSOR_ALERT_BLINKS: CursorAlertBlink[] = ["default", "off", "on"];
+const CURSOR_ALERT_SHAPES: CursorAlertShape[] = ["default", "block", "bar", "underline"];
+
+export function cycleCursorBlink(current: CursorAlertBlink, direction: -1 | 1): CursorAlertBlink {
+  const idx = CURSOR_ALERT_BLINKS.indexOf(current);
+  const next = (idx + direction + CURSOR_ALERT_BLINKS.length) % CURSOR_ALERT_BLINKS.length;
+  return CURSOR_ALERT_BLINKS[next]!;
+}
 
 export function cycleCursorShape(current: CursorAlertShape, direction: -1 | 1): CursorAlertShape {
   const idx = CURSOR_ALERT_SHAPES.indexOf(current);
@@ -217,6 +224,7 @@ export const NON_NAV_KINDS: ReadonlySet<string> = new Set(["generalSep", "palett
 
 /** Row kinds where left/right arrows edit a value (requires Enter to activate). */
 export const ARROW_EDITABLE_KINDS: ReadonlySet<string> = new Set([
+  "agentAlertCursorBlink",
   "agentAlertCursorShape",
   "agentAlertWatermark",
   "dimPanes",
@@ -246,9 +254,11 @@ export const OPTION_HELP: Partial<Record<RowKind, string>> = {
   agentAlertAnimGlow: "Pulsing glow when an agent needs attention",
   agentAlertAnimScribble: "Line scribble effect when an agent needs attention",
   agentAlertCursorAlert: "Change cursor shape and color when an agent needs attention",
-  agentAlertCursorBlink: "Blink cursor when an agent needs attention (may not be supported by some terminal emulators)",
+  agentAlertCursorBlink:
+    "Cursor blink override when an agent needs attention; default keeps the outer terminal's setting",
   agentAlertCursorColor: "Set custom cursor color when an agent needs attention",
-  agentAlertCursorShape: "Set cursor shape when an agent needs attention",
+  agentAlertCursorShape:
+    "Cursor shape override when an agent needs attention; default keeps the outer terminal's setting",
   agentAlertWatermark: "Background watermark shape displayed in the terminal when an agent needs attention",
   bufferZoomFade: "Quick fade transition when entering buffer zoom (truecolor terminals only)",
   dimPanes: "Dim unfocused panes; press ↵ then ← / → to adjust dimming intensity (10-80%)",

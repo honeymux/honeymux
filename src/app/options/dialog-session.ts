@@ -3,7 +3,7 @@ import type { MutableRefObject } from "react";
 import { useCallback, useRef, useState } from "react";
 
 import type { Base16SchemeName, ThemeMode } from "../../themes/theme.ts";
-import type { CursorAlertShape, HoneymuxConfig, UIMode, WatermarkShape } from "../../util/config.ts";
+import type { CursorAlertBlink, CursorAlertShape, HoneymuxConfig, UIMode, WatermarkShape } from "../../util/config.ts";
 import type { OptionsTab, RemoteAddingState, RemoteEditingState, RemoteServer, RemoteTestingState } from "./model.ts";
 
 import { DEFAULT_SCHEME } from "../../themes/theme.ts";
@@ -18,7 +18,7 @@ export interface OptionsDialogSessionApi {
   configAgentAlertAnimGlow: boolean;
   configAgentAlertAnimScribble: boolean;
   configAgentAlertCursorAlert: boolean;
-  configAgentAlertCursorBlink: boolean;
+  configAgentAlertCursorBlink: CursorAlertBlink;
   configAgentAlertCursorColor: string;
   configAgentAlertCursorShape: CursorAlertShape;
   configAgentAlertWatermark: WatermarkShape;
@@ -74,7 +74,7 @@ export interface OptionsDialogSessionApi {
   setConfigAgentAlertAnimGlow: (value: boolean) => void;
   setConfigAgentAlertAnimScribble: (value: boolean) => void;
   setConfigAgentAlertCursorAlert: (value: boolean) => void;
-  setConfigAgentAlertCursorBlink: (value: boolean) => void;
+  setConfigAgentAlertCursorBlink: (value: CursorAlertBlink) => void;
   setConfigAgentAlertCursorColor: (value: string) => void;
   setConfigAgentAlertCursorShape: (value: CursorAlertShape) => void;
   setConfigAgentAlertWatermark: (value: WatermarkShape) => void;
@@ -198,13 +198,13 @@ export function useOptionsDialogSession(
   );
   const [configAnimationCycleCountCursor, setConfigAnimationCycleCountCursorState] = useState(0);
   const [configAgentAlertCursorAlert, setConfigAgentAlertCursorAlertState] = useState(
-    () => initialConfig.agentAlertCursorAlert ?? false,
+    () => initialConfig.agentAlertCursorAlert ?? true,
   );
   const [configAgentAlertCursorShape, setConfigAgentAlertCursorShapeState] = useState<CursorAlertShape>(
-    () => initialConfig.agentAlertCursorShape ?? "underline",
+    () => initialConfig.agentAlertCursorShape ?? "default",
   );
-  const [configAgentAlertCursorBlink, setConfigAgentAlertCursorBlinkState] = useState(
-    () => initialConfig.agentAlertCursorBlink ?? true,
+  const [configAgentAlertCursorBlink, setConfigAgentAlertCursorBlinkState] = useState<CursorAlertBlink>(
+    () => initialConfig.agentAlertCursorBlink ?? "default",
   );
   const [configAgentAlertCursorColor, setConfigAgentAlertCursorColorState] = useState(
     () => initialConfig.agentAlertCursorColor ?? "#ff0000",
@@ -299,9 +299,9 @@ export function useOptionsDialogSession(
     setConfigAnimationCycleCountEditingState(false);
     setConfigAnimationCycleCountTextState(String(config.agentAlertAnimCycleCount ?? 1));
     setConfigAnimationCycleCountCursorState(0);
-    setConfigAgentAlertCursorAlertState(config.agentAlertCursorAlert ?? false);
-    setConfigAgentAlertCursorShapeState(config.agentAlertCursorShape ?? "underline");
-    setConfigAgentAlertCursorBlinkState(config.agentAlertCursorBlink ?? true);
+    setConfigAgentAlertCursorAlertState(config.agentAlertCursorAlert ?? true);
+    setConfigAgentAlertCursorShapeState(config.agentAlertCursorShape ?? "default");
+    setConfigAgentAlertCursorBlinkState(config.agentAlertCursorBlink ?? "default");
     setConfigAgentAlertCursorColorState(config.agentAlertCursorColor ?? "#ff0000");
     setConfigCursorColorPickerOpenState(false);
     setConfigPaneTabsEnabledState(config.paneTabsEnabled ?? false);

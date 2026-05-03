@@ -11,6 +11,7 @@ import {
   ROOT_TINT_STEP,
   type RowKind,
   cycleBuiltinTheme,
+  cycleCursorBlink,
   cycleCursorShape,
   cycleDimOpacity,
   cycleQuickSize,
@@ -199,13 +200,13 @@ export function SettingRow({
       );
     }
     case "agentAlertCursorBlink": {
-      const check = state.agentAlertCursorBlink ? "(●)" : "( )";
+      const arrows = focused && state.multiSelectEditing;
       return (
         <text
-          content={`${prefix}  ${check} Blink`}
+          content={`${prefix}  Blink: ${arrows ? "◂ " : ""}${state.agentAlertCursorBlink}${arrows ? " ▸" : ""}`}
           fg={color}
           onMouseDown={(event: MouseEvent) => {
-            if (event.button === 0) onSetAgentCursorBlink(!state.agentAlertCursorBlink);
+            if (event.button === 0) onSetAgentCursorBlink(cycleCursorBlink(state.agentAlertCursorBlink, 1));
           }}
         />
       );
