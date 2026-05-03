@@ -538,7 +538,7 @@ function joinModsAndKey(mods: number, key: string): string {
  * active. Modifier-only keys (57441-57454) are tracked separately in
  * MODIFIER_KEY_CODES.
  */
-export const FUNCTIONAL_KEY_NAMES: Record<number, string> = {
+const FUNCTIONAL_KEY_NAMES: Record<number, string> = {
   57358: "caps_lock",
   57359: "scroll_lock",
   57360: "num_lock",
@@ -651,7 +651,7 @@ export const MODIFIER_KEY_NAMES = new Set(Object.values(MODIFIER_KEY_CODES));
 
 export const ZOOM_HOLD_ACTIONS = new Set<KeyAction>(["zoomAgentsView", "zoomServerView"]);
 
-export interface RawKeyEvent {
+interface RawKeyEvent {
   code: number;
   eventType: number; // 1 = press, 2 = repeat, 3 = release, 0 = unspecified
   isModifierOnly: boolean;

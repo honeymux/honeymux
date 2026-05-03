@@ -12,20 +12,6 @@ export interface ActivePaneRect {
   width: number;
 }
 
-export interface PrepareGhosttyTerminalOptions {
-  /**
-   * Optional ref pointing at the currently-focused pane's screen rect. When
-   * provided, buffer cursor updates that land outside this rect are treated
-   * as stale (caused by tmux interleaving non-focused panes' draws into the
-   * shared VT) and replaced with the last cursor position seen *inside* the
-   * rect. Without this, the outer terminal cursor visibly hops between
-   * positions every frame whenever a non-focused pane is rendering rapidly
-   * (e.g. Codex while "thinking"), because each frame's snapshot may catch
-   * the buffer cursor wherever the most recent pane draw left it.
-   */
-  activePaneRectRef?: { current: ActivePaneRect | null };
-}
-
 interface CursorFilterState {
   lastRect: ActivePaneRect | null;
   lastValid: { visible: boolean; x: number; y: number } | null;
@@ -49,6 +35,20 @@ interface GhosttyTerminalData {
 interface GhosttyTerminalPatchState {
   __honeymuxTmuxPatched?: boolean;
   _persistentTerminal?: GhosttyPersistentTerminalLike;
+}
+
+interface PrepareGhosttyTerminalOptions {
+  /**
+   * Optional ref pointing at the currently-focused pane's screen rect. When
+   * provided, buffer cursor updates that land outside this rect are treated
+   * as stale (caused by tmux interleaving non-focused panes' draws into the
+   * shared VT) and replaced with the last cursor position seen *inside* the
+   * rect. Without this, the outer terminal cursor visibly hops between
+   * positions every frame whenever a non-focused pane is rendering rapidly
+   * (e.g. Codex while "thinking"), because each frame's snapshot may catch
+   * the buffer cursor wherever the most recent pane draw left it.
+   */
+  activePaneRectRef?: { current: ActivePaneRect | null };
 }
 
 const MAX_NATIVE_OFFSET = 0xffff_ffff;

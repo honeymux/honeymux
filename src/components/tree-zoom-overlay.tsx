@@ -8,7 +8,7 @@ import type { TmuxControlClient } from "../tmux/control-client.ts";
 import { theme } from "../themes/theme.ts";
 import { ServerTree } from "./server-tree.tsx";
 
-export interface TreeCounts {
+interface TreeCounts {
   paneTabsEnabled: number;
   panes: number;
   sessions: number;

@@ -21,7 +21,7 @@ import type { UiActionsApi } from "./use-ui-actions.ts";
 import { formatBinding } from "../../util/keybindings.ts";
 import { buildAppPaneProps } from "./build-app-pane-props.ts";
 
-export interface MainPaneModelApi {
+interface MainPaneModelApi {
   handleTreeNavigate: (sessionName: string, windowId: string, paneId: string) => void;
   mainPaneProps: ReturnType<typeof buildAppPaneProps>;
 }

@@ -3,9 +3,9 @@ export interface AgentAnimationConfig {
   unanswered: { char: string; color: string };
 }
 
-export type AgentStatus = "alive" | "ended" | "unanswered";
-
 export type AgentType = "claude" | "codex" | "gemini" | "opencode";
+
+type AgentStatus = "alive" | "ended" | "unanswered";
 
 /**
  * Brand color per agent type. Used to visually identify the agent provider
@@ -53,14 +53,14 @@ export const CODEX_ANIMATIONS: AgentAnimationConfig = {
   unanswered: { char: "\u25cf", color: "#ffb300" },
 };
 
-export interface HoneymuxAnimationConfig {
+export type HoneymuxState = "idle" | "needInput" | "needInputFocused" | "sleeping";
+
+interface HoneymuxAnimationConfig {
   idle: { color: string; frames: string[]; intervalMs: number; width: number };
   needInput: { color: string; frames: string[]; intervalMs: number; width: number };
   needInputFocused: { color: string; frames: string[]; intervalMs: number; width: number };
   sleeping: { color: string; frames: string[]; intervalMs: number; width: number };
 }
-
-export type HoneymuxState = "idle" | "needInput" | "needInputFocused" | "sleeping";
 
 export const HONEYMUX_ANIMATIONS: HoneymuxAnimationConfig = {
   // Idle — random blink every 10-30s (< 5 min idle)

@@ -15,7 +15,7 @@ import { disableInputModesBeforeShutdown, shutdownRenderer } from "../../util/sh
 import { tmuxCmd } from "../../util/tmux-server.ts";
 import { reportFatalError } from "../runtime/fatal-error-handler.ts";
 
-export interface PtyLifecycleApi {
+interface PtyLifecycleApi {
   spawnPtyBridge: (targetSession: string) => PtyBridge;
 }
 

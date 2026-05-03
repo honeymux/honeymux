@@ -1,4 +1,4 @@
-export interface PromptClickRegion {
+interface PromptClickRegion {
   cols: number;
   cursorX: number;
   cursorY: number;

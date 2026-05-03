@@ -19,11 +19,10 @@ import { TOOLBAR_WIDTH } from "../toolbar.tsx";
 import { usePaneAgentsDialog } from "./use-pane-agents-dialog.ts";
 import { usePaneOverflow } from "./use-pane-overflow.ts";
 
-export { computeTerminalMetrics };
 export { buildAgentsDialogProps } from "./use-pane-agents-dialog.ts";
-export { closeOverflowDropdown, computeOverflowItemWidth, selectOverflowTab } from "./use-pane-overflow.ts";
+export { closeOverflowDropdown, selectOverflowTab } from "./use-pane-overflow.ts";
 
-export interface TmuxPaneViewModel {
+interface TmuxPaneViewModel {
   agentsDialogProps: TmuxPaneAgentsDialogProps | null;
   borderColor: string;
   handleCloseWindowWithHint?: (index: number) => void;

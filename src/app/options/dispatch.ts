@@ -10,7 +10,7 @@ import { maybeStartRemoteTest } from "./remote-test.ts";
 
 let suppressNextOptionsModifierRelease = false;
 
-export interface OptionsDialogDispatchDeps {
+interface OptionsDialogDispatchDeps {
   dropdownInputRef: MutableRefObject<((data: string) => boolean) | null>;
   onReturnToMainMenu: () => void;
   optionsWorkflow: OptionsWorkflowApi;

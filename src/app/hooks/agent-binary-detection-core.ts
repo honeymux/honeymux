@@ -21,7 +21,7 @@ const WRAPPED_AGENT_PATTERNS: Array<{ pattern: RegExp; type: AgentType }> = [
   { pattern: /\bopencode\b/i, type: "opencode" },
 ];
 
-export interface PaneProcessSnapshot {
+interface PaneProcessSnapshot {
   command: string;
   pid: number;
   tty: null | string;

@@ -12,21 +12,6 @@ export interface PaneSnapshot {
   windowId: string;
 }
 
-export interface PaneStateSummary {
-  deadPaneIds: Set<string>;
-  livePaneIds: Set<string>;
-  windowByPaneId: Map<string, string>;
-}
-
-export interface ValidateGroupMaterializationPlan {
-  currentVisiblePaneId: string;
-  currentVisiblePaneIsLive: boolean;
-  incomingPaneId: string;
-  joinTargetPaneId: null | string;
-  kind: "promote_active";
-  targetWindowId: string;
-}
-
 export type ValidateGroupPlan =
   | {
       activeIndex: number;
@@ -70,6 +55,12 @@ interface ApplyTabsValidatePlanInput {
   windowId: string;
 }
 
+interface PaneStateSummary {
+  deadPaneIds: Set<string>;
+  livePaneIds: Set<string>;
+  windowByPaneId: Map<string, string>;
+}
+
 interface RuntimeGroupInput {
   activePaneId?: string;
   explicitWindowName?: string;
@@ -81,20 +72,13 @@ interface RuntimeGroupInput {
   windowId?: string;
 }
 
-export function buildApplyTabsValidatePlan(input: ApplyTabsValidatePlanInput): ValidateGroupPlan {
-  return {
-    activeIndex: input.activeIndex,
-    activeTabToKillAfterMaterialize: input.activeTabToKillAfterMaterialize,
-    changed: input.changed,
-    kind: "apply_tabs",
-    logMessage: input.logMessage,
-    materialization: input.materialization,
-    runtimeGroup: input.runtimeGroup,
-    slotKey: input.slotKey,
-    tabs: input.tabs,
-    tabsToKillBeforeApply: input.tabsToKillBeforeApply,
-    windowId: input.windowId,
-  };
+interface ValidateGroupMaterializationPlan {
+  currentVisiblePaneId: string;
+  currentVisiblePaneIsLive: boolean;
+  incomingPaneId: string;
+  joinTargetPaneId: null | string;
+  kind: "promote_active";
+  targetWindowId: string;
 }
 
 export function buildPaneStateSummary(paneStateById: Map<string, PaneSnapshot>): PaneStateSummary {
@@ -103,42 +87,6 @@ export function buildPaneStateSummary(paneStateById: Map<string, PaneSnapshot>):
     livePaneIds: new Set(paneStateById.keys()),
     windowByPaneId: new Map([...paneStateById.values()].map((pane) => [pane.paneId, pane.windowId] as const)),
   };
-}
-
-export function buildRuntimeGroup(
-  group: RuntimeGroupInput,
-  paneStateById: Map<string, PaneSnapshot>,
-): PaneTabGroup | null {
-  const tabs = group.tabs.filter((tab) => paneStateById.has(tab.paneId));
-  if (tabs.length === 0) return null;
-
-  const activePaneId =
-    group.activePaneId && tabs.some((tab) => tab.paneId === group.activePaneId) ? group.activePaneId : tabs[0]!.paneId;
-  const activeIndex = tabs.findIndex((tab) => tab.paneId === activePaneId);
-  const activePane = paneStateById.get(activePaneId) ?? paneStateById.get(tabs[0]!.paneId)!;
-  const fallbackPane = paneStateById.get(tabs[0]!.paneId)!;
-
-  return {
-    activeIndex: activeIndex >= 0 ? activeIndex : 0,
-    explicitWindowName: group.explicitWindowName,
-    restoreAutomaticRename: group.restoreAutomaticRename,
-    slotHeight: activePane.height || group.slotHeight || fallbackPane.height || 24,
-    slotKey: group.slotKey,
-    slotWidth: activePane.width || group.slotWidth || fallbackPane.width || 80,
-    tabs,
-    windowId: activePane.windowId || group.windowId || fallbackPane.windowId,
-  };
-}
-
-export function didRuntimeGroupDrift(group: PaneTabGroup, runtimeGroup: PaneTabGroup): boolean {
-  return (
-    runtimeGroup.explicitWindowName !== group.explicitWindowName ||
-    runtimeGroup.windowId !== group.windowId ||
-    runtimeGroup.activeIndex !== group.activeIndex ||
-    runtimeGroup.tabs.length !== group.tabs.length ||
-    runtimeGroup.slotWidth !== group.slotWidth ||
-    runtimeGroup.slotHeight !== group.slotHeight
-  );
 }
 
 export function isPaneGone(paneId: string, paneState: PaneStateSummary): boolean {
@@ -277,19 +225,6 @@ export function planValidateGroup(
   });
 }
 
-export function resolveGroupWindowId(group: PaneTabGroup, windowByPaneId: Map<string, string>): string {
-  const activePaneId = group.tabs[group.activeIndex]?.paneId;
-  if (activePaneId) {
-    const mapped = windowByPaneId.get(activePaneId);
-    if (mapped) return mapped;
-  }
-  for (const tab of group.tabs) {
-    const mapped = windowByPaneId.get(tab.paneId);
-    if (mapped) return mapped;
-  }
-  return group.windowId;
-}
-
 export function restoreGroupsFromPersistence(
   savedGroups: PaneTabPersistGroup[],
   paneStateById: Map<string, PaneSnapshot>,
@@ -314,4 +249,66 @@ export function restoreGroupsFromPersistence(
     if (restoredGroup) restoredGroups.set(group.slotKey, restoredGroup);
   }
   return restoredGroups;
+}
+
+function buildApplyTabsValidatePlan(input: ApplyTabsValidatePlanInput): ValidateGroupPlan {
+  return {
+    activeIndex: input.activeIndex,
+    activeTabToKillAfterMaterialize: input.activeTabToKillAfterMaterialize,
+    changed: input.changed,
+    kind: "apply_tabs",
+    logMessage: input.logMessage,
+    materialization: input.materialization,
+    runtimeGroup: input.runtimeGroup,
+    slotKey: input.slotKey,
+    tabs: input.tabs,
+    tabsToKillBeforeApply: input.tabsToKillBeforeApply,
+    windowId: input.windowId,
+  };
+}
+
+function buildRuntimeGroup(group: RuntimeGroupInput, paneStateById: Map<string, PaneSnapshot>): PaneTabGroup | null {
+  const tabs = group.tabs.filter((tab) => paneStateById.has(tab.paneId));
+  if (tabs.length === 0) return null;
+
+  const activePaneId =
+    group.activePaneId && tabs.some((tab) => tab.paneId === group.activePaneId) ? group.activePaneId : tabs[0]!.paneId;
+  const activeIndex = tabs.findIndex((tab) => tab.paneId === activePaneId);
+  const activePane = paneStateById.get(activePaneId) ?? paneStateById.get(tabs[0]!.paneId)!;
+  const fallbackPane = paneStateById.get(tabs[0]!.paneId)!;
+
+  return {
+    activeIndex: activeIndex >= 0 ? activeIndex : 0,
+    explicitWindowName: group.explicitWindowName,
+    restoreAutomaticRename: group.restoreAutomaticRename,
+    slotHeight: activePane.height || group.slotHeight || fallbackPane.height || 24,
+    slotKey: group.slotKey,
+    slotWidth: activePane.width || group.slotWidth || fallbackPane.width || 80,
+    tabs,
+    windowId: activePane.windowId || group.windowId || fallbackPane.windowId,
+  };
+}
+
+function didRuntimeGroupDrift(group: PaneTabGroup, runtimeGroup: PaneTabGroup): boolean {
+  return (
+    runtimeGroup.explicitWindowName !== group.explicitWindowName ||
+    runtimeGroup.windowId !== group.windowId ||
+    runtimeGroup.activeIndex !== group.activeIndex ||
+    runtimeGroup.tabs.length !== group.tabs.length ||
+    runtimeGroup.slotWidth !== group.slotWidth ||
+    runtimeGroup.slotHeight !== group.slotHeight
+  );
+}
+
+function resolveGroupWindowId(group: PaneTabGroup, windowByPaneId: Map<string, string>): string {
+  const activePaneId = group.tabs[group.activeIndex]?.paneId;
+  if (activePaneId) {
+    const mapped = windowByPaneId.get(activePaneId);
+    if (mapped) return mapped;
+  }
+  for (const tab of group.tabs) {
+    const mapped = windowByPaneId.get(tab.paneId);
+    if (mapped) return mapped;
+  }
+  return group.windowId;
 }

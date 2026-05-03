@@ -1,4 +1,4 @@
-export interface BoundedLineAppendResult {
+interface BoundedLineAppendResult {
   lines: string[];
   overflowed: boolean;
   remainder: string;

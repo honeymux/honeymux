@@ -10,7 +10,15 @@ import {
 export const PANE_TAB_DEAD_SUBSCRIPTION = "hmx-pane-tab-dead";
 export const PANE_TAB_LABEL_SUBSCRIPTION = "hmx-pane-tab-labels";
 
-export interface PaneTabTmuxEventHandlers {
+interface CreatePaneTabTmuxEventHandlersOptions {
+  commitGroups: (groups: Map<string, PaneTabGroup>) => void;
+  getGroups: () => Map<string, PaneTabGroup>;
+  queueBootstrap: () => void;
+  queueLabelRefresh: () => void;
+  validateTabGroups: () => void;
+}
+
+interface PaneTabTmuxEventHandlers {
   handleBootstrap: () => void;
   handleDeadPaneSubscriptionChanged: (
     name: string,
@@ -30,14 +38,6 @@ export interface PaneTabTmuxEventHandlers {
   handlePaneTitleChanged: (paneId: string) => void;
   handleWindowPaneChanged: () => void;
   handleWindowRename: (windowId: string, name: string) => void;
-}
-
-interface CreatePaneTabTmuxEventHandlersOptions {
-  commitGroups: (groups: Map<string, PaneTabGroup>) => void;
-  getGroups: () => Map<string, PaneTabGroup>;
-  queueBootstrap: () => void;
-  queueLabelRefresh: () => void;
-  validateTabGroups: () => void;
 }
 
 export function applyExternalWindowRename(

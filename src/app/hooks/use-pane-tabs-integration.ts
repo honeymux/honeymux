@@ -8,7 +8,7 @@ import type { AppRuntimeRefs } from "./use-app-runtime-refs.ts";
 
 import { type PaneTabGroup, usePaneTabs } from "../pane-tabs/use-pane-tabs.ts";
 
-export interface PaneTabsIntegrationApi {
+interface PaneTabsIntegrationApi {
   closePaneBorderMenu: () => void;
   guardedSetConfigPaneTabsEnabled: (value: boolean) => void;
   handlePaneTabDisableCancel: () => void;

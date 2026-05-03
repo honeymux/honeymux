@@ -7,7 +7,7 @@ import { getMaxExpandedMuxotronWidth } from "../../util/muxotron-size.ts";
 import { stringWidth } from "../../util/text.ts";
 import { computeOverflow } from "../tab-bar.tsx";
 
-export interface PaneOverflowModel {
+interface PaneOverflowModel {
   handleOverflowClose: () => void;
   handleOverflowSelect: (index: number) => void;
   hasOverflow: boolean;
@@ -42,14 +42,6 @@ export function closeOverflowDropdown(
 ): void {
   if (dropdownInputRef) dropdownInputRef.current = null;
   setOverflowOpen(false);
-}
-
-// Fixed 20-column name area (prefix + name padded to 24), then right-aligned ID column
-export function computeOverflowItemWidth(overflowWindows: TmuxPaneCoreProps["windows"]): number {
-  if (overflowWindows.length === 0) return 0;
-  const maxIdLen = Math.max(...overflowWindows.map((w) => stringWidth(w.id)));
-  // " ▸ " (3) + name padded to 20 + " " (1) + id + " " (1)
-  return 3 + 20 + 1 + maxIdLen + 1;
 }
 
 export function selectOverflowTab({
@@ -151,4 +143,12 @@ export function usePaneOverflow({
     toggleOverflowOpen,
     visibleCount,
   };
+}
+
+// Fixed 20-column name area (prefix + name padded to 24), then right-aligned ID column
+function computeOverflowItemWidth(overflowWindows: TmuxPaneCoreProps["windows"]): number {
+  if (overflowWindows.length === 0) return 0;
+  const maxIdLen = Math.max(...overflowWindows.map((w) => stringWidth(w.id)));
+  // " ▸ " (3) + name padded to 20 + " " (1) + id + " " (1)
+  return 3 + 20 + 1 + maxIdLen + 1;
 }

@@ -1,7 +1,7 @@
 import type { OptionsWorkflowApi } from "../hooks/use-options-workflow.ts";
 import type { OptionsDialogState } from "./model.ts";
 
-export interface OptionsDialogStateSource {
+interface OptionsDialogStateSource {
   configActiveWindowIdDisplayEnabled: OptionsWorkflowApi["configActiveWindowIdDisplayEnabled"];
   configAgentAlertAnimConfusables: OptionsWorkflowApi["configAgentAlertAnimConfusables"];
   configAgentAlertAnimCycleCount: OptionsWorkflowApi["configAgentAlertAnimCycleCount"];

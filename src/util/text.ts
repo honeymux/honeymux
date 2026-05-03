@@ -47,16 +47,6 @@ export function fitToWidth(text: string, targetWidth: number): string {
   return padEndToWidth(truncateToWidth(text, targetWidth), targetWidth);
 }
 
-/** Mid-string truncation: shows start and end with "…" in the middle. */
-export function midTruncate(text: string, maxLen: number): string {
-  if (text.length <= maxLen) return text;
-  if (maxLen <= 1) return text.slice(0, maxLen);
-  const available = maxLen - 1;
-  const headLen = Math.ceil(available / 2);
-  const tailLen = Math.floor(available / 2);
-  return text.slice(0, headLen) + "…" + text.slice(text.length - tailLen);
-}
-
 /** Mid-truncate a file path by removing middle segments. */
 export function midTruncatePath(path: string, maxLen: number): string {
   if (path.length <= maxLen) return path;
@@ -128,6 +118,16 @@ export function truncateName(name: string, maxLen: number): string {
 /** Truncate text so its display width never exceeds maxWidth. */
 export function truncateToWidth(text: string, maxWidth: number): string {
   return truncateToWidthWithSuffix(text, maxWidth, "…");
+}
+
+/** Mid-string truncation: shows start and end with "…" in the middle. */
+function midTruncate(text: string, maxLen: number): string {
+  if (text.length <= maxLen) return text;
+  if (maxLen <= 1) return text.slice(0, maxLen);
+  const available = maxLen - 1;
+  const headLen = Math.ceil(available / 2);
+  const tailLen = Math.floor(available / 2);
+  return text.slice(0, headLen) + "…" + text.slice(text.length - tailLen);
 }
 
 function takePrefixByWidth(text: string, maxWidth: number): string {

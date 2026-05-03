@@ -148,7 +148,7 @@ export type RemoteServer = { agentForwarding?: boolean; host: string; name: stri
 
 export type RemoteTestingState = { index: number; message?: string; status: "error" | "success" | "testing" } | null;
 
-export const UI_MODE_OPTIONS: UIMode[] = ["adaptive", "marquee-top", "marquee-bottom", "raw"];
+const UI_MODE_OPTIONS: UIMode[] = ["adaptive", "marquee-top", "marquee-bottom", "raw"];
 
 export function cycleBuiltinTheme(current: Base16SchemeName, direction: -1 | 1): Base16SchemeName {
   const idx = BASE16_SCHEME_NAMES.indexOf(current);
@@ -172,7 +172,7 @@ export function toggleThemeMode(current: ThemeMode): ThemeMode {
   return current === "custom" ? "built-in" : "custom";
 }
 
-export const CURSOR_ALERT_SHAPES: CursorAlertShape[] = ["block", "bar", "underline"];
+const CURSOR_ALERT_SHAPES: CursorAlertShape[] = ["block", "bar", "underline"];
 
 export function cycleCursorShape(current: CursorAlertShape, direction: -1 | 1): CursorAlertShape {
   const idx = CURSOR_ALERT_SHAPES.indexOf(current);

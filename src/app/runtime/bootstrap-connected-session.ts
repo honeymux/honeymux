@@ -19,14 +19,14 @@ import { loadConfig } from "../../util/config.ts";
 import { syncActivePaneRef } from "./active-pane-sync.ts";
 import { buildHookSnifferEntry } from "./hook-sniffer-entry.ts";
 
-export interface BootstrapConnectedSessionOptions {
+interface BootstrapConnectedSessionOptions {
   applyPendingRenames: (windows: TmuxWindow[]) => void;
   client: TmuxControlClient;
   ctx: SetupTmuxRuntimeContext;
   targetSession: string;
 }
 
-export interface BootstrapConnectedSessionResult {
+interface BootstrapConnectedSessionResult {
   clearKeybindingRefresh: () => void;
 }
 

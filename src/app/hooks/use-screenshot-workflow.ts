@@ -16,18 +16,18 @@ import { log } from "../../util/log.ts";
 import { runScreenshotFlash } from "../../util/screenshot-flash.ts";
 import { cropTerminalData } from "../../util/terminal-data-crop.ts";
 
-export interface ImageDims {
-  height: number;
-  width: number;
-}
-
 export interface ScreenshotPreview {
   dir: string;
   scrollbackDims: "error" | "loading" | ImageDims;
   viewportDims: ImageDims;
 }
 
-export interface ScreenshotWorkflowApi {
+interface ImageDims {
+  height: number;
+  width: number;
+}
+
+interface ScreenshotWorkflowApi {
   dismissScreenshotDone: () => void;
   dismissScreenshotError: () => void;
   dismissScreenshotLargeDialog: () => void;

@@ -5,12 +5,12 @@ import { encodeTmuxDoubleQuotedString, quoteTmuxArg } from "../tmux/escape.ts";
 const BRACKETED_PASTE_START = "\x1b[200~";
 const BRACKETED_PASTE_END = "\x1b[201~";
 
-export interface RemotePasteClient {
-  sendCommand(cmd: string): Promise<string>;
-}
-
 interface PasteTextIntoRemotePaneOptions {
   bufferName?: string;
+}
+
+interface RemotePasteClient {
+  sendCommand(cmd: string): Promise<string>;
 }
 
 export function extractBracketedPastePayload(data: string): null | string {

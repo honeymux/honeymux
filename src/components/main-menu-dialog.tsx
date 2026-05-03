@@ -97,9 +97,9 @@ export const ZOOM_ROW_IDX = FUNC_ROWS; // 10
 const ZOOM_LEFT = { action: "zoomAgentsView" as KeyAction, desc: "Zoom agents view" };
 const ZOOM_RIGHT = { action: "zoomServerView" as KeyAction, desc: "Zoom server view" };
 /** Total selectable rows in the functions tab (10 functions + 1 zoom). */
-export const TOTAL_FUNC_ROWS = FUNC_ROWS + 1; // 11
+const TOTAL_FUNC_ROWS = FUNC_ROWS + 1; // 11
 export const AGENT_ROWS = AGENT_ROWS_DATA.length; // 5 single-column rows
-export const NAV_ROWS = NAV_PAIRS.length; // 4
+const NAV_ROWS = NAV_PAIRS.length; // 4
 
 const PANE_TAB_ACTIONS = new Set<KeyAction>(["newPaneTab"]);
 

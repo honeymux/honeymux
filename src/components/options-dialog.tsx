@@ -64,7 +64,21 @@ export interface OptionsDialogActions {
   screenshotDirTextareaRef: React.RefObject<any>;
 }
 
-export type OptionsDialogConfirmAction = (
+export interface OptionsDialogRenderState extends OptionsDialogState {
+  termHeight: number;
+  termWidth: number;
+}
+
+interface OptionsDialogChrome {
+  dropdownInputRef: React.MutableRefObject<((data: string) => boolean) | null>;
+  termHeight: number;
+  termWidth: number;
+  textInputActive: React.MutableRefObject<boolean>;
+  textInputEscapeHandlerRef: React.MutableRefObject<(() => void) | null>;
+  tmuxPrefixLabel: null | string;
+}
+
+type OptionsDialogConfirmAction = (
   ignoreMouseInput?: boolean,
   tmuxPrefixKeyAlias?: null | string,
   uiMode?: UIMode,
@@ -83,31 +97,17 @@ export type OptionsDialogConfirmAction = (
   remoteServers?: RemoteServer[],
 ) => Promise<void> | void;
 
-export interface OptionsDialogRenderState extends OptionsDialogState {
-  termHeight: number;
-  termWidth: number;
+interface OptionsDialogProps {
+  chrome: OptionsDialogChrome;
+  workflow: OptionsDialogWorkflow;
 }
 
-export type OptionsDialogToggleAction = (
+type OptionsDialogToggleAction = (
   ignoreMouseInput?: boolean,
   themeMode?: ThemeMode,
   themeBuiltin?: Base16SchemeName,
   uiMode?: UIMode,
 ) => void;
-
-interface OptionsDialogChrome {
-  dropdownInputRef: React.MutableRefObject<((data: string) => boolean) | null>;
-  termHeight: number;
-  termWidth: number;
-  textInputActive: React.MutableRefObject<boolean>;
-  textInputEscapeHandlerRef: React.MutableRefObject<(() => void) | null>;
-  tmuxPrefixLabel: null | string;
-}
-
-interface OptionsDialogProps {
-  chrome: OptionsDialogChrome;
-  workflow: OptionsDialogWorkflow;
-}
 
 interface OptionsDialogWorkflow {
   configActiveWindowIdDisplayEnabled: boolean;

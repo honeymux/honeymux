@@ -1,13 +1,13 @@
-export interface HistorySearchMatcher {
+export interface HistorySearchOptions {
+  caseSensitive?: boolean;
+  regex?: boolean;
+}
+
+interface HistorySearchMatcher {
   active: boolean;
   buildHighlightMask: (text: string) => boolean[];
   error?: string;
   matches: (text: string | undefined) => boolean;
-}
-
-export interface HistorySearchOptions {
-  caseSensitive?: boolean;
-  regex?: boolean;
 }
 
 export function compileHistorySearchMatcher(query: string, options: HistorySearchOptions = {}): HistorySearchMatcher {

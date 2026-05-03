@@ -8,7 +8,7 @@ import { buildTabLines, computeOverflow, computeTabDisplayNames, tabBoundsFromIn
 
 const MAX_SESSION_DISPLAY = 10;
 
-export interface BuildTabBarModelOptions {
+interface BuildTabBarModelOptions {
   activeIndex: number;
   activeWindowIdDisplayEnabled?: boolean;
   dragFrom: null | number;
@@ -27,12 +27,12 @@ export interface BuildTabBarModelOptions {
   windows: TmuxWindow[];
 }
 
-export interface TabBarActiveIdOverlay {
+interface TabBarActiveIdOverlay {
   id: string;
   left: number;
 }
 
-export interface TabBarModel {
+interface TabBarModel {
   activeHiddenInOverflow: boolean;
   activeIdOverlay: TabBarActiveIdOverlay | null;
   badgeLabel: null | string;

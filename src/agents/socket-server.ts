@@ -308,10 +308,6 @@ export function getOpenCodeSocketPath(): string {
   return getPrivateSocketPath("hmx-opencode");
 }
 
-export function getSocketPath(): string {
-  return getPrivateSocketPath("hmx-claude");
-}
-
 export function isPidBoundToPane(
   pid: number,
   tty: string,
@@ -423,6 +419,10 @@ function getProcessStdinTty(pid: number): null | string {
 
 function getSessionsDir(): string {
   return getPrivateRuntimePath("sessions");
+}
+
+function getSocketPath(): string {
+  return getPrivateSocketPath("hmx-claude");
 }
 
 function isValidLocalAgentEvent(event: AgentEvent): boolean {

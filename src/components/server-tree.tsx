@@ -739,7 +739,12 @@ export function coalesceTreeData(previous: TreeData | null, next: TreeData): Tre
   return next;
 }
 
-export function computeCurrentTreePath(
+export function fitTreeLabel(prefix: string, label: string, nodeZoneW: number): string {
+  const availForLabel = Math.max(0, nodeZoneW - 1 - stringWidth(prefix) - 1);
+  return truncateToWidth(label, availForLabel);
+}
+
+function computeCurrentTreePath(
   data: TreeData | null,
   currentSessionName: string,
   rows: TreeRow[],
@@ -801,7 +806,7 @@ export function computeCurrentTreePath(
  * — only an actually-current/active row colors the arrow with its accent.
  * When `forceFg` is provided, every part uses it (keyboard-focused row).
  */
-export function computeTreePrefixSegments(
+function computeTreePrefixSegments(
   row: TreeRow,
   rowIndex: number,
   currentPath: CurrentPath,
@@ -831,11 +836,6 @@ export function computeTreePrefixSegments(
     }
   }
   return parts;
-}
-
-export function fitTreeLabel(prefix: string, label: string, nodeZoneW: number): string {
-  const availForLabel = Math.max(0, nodeZoneW - 1 - stringWidth(prefix) - 1);
-  return truncateToWidth(label, availForLabel);
 }
 
 function countVisibleTreeWindows(data: TreeData | null): number {

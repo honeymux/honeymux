@@ -1,4 +1,4 @@
-export type InputOwner =
+type InputOwner =
   | "dialog"
   | "dialogCapture"
   | "dropdown"
@@ -9,7 +9,7 @@ export type InputOwner =
   | "textInput"
   | "toolbar";
 
-export interface InputOwnerState {
+interface InputOwnerState {
   dialogCapturing: boolean;
   dialogOpen: boolean;
   dropdownOpen: boolean;

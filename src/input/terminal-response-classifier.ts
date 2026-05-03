@@ -32,7 +32,7 @@ const OSC_RESPONSE_RE = /^\x1b][\s\S]*(\x07|\x1b\\)$/;
 //   otherwise leak into the attached tmux pane as literal text.
 const APC_RESPONSE_RE = /^\x1b_[\s\S]*\x1b\\$/;
 
-export type TerminalResponseClassification = "consume" | "none" | "opentui";
+type TerminalResponseClassification = "consume" | "none" | "opentui";
 
 export function classifyTerminalResponse(sequence: string): TerminalResponseClassification {
   if (

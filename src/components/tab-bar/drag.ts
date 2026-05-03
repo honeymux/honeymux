@@ -3,7 +3,7 @@ import type { TmuxWindow } from "../../tmux/types.ts";
 import { stripNonPrintingControlChars } from "../../util/text.ts";
 import { tabWidth } from "./layout.ts";
 
-export interface ComputeDragDisplayStateOptions {
+interface ComputeDragDisplayStateOptions {
   activeIndex: number;
   dragFrom: null | number;
   dragOver: null | number;
@@ -13,7 +13,7 @@ export interface ComputeDragDisplayStateOptions {
   windows: TmuxWindow[];
 }
 
-export interface DragDisplayState {
+interface DragDisplayState {
   displayActiveIndex: number;
   displaySlotIndex: number;
   displayWindows: TmuxWindow[];

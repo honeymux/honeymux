@@ -9,7 +9,7 @@ import { SIDEBAR_MIN_WIDTH, sidebarMaxWidth } from "../../components/sidebar.tsx
 
 export const SIDEBAR_VIEWS: SidebarView[] = ["agents", "server", "hook-sniffer"];
 
-export interface AppChromeFocusApi {
+interface AppChromeFocusApi {
   handleSidebarViewChange: (view: SidebarView) => void;
   sidebarFocused: boolean;
   sidebarFocusedIndex: number;

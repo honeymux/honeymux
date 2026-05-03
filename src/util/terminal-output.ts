@@ -1,9 +1,9 @@
-export type TerminalOutputData = Uint8Array | string;
-export type TerminalOutputWriter = (data: TerminalOutputData) => void;
-
+type TerminalOutputData = Uint8Array | string;
 type TerminalOutputRendererLike = {
   writeOut: (data: TerminalOutputData) => unknown;
 };
+
+type TerminalOutputWriter = (data: TerminalOutputData) => void;
 
 const defaultTerminalOutputWriter: TerminalOutputWriter = (data) => {
   process.stdout.write(data);

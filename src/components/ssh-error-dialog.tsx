@@ -80,10 +80,6 @@ export function SshErrorDialog({ error, errorAt, noBackdrop = false, onDismiss, 
   );
 }
 
-export function sanitizeSshErrorText(text: string): string {
-  return stripNonPrintingControlChars(stripAnsiEscapes(text)).replace(/\s+/g, " ").trim();
-}
-
 export function wrapText(text: string, maxWidth: number): string[] {
   const safe = sanitizeSshErrorText(text);
   const lines: string[] = [];
@@ -97,6 +93,10 @@ export function wrapText(text: string, maxWidth: number): string[] {
   }
   if (remaining.length > 0) lines.push(remaining);
   return lines;
+}
+
+function sanitizeSshErrorText(text: string): string {
+  return stripNonPrintingControlChars(stripAnsiEscapes(text)).replace(/\s+/g, " ").trim();
 }
 
 function timeAgo(ts: number): string {

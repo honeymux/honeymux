@@ -97,7 +97,11 @@ export function FatalErrorDialog({ onDismiss, report }: FatalErrorDialogProps) {
   );
 }
 
-export function wrapText(text: string, maxWidth: number): string[] {
+function sanitizeLine(text: string): string {
+  return stripNonPrintingControlChars(stripAnsiEscapes(text)).replace(/\s+/g, " ").trim();
+}
+
+function wrapText(text: string, maxWidth: number): string[] {
   const lines: string[] = [];
   let remaining = text;
   while (remaining.length > maxWidth) {
@@ -108,8 +112,4 @@ export function wrapText(text: string, maxWidth: number): string[] {
   }
   if (remaining.length > 0) lines.push(remaining);
   return lines;
-}
-
-function sanitizeLine(text: string): string {
-  return stripNonPrintingControlChars(stripAnsiEscapes(text)).replace(/\s+/g, " ").trim();
 }

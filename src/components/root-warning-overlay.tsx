@@ -5,7 +5,7 @@ const ROOT_WARNING_RENDER_OPACITY_MAX = 50;
 const ROOT_WARNING_RENDER_OPACITY_MIN = 5;
 const ROOT_WARNING_RENDER_OPACITY_SCALE = 3;
 
-export interface RootWarningOverlayProps {
+interface RootWarningOverlayProps {
   /** Visible content columns (termCols) — used to clamp overlays so the tool bar isn't tinted. */
   contentCols?: number;
   /** Privileged-pane tint strength from config. Scaled to renderer alpha. Default 10. */

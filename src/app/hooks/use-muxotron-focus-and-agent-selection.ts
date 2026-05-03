@@ -15,7 +15,7 @@ import { stripAnsiEscapes } from "../../util/text.ts";
 
 const CAPTURE_POLL_MS = 2000;
 
-export interface InteractiveAgentInputs {
+interface InteractiveAgentInputs {
   activePaneId: null | string;
   agentSessions: AgentSession[];
   muxotronFocusActive: boolean;
@@ -25,7 +25,7 @@ export interface InteractiveAgentInputs {
   zoomSticky: { zoomAgentsView: boolean; zoomServerView: boolean };
 }
 
-export interface MuxotronFocusAndAgentSelectionApi {
+interface MuxotronFocusAndAgentSelectionApi {
   /** Human-readable label for the agentLatch binding (e.g. "right shift"). */
   agentLatchBindingLabel: string | undefined;
   /**
@@ -157,23 +157,6 @@ export function matchZoomActionForModifierCode(
   if (!name) return null;
   if (name === zoomAgentsViewBinding) return "zoomAgentsView";
   if (name === zoomServerViewBinding) return "zoomServerView";
-  return null;
-}
-
-/**
- * Mirrors the agents sidebar view's "first focusable row" — the agent
- * pressing spacebar would target when focus is on the first entry. Filters
- * out ended sessions and applies the same grouping/sorting as the tree so
- * the review workflow can be entered from non-sidebar contexts (main menu,
- * hotkey) without needing the sidebar mounted.
- */
-export function pickFirstReviewAgent(sessions: AgentSession[]): AgentSession | null {
-  const active = sessions.filter((s) => s.status !== "ended");
-  const groups = groupSessionsForDisplay(active);
-  for (const group of groups) {
-    if (group.lead) return group.lead;
-    if (group.members.length > 0) return group.members[0]!;
-  }
   return null;
 }
 
@@ -426,4 +409,21 @@ export function useMuxotronFocusAndAgentSelection({
     treeSelectedSession,
     treeSelectedSessionRef,
   };
+}
+
+/**
+ * Mirrors the agents sidebar view's "first focusable row" — the agent
+ * pressing spacebar would target when focus is on the first entry. Filters
+ * out ended sessions and applies the same grouping/sorting as the tree so
+ * the review workflow can be entered from non-sidebar contexts (main menu,
+ * hotkey) without needing the sidebar mounted.
+ */
+function pickFirstReviewAgent(sessions: AgentSession[]): AgentSession | null {
+  const active = sessions.filter((s) => s.status !== "ended");
+  const groups = groupSessionsForDisplay(active);
+  for (const group of groups) {
+    if (group.lead) return group.lead;
+    if (group.members.length > 0) return group.members[0]!;
+  }
+  return null;
 }

@@ -1,4 +1,4 @@
-export interface PaneTabOpQueue {
+interface PaneTabOpQueue {
   enqueue<T>(op: () => Promise<T>): Promise<T>;
   isBusy: () => boolean;
   requestValidation: (validate: () => Promise<void>) => void;

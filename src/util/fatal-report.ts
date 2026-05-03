@@ -30,19 +30,6 @@ export function formatFatalConsoleMessage(report: FatalReport): string {
   return lines.join("\n");
 }
 
-export function formatFatalThrowable(error: unknown): string {
-  if (error instanceof Error) {
-    return error.stack || `${error.name}: ${error.message}` || String(error);
-  }
-  if (typeof error === "string") return error;
-  if (typeof error === "object" && error !== null) {
-    try {
-      return JSON.stringify(error, null, 2);
-    } catch {}
-  }
-  return String(error);
-}
-
 export function writeFatalReport(options: WriteFatalReportOptions): FatalReport {
   const occurredAt = new Date().toISOString();
   const errorText = formatFatalThrowable(options.error);
@@ -94,4 +81,17 @@ function buildFatalReportText(
     "",
   ];
   return lines.join("\n");
+}
+
+function formatFatalThrowable(error: unknown): string {
+  if (error instanceof Error) {
+    return error.stack || `${error.name}: ${error.message}` || String(error);
+  }
+  if (typeof error === "string") return error;
+  if (typeof error === "object" && error !== null) {
+    try {
+      return JSON.stringify(error, null, 2);
+    } catch {}
+  }
+  return String(error);
 }

@@ -30,38 +30,11 @@ export interface AltScreenFadeHandle {
   fadeIn: (options?: FadeOverlayInOptions) => Promise<void>;
 }
 
-export interface AnsiSegment {
+interface AnsiSegment {
   attrs: Attrs;
   bg: RGB | null;
   fg: RGB | null;
   text: string;
-}
-
-export interface FadeInOptions {
-  content: string;
-  /** Total duration in ms (default 300). */
-  durationMs?: number;
-  /** Number of animation frames (default 10). */
-  frames?: number;
-  /** Terminal display columns — used to pre-wrap content so fade redraws don't cause auto-wrap scroll. */
-  termCols: number;
-  /** Visible terminal rows — content beyond this fades in; older lines write straight. */
-  termRows: number;
-}
-
-export interface FadeOutOptions {
-  /** Total duration in ms (default 200). */
-  durationMs?: number;
-  /** Number of animation frames (default 8). */
-  frames?: number;
-  renderer: CliRenderer;
-}
-
-export interface FadeOverlayInOptions {
-  /** Total duration in ms (default 200). */
-  durationMs?: number;
-  /** Number of animation frames (default 8). */
-  frames?: number;
 }
 
 interface Attrs {
@@ -73,6 +46,26 @@ interface Attrs {
   underline: boolean;
 }
 
+interface FadeInOptions {
+  content: string;
+  /** Total duration in ms (default 300). */
+  durationMs?: number;
+  /** Number of animation frames (default 10). */
+  frames?: number;
+  /** Terminal display columns — used to pre-wrap content so fade redraws don't cause auto-wrap scroll. */
+  termCols: number;
+  /** Visible terminal rows — content beyond this fades in; older lines write straight. */
+  termRows: number;
+}
+
+interface FadeOutOptions {
+  /** Total duration in ms (default 200). */
+  durationMs?: number;
+  /** Number of animation frames (default 8). */
+  frames?: number;
+  renderer: CliRenderer;
+}
+
 interface FadeOverlayAnimationOptions {
   box: FadeOverlayRenderable;
   durationMs: number;
@@ -80,6 +73,13 @@ interface FadeOverlayAnimationOptions {
   fromAlpha: number;
   renderer: FadeOverlayRenderer;
   toAlpha: number;
+}
+
+interface FadeOverlayInOptions {
+  /** Total duration in ms (default 200). */
+  durationMs?: number;
+  /** Number of animation frames (default 8). */
+  frames?: number;
 }
 
 interface FadeOverlayRenderable {
@@ -351,51 +351,6 @@ interface SgrState {
   fg: RGB | null;
 }
 
-export function parseAnsiSegments(input: string): AnsiSegment[] {
-  const out: AnsiSegment[] = [];
-  const state = { attrs: cloneAttrs(BLANK_ATTRS), bg: null as RGB | null, fg: null as RGB | null };
-  let text = "";
-
-  const flush = () => {
-    if (text.length === 0) return;
-    out.push({ attrs: cloneAttrs(state.attrs), bg: state.bg, fg: state.fg, text });
-    text = "";
-  };
-
-  let i = 0;
-  while (i < input.length) {
-    const ch = input.charCodeAt(i);
-    if (ch === 0x1b && i + 1 < input.length && input.charCodeAt(i + 1) === 0x5b /* [ */) {
-      let j = i + 2;
-      while (j < input.length) {
-        const c = input.charCodeAt(j);
-        if (c >= 0x40 && c <= 0x7e) break;
-        j++;
-      }
-      if (j >= input.length) break;
-      const final = input.charCodeAt(j);
-      if (final === 0x6d /* m */) {
-        flush();
-        applySgr(input.slice(i + 2, j), state);
-      } else {
-        // Non-SGR CSI — pass through verbatim within the current segment.
-        text += input.slice(i, j + 1);
-      }
-      i = j + 1;
-    } else if (ch === 0x1b) {
-      // Other escape — copy two bytes through. Captured pane output from
-      // tmux capture-pane -e is largely SGR-only after this point.
-      text += input.slice(i, i + 2);
-      i += 2;
-    } else {
-      text += input[i];
-      i++;
-    }
-  }
-  flush();
-  return out;
-}
-
 function applySgr(paramStr: string, state: SgrState): void {
   const parts = paramStr.length === 0 ? [0] : paramStr.split(";").map((s) => (s.length === 0 ? 0 : parseInt(s, 10)));
   let i = 0;
@@ -496,6 +451,51 @@ function emitFrame(segments: readonly AnsiSegment[], t: number, targetBg: RGB, d
     out += seg.text;
   }
   out += "\x1b[0m";
+  return out;
+}
+
+function parseAnsiSegments(input: string): AnsiSegment[] {
+  const out: AnsiSegment[] = [];
+  const state = { attrs: cloneAttrs(BLANK_ATTRS), bg: null as RGB | null, fg: null as RGB | null };
+  let text = "";
+
+  const flush = () => {
+    if (text.length === 0) return;
+    out.push({ attrs: cloneAttrs(state.attrs), bg: state.bg, fg: state.fg, text });
+    text = "";
+  };
+
+  let i = 0;
+  while (i < input.length) {
+    const ch = input.charCodeAt(i);
+    if (ch === 0x1b && i + 1 < input.length && input.charCodeAt(i + 1) === 0x5b /* [ */) {
+      let j = i + 2;
+      while (j < input.length) {
+        const c = input.charCodeAt(j);
+        if (c >= 0x40 && c <= 0x7e) break;
+        j++;
+      }
+      if (j >= input.length) break;
+      const final = input.charCodeAt(j);
+      if (final === 0x6d /* m */) {
+        flush();
+        applySgr(input.slice(i + 2, j), state);
+      } else {
+        // Non-SGR CSI — pass through verbatim within the current segment.
+        text += input.slice(i, j + 1);
+      }
+      i = j + 1;
+    } else if (ch === 0x1b) {
+      // Other escape — copy two bytes through. Captured pane output from
+      // tmux capture-pane -e is largely SGR-only after this point.
+      text += input.slice(i, i + 2);
+      i += 2;
+    } else {
+      text += input[i];
+      i++;
+    }
+  }
+  flush();
   return out;
 }
 

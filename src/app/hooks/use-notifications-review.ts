@@ -7,11 +7,6 @@ import type { AgentBinaryDetectionApi, AgentType } from "./use-agent-binary-dete
 import { acknowledgeIndexingInfo, getAcknowledgedIndexingInfos, historyIndex } from "../../agents/history-search.ts";
 import { dismissNotice, isNoticeDismissed } from "../../util/notices.ts";
 
-export type NotificationItem =
-  | { agent: AgentType; kind: "agent" }
-  | { id: string; kind: "info"; message: string | string[] }
-  | { kind: "ssh"; server: string };
-
 interface InfoItem {
   id: string;
   message: string | string[];
@@ -19,9 +14,14 @@ interface InfoItem {
 
 type InfoNotificationItem = Extract<NotificationItem, { kind: "info" }>;
 
+type NotificationItem =
+  | { agent: AgentType; kind: "agent" }
+  | { id: string; kind: "info"; message: string | string[] }
+  | { kind: "ssh"; server: string };
+
 const ROOT_TINT_NOTICE_ID = "root-tint-intro";
 
-export interface NotificationsReviewApi {
+interface NotificationsReviewApi {
   addInfo: (id: string, message: string | string[]) => void;
   clearSshErrors: () => void;
   dialogReview: {

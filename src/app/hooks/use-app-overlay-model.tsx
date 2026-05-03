@@ -17,7 +17,7 @@ import { MainRootOverlays } from "../../components/main-root-overlays.tsx";
 import { setCursorAlertActive } from "../../util/cursor-alert.ts";
 import { isAgentWatermarkPreviewFocused, isQuickTerminalSizePreviewFocused } from "../options/preview-selectors.ts";
 
-export interface AppOptionsPreviewState {
+interface AppOptionsPreviewState {
   quickSizePreview: boolean;
   quickTerminalSize: number;
   unansweredCount: number;
@@ -26,14 +26,14 @@ export interface AppOptionsPreviewState {
   watermarkShape: WatermarkShape;
 }
 
-export interface AppOverlayModel {
+interface AppOverlayModel {
   hasFavoriteProfile: boolean;
   mainRootOverlayNode: ReactNode;
   optionsPreview: AppOptionsPreviewState;
   overlayZoomState: AppOverlayZoomState;
 }
 
-export interface AppOverlayZoomState {
+interface AppOverlayZoomState {
   action: KeyAction | null;
   active: boolean;
   agentsStickyKey: boolean;

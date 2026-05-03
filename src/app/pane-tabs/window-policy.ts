@@ -105,24 +105,6 @@ export async function resolveHostWindowRenameState(
   };
 }
 
-export async function syncManagedWindowName(
-  client: TmuxControlClient,
-  group: PaneTabGroup,
-  windowId: string = group.windowId,
-): Promise<void> {
-  if (!groupOwnsHostWindowName(group)) return;
-  const activeTab = group.tabs[group.activeIndex];
-  if (!activeTab) return;
-
-  const nextWindowName = group.explicitWindowName ?? activeTab.label;
-  try {
-    await client.renameWindow(windowId, nextWindowName);
-  } catch {}
-  try {
-    await client.disableAutomaticRename(windowId);
-  } catch {}
-}
-
 export async function syncManagedWindowNamesForGroups(
   client: TmuxControlClient,
   groups: Map<string, PaneTabGroup>,
@@ -177,4 +159,22 @@ async function resolveInitialExplicitWindowName(
   if (restoreAutomaticRename) return undefined;
   const windowNames = await listWindowNameMap(client);
   return windowNames?.get(windowId);
+}
+
+async function syncManagedWindowName(
+  client: TmuxControlClient,
+  group: PaneTabGroup,
+  windowId: string = group.windowId,
+): Promise<void> {
+  if (!groupOwnsHostWindowName(group)) return;
+  const activeTab = group.tabs[group.activeIndex];
+  if (!activeTab) return;
+
+  const nextWindowName = group.explicitWindowName ?? activeTab.label;
+  try {
+    await client.renameWindow(windowId, nextWindowName);
+  } catch {}
+  try {
+    await client.disableAutomaticRename(windowId);
+  } catch {}
 }

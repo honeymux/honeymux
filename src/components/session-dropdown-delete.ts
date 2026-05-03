@@ -1,10 +1,10 @@
 import { isDismissKey } from "../util/keybindings.ts";
 
-export type SessionDeleteConfirmAction = "close" | "delete" | "none";
 export type SessionDeleteConfirmFocus = 0 | 1;
+type SessionDeleteConfirmAction = "close" | "delete" | "none";
 
 export const SESSION_DELETE_CONFIRM_YES = 0;
-export const SESSION_DELETE_CONFIRM_NO = 1;
+const SESSION_DELETE_CONFIRM_NO = 1;
 export const SESSION_DELETE_CONFIRM_DEFAULT_FOCUS = SESSION_DELETE_CONFIRM_NO;
 
 export function handleSessionDeleteConfirmInput(

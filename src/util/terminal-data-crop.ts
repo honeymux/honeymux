@@ -1,12 +1,5 @@
 import type { TerminalData, TerminalLine, TerminalSpan } from "ghostty-opentui";
 
-export interface TerminalCropRect {
-  height: number;
-  left: number;
-  top: number;
-  width: number;
-}
-
 /**
  * Crop terminal data to a rectangular region in terminal-cell space.
  */

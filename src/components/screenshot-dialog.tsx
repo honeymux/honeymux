@@ -13,7 +13,7 @@ import { OSC_TERMINATOR } from "../util/terminal-sequences.ts";
 import { midTruncatePath, stringWidth } from "../util/text.ts";
 import { wrapText } from "./ssh-error-dialog.tsx";
 
-export interface ScreenshotDialogProps {
+interface ScreenshotDialogProps {
   buttonCol: number; // 0=Viewport, 1=Scrollback, 2=Cancel
   height: number;
   maxHeightPixels?: number;
@@ -26,21 +26,21 @@ export interface ScreenshotDialogProps {
   width: number;
 }
 
-export interface ScreenshotDoneDialogProps {
+interface ScreenshotDoneDialogProps {
   buttonCol: number; // 0=Copy, 1=OK
   filePath: string;
   onCopy: () => void;
   onDismiss: () => void;
 }
 
-export interface ScreenshotErrorDialogProps {
+interface ScreenshotErrorDialogProps {
   height: number;
   message: string;
   onDismiss: () => void;
   width: number;
 }
 
-export interface ScreenshotLargeDialogProps {
+interface ScreenshotLargeDialogProps {
   height: number;
   onDismiss: () => void;
   width: number;
