@@ -368,7 +368,7 @@ export function AgentTree({
             {useImperativeLeft ? (
               <AgentTreeRowLeft
                 agentAlertAnimConfusables={!!agentAlertAnimConfusables}
-                agentAlertAnimCycleCount={agentAlertAnimCycleCount ?? 1}
+                agentAlertAnimCycleCount={agentAlertAnimCycleCount ?? 5}
                 agentAlertAnimDelay={agentAlertAnimDelay ?? 0}
                 agentAlertAnimEqualizer={!!agentAlertAnimEqualizer}
                 agentAlertAnimGlow={!!agentAlertAnimGlow}

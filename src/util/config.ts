@@ -88,12 +88,12 @@ type LoadedHoneymuxConfig = Partial<HoneymuxConfig>;
 export function defaultConfig(): HoneymuxConfig {
   return {
     activeWindowIdDisplayEnabled: false,
-    agentAlertAnimConfusables: true,
-    agentAlertAnimCycleCount: 1,
+    agentAlertAnimConfusables: false,
+    agentAlertAnimCycleCount: 5,
     agentAlertAnimDelay: 60,
     agentAlertAnimEqualizer: false,
     agentAlertAnimGlow: false,
-    agentAlertAnimScribble: false,
+    agentAlertAnimScribble: true,
     agentAlertCursorAlert: true,
     agentAlertCursorBlink: "default",
     agentAlertCursorColor: "#ff0000",

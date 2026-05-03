@@ -170,10 +170,10 @@ export function useOptionsDialogSession(
     () => initialConfig.agentAlertAnimGlow ?? false,
   );
   const [configAgentAlertAnimConfusables, setConfigAgentAlertAnimConfusablesState] = useState(
-    () => initialConfig.agentAlertAnimConfusables ?? true,
+    () => initialConfig.agentAlertAnimConfusables ?? false,
   );
   const [configAgentAlertAnimScribble, setConfigAgentAlertAnimScribbleState] = useState(
-    () => initialConfig.agentAlertAnimScribble ?? false,
+    () => initialConfig.agentAlertAnimScribble ?? true,
   );
   const [configAgentAlertWatermark, setConfigAgentAlertWatermarkState] = useState<WatermarkShape>(
     () => initialConfig.agentAlertWatermark ?? "off",
@@ -190,11 +190,11 @@ export function useOptionsDialogSession(
   );
   const [configAnimationDelayCursor, setConfigAnimationDelayCursorState] = useState(0);
   const [configAgentAlertAnimCycleCount, setConfigAgentAlertAnimCycleCountState] = useState(
-    () => initialConfig.agentAlertAnimCycleCount ?? 1,
+    () => initialConfig.agentAlertAnimCycleCount ?? 5,
   );
   const [configAnimationCycleCountEditing, setConfigAnimationCycleCountEditingState] = useState(false);
   const [configAnimationCycleCountText, setConfigAnimationCycleCountTextState] = useState(() =>
-    String(initialConfig.agentAlertAnimCycleCount ?? 1),
+    String(initialConfig.agentAlertAnimCycleCount ?? 5),
   );
   const [configAnimationCycleCountCursor, setConfigAnimationCycleCountCursorState] = useState(0);
   const [configAgentAlertCursorAlert, setConfigAgentAlertCursorAlertState] = useState(
@@ -287,17 +287,17 @@ export function useOptionsDialogSession(
     setConfigQuickTerminalSizeState(config.quickTerminalSize ?? 90);
     setConfigMuxotronEnabledState(config.muxotronEnabled ?? true);
     setConfigAgentAlertAnimGlowState(config.agentAlertAnimGlow ?? false);
-    setConfigAgentAlertAnimConfusablesState(config.agentAlertAnimConfusables ?? true);
-    setConfigAgentAlertAnimScribbleState(config.agentAlertAnimScribble ?? false);
+    setConfigAgentAlertAnimConfusablesState(config.agentAlertAnimConfusables ?? false);
+    setConfigAgentAlertAnimScribbleState(config.agentAlertAnimScribble ?? true);
     setConfigAgentAlertWatermarkState(config.agentAlertWatermark ?? "off");
     setConfigAgentAlertAnimEqualizerState(config.agentAlertAnimEqualizer ?? false);
     setConfigAgentAlertAnimDelayState(config.agentAlertAnimDelay ?? 60);
     setConfigAnimationDelayEditingState(false);
     setConfigAnimationDelayTextState(String(config.agentAlertAnimDelay ?? 60));
     setConfigAnimationDelayCursorState(0);
-    setConfigAgentAlertAnimCycleCountState(config.agentAlertAnimCycleCount ?? 1);
+    setConfigAgentAlertAnimCycleCountState(config.agentAlertAnimCycleCount ?? 5);
     setConfigAnimationCycleCountEditingState(false);
-    setConfigAnimationCycleCountTextState(String(config.agentAlertAnimCycleCount ?? 1));
+    setConfigAnimationCycleCountTextState(String(config.agentAlertAnimCycleCount ?? 5));
     setConfigAnimationCycleCountCursorState(0);
     setConfigAgentAlertCursorAlertState(config.agentAlertCursorAlert ?? true);
     setConfigAgentAlertCursorShapeState(config.agentAlertCursorShape ?? "default");

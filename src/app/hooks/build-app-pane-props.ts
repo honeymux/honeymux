@@ -269,10 +269,10 @@ export function buildAppPaneProps({
     activePaneId,
     agentAlertAnimConfusables: optionsWorkflow.optionsDialogOpen
       ? optionsWorkflow.configAgentAlertAnimConfusables
-      : (optionsWorkflow.config.agentAlertAnimConfusables ?? true),
+      : (optionsWorkflow.config.agentAlertAnimConfusables ?? false),
     agentAlertAnimCycleCount: optionsWorkflow.optionsDialogOpen
       ? optionsWorkflow.configAgentAlertAnimCycleCount
-      : (optionsWorkflow.config.agentAlertAnimCycleCount ?? 1),
+      : (optionsWorkflow.config.agentAlertAnimCycleCount ?? 5),
     agentAlertAnimDelay: optionsWorkflow.optionsDialogOpen
       ? optionsWorkflow.configAgentAlertAnimDelay
       : (optionsWorkflow.config.agentAlertAnimDelay ?? 60),
@@ -284,7 +284,7 @@ export function buildAppPaneProps({
       : (optionsWorkflow.config.agentAlertAnimGlow ?? false),
     agentAlertAnimScribble: optionsWorkflow.optionsDialogOpen
       ? optionsWorkflow.configAgentAlertAnimScribble
-      : (optionsWorkflow.config.agentAlertAnimScribble ?? false),
+      : (optionsWorkflow.config.agentAlertAnimScribble ?? true),
     agentLatchBindingLabel,
     agentNavNextRef: refs.agentNavNextRef,
     agentNavPrevRef: refs.agentNavPrevRef,

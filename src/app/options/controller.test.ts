@@ -7,12 +7,12 @@ import { routeOptionsDialogInput } from "./controller.ts";
 function createState(overrides: Partial<OptionsDialogState> = {}): OptionsDialogState {
   return {
     activeWindowIdDisplayEnabled: false,
-    agentAlertAnimConfusables: true,
-    agentAlertAnimCycleCount: 1,
+    agentAlertAnimConfusables: false,
+    agentAlertAnimCycleCount: 5,
     agentAlertAnimDelay: 60,
     agentAlertAnimEqualizer: false,
     agentAlertAnimGlow: false,
-    agentAlertAnimScribble: false,
+    agentAlertAnimScribble: true,
     agentAlertCursorAlert: false,
     agentAlertCursorBlink: "default",
     agentAlertCursorColor: "#ff0000",

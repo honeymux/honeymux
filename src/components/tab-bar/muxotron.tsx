@@ -198,7 +198,7 @@ export function Muxotron({
   // Intermittent animation gating: when agentAlertAnimDelay > 0, animations
   // play for cycleCount complete back-and-forth sweeps then pause for the delay.
   const SWEEP_MS = 1800; // ms for one complete back-and-forth scanner sweep
-  const cycleCount = Math.max(1, agentAlertAnimCycleCount ?? 1);
+  const cycleCount = Math.max(1, agentAlertAnimCycleCount ?? 5);
   const burstMs = SWEEP_MS * cycleCount;
   const delayMs = (agentAlertAnimDelay ?? 0) * 1000;
   const totalCycleMs = burstMs + delayMs;
