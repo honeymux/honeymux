@@ -7,8 +7,8 @@ import type { Base16SchemeName, RGB } from "../themes/theme.ts";
 import {
   BASE16_SCHEME_NAMES,
   getSchemePaletteColors,
-  hexToRgb,
   hsvToRgb,
+  isBright,
   paletteColors,
   rgbToHex,
   theme,
@@ -58,10 +58,7 @@ function buildWheelGrid(diameter: number, bgHex: string): WheelCell[][] {
 
 /** Pick black or white foreground for maximum contrast against a hex background. */
 function contrastFg(hex: string): string {
-  const [r, g, b] = hexToRgb(hex);
-  // Perceived brightness (ITU-R BT.601)
-  const brightness = (r * 299 + g * 587 + b * 114) / 1000;
-  return brightness > 128 ? "#000000" : "#ffffff";
+  return isBright(hex) ? "#000000" : "#ffffff";
 }
 
 function wheelPixelColor(
@@ -102,7 +99,7 @@ interface ColorPickerProps {
   width: number;
 }
 
-type FocusSection = "palette" | "reset" | "scheme";
+type FocusSection = "palette" | "reset" | "scheme" | "value";
 
 // ---------------------------------------------------------------------------
 // ColorPicker component
@@ -119,10 +116,15 @@ export function ColorPicker({
   const itemWidth = effectiveWidth - 2;
   const contentWidth = itemWidth - 2; // 1-col padding each side
 
+  // --- Wheel/slider sizing ---
+  const wheelDiameter = Math.min(contentWidth, 24);
+  const valueSteps = wheelDiameter;
+
   // --- State ---
   const [schemeIndex, setSchemeIndex] = useState(0);
   const [focusSection, setFocusSection] = useState<FocusSection>("palette");
   const [paletteIndex, setPaletteIndex] = useState(0);
+  const [valueIndex, setValueIndex] = useState(valueSteps - 1);
 
   // --- Refs for handler closure ---
   const schemeIndexRef = useRef(schemeIndex);
@@ -131,6 +133,8 @@ export function ColorPicker({
   focusSectionRef.current = focusSection;
   const paletteIndexRef = useRef(paletteIndex);
   paletteIndexRef.current = paletteIndex;
+  const valueIndexRef = useRef(valueIndex);
+  valueIndexRef.current = valueIndex;
   const onSelectRef = useRef(onSelect);
   onSelectRef.current = onSelect;
   const onCloseRef = useRef(onClose);
@@ -207,8 +211,8 @@ export function ColorPicker({
         }
         if (data === ARROW_DOWN) {
           if (pIdx >= PALETTE_COLS) {
-            focusSectionRef.current = "reset";
-            setFocusSection("reset");
+            focusSectionRef.current = "value";
+            setFocusSection("value");
           } else {
             const next = pIdx + PALETTE_COLS;
             paletteIndexRef.current = next;
@@ -221,7 +225,19 @@ export function ColorPicker({
           onSelectRef.current(rgbToHex(displayColorsRef.current[pIdx]!));
           return true;
         }
-      } else if (section === "reset") {
+      } else if (section === "value") {
+        if (data === ARROW_LEFT) {
+          const next = Math.max(0, valueIndexRef.current - 1);
+          valueIndexRef.current = next;
+          setValueIndex(next);
+          return true;
+        }
+        if (data === ARROW_RIGHT) {
+          const next = Math.min(valueSteps - 1, valueIndexRef.current + 1);
+          valueIndexRef.current = next;
+          setValueIndex(next);
+          return true;
+        }
         if (data === ARROW_UP) {
           focusSectionRef.current = "palette";
           setFocusSection("palette");
@@ -230,6 +246,22 @@ export function ColorPicker({
             paletteIndexRef.current = next;
             setPaletteIndex(next);
           }
+          return true;
+        }
+        if (data === ARROW_DOWN) {
+          focusSectionRef.current = "reset";
+          setFocusSection("reset");
+          return true;
+        }
+        if (data === "\r" || data === "\n") {
+          dropdownInputRef.current = null;
+          onSelectRef.current(greyAtIndex(valueIndexRef.current, valueSteps));
+          return true;
+        }
+      } else if (section === "reset") {
+        if (data === ARROW_UP) {
+          focusSectionRef.current = "value";
+          setFocusSection("value");
           return true;
         }
         if (data === ARROW_DOWN) {
@@ -260,15 +292,14 @@ export function ColorPicker({
     };
   }, [dropdownInputRef]);
 
-  // --- Wheel ---
-  const wheelDiameter = Math.min(contentWidth, 24);
+  // --- Wheel layout ---
   const wheelTermRows = Math.ceil(wheelDiameter / 2);
   const wheelPadLeft = Math.floor((contentWidth - wheelDiameter) / 2);
 
   const wheelGrid = useMemo(() => buildWheelGrid(wheelDiameter, theme.bgSurface), [wheelDiameter]);
 
-  // Height: scheme(1) + sep(1) + palette(2) + sep(1) + wheel(wheelTermRows) + sep(1) + reset(1) + border(2)
-  const dropdownHeight = 1 + 1 + 2 + 1 + wheelTermRows + 1 + 1 + 2;
+  // Height: scheme(1) + sep(1) + palette(2) + sep(1) + wheel(wheelTermRows) + pad(1) + slider(1) + pad(1) + sep(1) + reset(1) + border(2)
+  const dropdownHeight = 1 + 1 + 2 + 1 + wheelTermRows + 1 + 1 + 1 + 1 + 1 + 2;
 
   const paletteRows = [displayColors.slice(0, 8), displayColors.slice(8, 16)];
 
@@ -413,6 +444,46 @@ export function ColorPicker({
         </box>
       ))}
 
+      {/* Padding above slider */}
+      <box flexDirection="row" height={1} width={itemWidth}>
+        <text bg={theme.bgSurface} content={" ".repeat(itemWidth)} selectable={false} />
+      </box>
+
+      {/* Grey ramp (click any cell to pick that grey) */}
+      <box flexDirection="row" height={1} width={itemWidth}>
+        <text bg={theme.bgSurface} content=" " selectable={false} />
+        {wheelPadLeft > 0 && <text bg={theme.bgSurface} content={" ".repeat(wheelPadLeft)} selectable={false} />}
+        {Array.from({ length: valueSteps }, (_, i) => {
+          const grey = greyAtIndex(i, valueSteps);
+          const sliderFocused = focusSection === "value";
+          const isCursor = sliderFocused && i === valueIndex;
+          const handleSliderClick = (event: MouseEvent) => {
+            if (event.button === 0) onSelect(grey);
+          };
+          return (
+            <text
+              bg={isCursor ? theme.accent : theme.bgSurface}
+              content={isCursor ? "▀" : "█"}
+              fg={grey}
+              key={i}
+              onMouseDown={handleSliderClick}
+              selectable={false}
+            />
+          );
+        })}
+        <text
+          bg={theme.bgSurface}
+          content={"".padEnd(Math.max(0, contentWidth - wheelPadLeft - wheelDiameter))}
+          selectable={false}
+        />
+        <text bg={theme.bgSurface} content=" " selectable={false} />
+      </box>
+
+      {/* Padding below slider */}
+      <box flexDirection="row" height={1} width={itemWidth}>
+        <text bg={theme.bgSurface} content={" ".repeat(itemWidth)} selectable={false} />
+      </box>
+
       {/* Separator */}
       <DropdownSeparator width={itemWidth} />
 
@@ -451,3 +522,9 @@ function formatSchemeName(name: string): string {
     .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
     .join(" ");
 }
+
+function greyAtIndex(i: number, steps: number): string {
+  const v = steps <= 1 ? 1 : i / (steps - 1);
+  return rgbToHex(hsvToRgb(0, 0, v));
+}
+
