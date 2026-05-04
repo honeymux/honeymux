@@ -199,8 +199,8 @@ export function useUiChromeState(): UiChromeState {
   const dropdownOpenRef = useRef(dropdownOpen);
   dropdownOpenRef.current = dropdownOpen;
 
-  const [toolbarOpen, setToolbarOpenState] = useState(() => persistedVisibility?.toolbarOpen ?? false);
-  const [sidebarOpen, setSidebarOpenState] = useState(() => persistedVisibility?.sidebarOpen ?? false);
+  const [toolbarOpen, setToolbarOpenState] = useState(() => persistedVisibility?.toolbarOpen ?? true);
+  const [sidebarOpen, setSidebarOpenState] = useState(() => persistedVisibility?.sidebarOpen ?? true);
   const [sidebarView, setSidebarViewState] = useState<SidebarView>(() => persistedVisibility?.sidebarView ?? "server");
   const [sidebarWidth, setSidebarWidthState] = useState(
     () => persistedVisibility?.sidebarWidth ?? SIDEBAR_DEFAULT_WIDTH,
