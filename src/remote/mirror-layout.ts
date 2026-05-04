@@ -100,8 +100,17 @@ export class MirrorLayoutManager {
 
   /**
    * Handle local window-add: create a matching window on the remote.
+   *
+   * Idempotent: tmux re-emits `%window-add` for every existing window when a
+   * new session joins their session group (e.g. the agent zoom overlay
+   * created via `new-session -d -t <target>`). Without this guard, those
+   * spurious adds would create duplicate empty mirror windows, overwrite
+   * `windowMap`, and corrupt `paneMap` to point at placeholder remote panes,
+   * which `fullSync` would later kill — taking the real proxy panes with
+   * them. Reconciliation of any genuine drift is handled by `fullSync`.
    */
   async onWindowAdd(localWindowId: string): Promise<void> {
+    if (this.windowMap.has(localWindowId)) return;
     try {
       const remoteWindow = await this.createRemoteWindow(localWindowId);
       if (remoteWindow) {
@@ -116,10 +125,19 @@ export class MirrorLayoutManager {
 
   /**
    * Handle local window-close: kill the matching remote window.
+   *
+   * tmux emits `%window-close` whenever a winlink is removed, not only when
+   * the window is destroyed. When a session group member is killed (e.g. the
+   * agent zoom overlay created via `new-session -d -t <target>`), all of its
+   * winlinks are removed and the notifications fan to our control client
+   * even though the windows still exist in the user's main session. Verify
+   * the local window is actually gone before tearing down the mirror.
    */
   async onWindowClose(localWindowId: string): Promise<void> {
     const remoteWindowId = this.windowMap.get(localWindowId);
     if (!remoteWindowId) return;
+
+    if (await this.localWindowExists(localWindowId)) return;
 
     try {
       await this.remoteClient.sendCommand(`kill-window -t ${remoteWindowId}`);
@@ -148,6 +166,17 @@ export class MirrorLayoutManager {
       };
     } catch {
       return undefined;
+    }
+  }
+
+  private async localWindowExists(localWindowId: string): Promise<boolean> {
+    try {
+      const output = await (this.localClient as any).sendCommand(
+        `display-message -p -t ${quoteTmuxArg("local window id", localWindowId)} '#{window_id}'`,
+      );
+      return output.trim() === localWindowId;
+    } catch {
+      return false;
     }
   }
 

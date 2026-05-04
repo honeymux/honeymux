@@ -105,6 +105,13 @@ function createFakeServer(initial: {
       }
       return "";
     }
+    if (cmd.startsWith("display-message")) {
+      const m = cmd.match(/-t ('[^']+'|\S+)/);
+      if (!m) throw new Error("display-message missing -t");
+      const target = m[1]!.replace(/^'/, "").replace(/'$/, "");
+      if (!state.panesByWindow.has(target)) throw new Error(`no such window ${target}`);
+      return target;
+    }
     if (cmd.startsWith("refresh-client") || cmd.startsWith("select-layout")) {
       return "";
     }
@@ -173,6 +180,67 @@ describe("MirrorLayoutManager", () => {
     await mirror.onLayoutChange("@1", "bbbb,80x24,0,0,10");
 
     expect(remoteServer.state.panesByWindow.get("@100")).toEqual(["%200"]);
+  });
+
+  test("onWindowClose skips remote teardown when local window still exists", async () => {
+    // Repro: tmux emits %window-close whenever a winlink is removed, not
+    // only on actual window destruction. Killing the agent zoom overlay
+    // (`new-session -d -t <target>`) removes its winlinks for every window
+    // it inherited from the target session, fanning %window-close
+    // notifications to our control client even though the windows still
+    // exist in the user's main session. The mirror must not tear down its
+    // remote window in that case — doing so kills the active proxy panes.
+    const localServer = createFakeServer({ panesByWindow: new Map([["@1", ["%10"]]]) });
+    const remoteServer = createFakeServer({ panesByWindow: new Map([["@100", ["%200"]]]) });
+    const mirror = makeMirror(localServer, remoteServer);
+
+    (mirror as any).windowMap.set("@1", "@100");
+    (mirror as any).paneMap.set("%10", "%200");
+
+    await mirror.onWindowClose("@1");
+
+    expect(remoteServer.state.panesByWindow.has("@100")).toBe(true);
+    expect((mirror as any).windowMap.get("@1")).toBe("@100");
+  });
+
+  test("onWindowClose tears down remote window when local window is gone", async () => {
+    const localServer = createFakeServer({ panesByWindow: new Map([["@1", ["%10"]]]) });
+    const remoteServer = createFakeServer({ panesByWindow: new Map([["@100", ["%200"]]]) });
+    const mirror = makeMirror(localServer, remoteServer);
+
+    (mirror as any).windowMap.set("@1", "@100");
+    (mirror as any).paneMap.set("%10", "%200");
+
+    // Local window actually destroyed
+    localServer.state.panesByWindow.delete("@1");
+
+    await mirror.onWindowClose("@1");
+
+    expect(remoteServer.state.panesByWindow.has("@100")).toBe(false);
+    expect((mirror as any).windowMap.has("@1")).toBe(false);
+  });
+
+  test("onWindowAdd is idempotent for an already-mapped local window", async () => {
+    // Repro: tmux emits %window-add for every existing window when another
+    // session joins the session group (e.g. zoom overlay via
+    // `new-session -d -t <target>`). The mirror must not create a second
+    // remote window for an id it already mirrors — that overwrites windowMap
+    // and corrupts paneMap with placeholder panes that fullSync later kills,
+    // tearing down the real proxy panes.
+    const localServer = createFakeServer({ panesByWindow: new Map([["@1", ["%10"]]]) });
+    const remoteServer = createFakeServer({ panesByWindow: new Map([["@100", ["%200"]]]) });
+    const mirror = makeMirror(localServer, remoteServer);
+
+    (mirror as any).windowMap.set("@1", "@100");
+    (mirror as any).paneMap.set("%10", "%200");
+
+    const remoteWindowsBefore = [...remoteServer.state.panesByWindow.keys()];
+
+    await mirror.onWindowAdd("@1");
+
+    const remoteWindowsAfter = [...remoteServer.state.panesByWindow.keys()];
+    expect(remoteWindowsAfter).toEqual(remoteWindowsBefore);
+    expect(mirror.getRemotePaneId("%10")).toBe("%200");
   });
 
   test("close after split-induced index shuffle kills the orphan, not the active mirror", async () => {
