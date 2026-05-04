@@ -169,10 +169,15 @@ export function useUiActions({
     [textInputActiveRef],
   );
 
-  // Escape pressed while text input is active — close dropdown
+  // Escape pressed while text input is active. If a custom escape handler is
+  // registered, it owns the cleanup (e.g. returning to a list view) and the
+  // default close path is skipped. Otherwise, close any open dropdown.
   const handleTextInputEscape = useCallback(() => {
-    textInputEscapeHandlerRef.current?.();
-    textInputEscapeHandlerRef.current = null;
+    const customHandler = textInputEscapeHandlerRef.current;
+    if (customHandler) {
+      customHandler();
+      return;
+    }
     textInputActiveRef.current = false;
     dropdownInputRef.current = null;
     setDropdownOpen(false);

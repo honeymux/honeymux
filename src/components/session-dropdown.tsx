@@ -13,6 +13,7 @@ import {
   type SessionDeleteConfirmFocus,
   handleSessionDeleteConfirmInput,
 } from "./session-dropdown-delete.ts";
+import { claimSharedInputHandler } from "./shared-input-handler.ts";
 import { useDropdownKeyboard } from "./use-dropdown-keyboard.ts";
 
 interface SessionDropdownProps {
@@ -28,6 +29,7 @@ interface SessionDropdownProps {
   onSetSessionColor?: (sessionName: string, color: null | string) => void;
   onTextInputActive?: (active: boolean) => void;
   sessions: TmuxSession[];
+  textInputEscapeHandlerRef?: React.MutableRefObject<(() => void) | null>;
 }
 
 export function SessionDropdown({
@@ -43,6 +45,7 @@ export function SessionDropdown({
   onSetSessionColor,
   onTextInputActive,
   sessions,
+  textInputEscapeHandlerRef,
 }: SessionDropdownProps) {
   const [mode, setMode] = useState<"color" | "confirm-delete" | "input" | "list" | "rename">("list");
   const [renameTarget, setRenameTarget] = useState("");
@@ -57,6 +60,7 @@ export function SessionDropdown({
   const [saveError, setSaveError] = useState("");
   const [focusedCol, setFocusedCol] = useState(0); // 0 = name, 1..N = icons
   const textareaRef = useRef<any>(null);
+  const textInputEscapeOwnerRef = useRef<(() => void) | null>(null);
 
   // Sort sessions alphabetically (case-sensitive); hide internal __hmx- sessions
   const sortedSessions = useMemo(
@@ -69,6 +73,16 @@ export function SessionDropdown({
     onTextInputActive?.(mode === "input" || mode === "rename");
     return () => onTextInputActive?.(false);
   }, [mode]);
+
+  // In rename/input modes, claim the textInputEscape handler so pressing Esc
+  // returns to the session list instead of dismissing the entire dropdown.
+  useEffect(() => {
+    if ((mode !== "input" && mode !== "rename") || !textInputEscapeHandlerRef) return;
+    return claimSharedInputHandler(textInputEscapeHandlerRef, textInputEscapeOwnerRef, () => {
+      setSaveError("");
+      setMode("list");
+    });
+  }, [mode, textInputEscapeHandlerRef]);
 
   // Build ordered list of icon actions
   type IconAction = "color" | "delete" | "name" | "pencil";
