@@ -108,7 +108,7 @@ export function defaultConfig(): HoneymuxConfig {
     metaSavedAt: 0,
     muxotronEnabled: true,
 
-    paneTabsEnabled: false,
+    paneTabsEnabled: true,
     policyLocalOsc52Passthrough: DEFAULT_LOCAL_OSC52_PASSTHROUGH,
     policyLocalOtherOscPassthrough: DEFAULT_LOCAL_OTHER_OSC_PASSTHROUGH,
     privilegedPaneDetection: true,

@@ -380,7 +380,7 @@ export function SettingRow({
       const check = state.paneTabsEnabled ? "(●)" : "( )";
       return (
         <text
-          content={`${prefix}${check} Enable pane tabs (experimental)`}
+          content={`${prefix}${check} Enable pane tabs`}
           fg={color}
           onMouseDown={(event: MouseEvent) => {
             if (event.button === 0) onSetPaneTabs(!state.paneTabsEnabled);
