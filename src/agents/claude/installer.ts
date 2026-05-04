@@ -66,6 +66,29 @@ export function isClaudeConsented(hostId: string = "local"): boolean {
   return readHostConsent(getConsentFile(), hostId).consented === true;
 }
 
+/**
+ * True when the on-disk hook script and settings.json already match what
+ * `installClaudeHooks` would produce — i.e. running sync would be a no-op.
+ * Used to suppress the "upgrade" prompt when nothing is actually stale.
+ */
+export async function isClaudeHookInstallCurrent(host: InstallHost = localInstallHost): Promise<boolean> {
+  const scriptPath = join(await getHooksDir(host), HOOK_SCRIPT_NAME);
+  const currentScript = await host.readFile(scriptPath);
+  if (currentScript !== HOOK_CONTENT) return false;
+  const resolver = await buildHostResolver(host);
+  const command = buildClaudeHookCommand(scriptPath, resolver);
+  if (!command) return false;
+  const settingsFile = await getSettingsFile(host);
+  const currentSettingsText = await host.readFile(settingsFile);
+  if (currentSettingsText === null) return false;
+  const nextSettingsText = JSON.stringify(
+    upsertClaudeHookSettings(safeParseJson(currentSettingsText), command),
+    null,
+    2,
+  );
+  return currentSettingsText === nextSettingsText;
+}
+
 export function isClaudeIgnored(hostId: string = "local"): boolean {
   return readHostConsent(getConsentFile(), hostId).ignored === true;
 }

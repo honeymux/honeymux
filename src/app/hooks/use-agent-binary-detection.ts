@@ -13,10 +13,30 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { TmuxControlClient } from "../../tmux/control-client.ts";
 
-import { areClaudeHooksInstalled, isClaudeConsented, isClaudeIgnored } from "../../agents/claude/installer.ts";
-import { areCodexHooksInstalled, isCodexConsented, isCodexIgnored } from "../../agents/codex/installer.ts";
-import { areGeminiHooksInstalled, isGeminiConsented, isGeminiIgnored } from "../../agents/gemini/installer.ts";
-import { isOpenCodeConsented, isOpenCodeIgnored, isOpenCodePluginInstalled } from "../../agents/opencode/installer.ts";
+import {
+  areClaudeHooksInstalled,
+  isClaudeConsented,
+  isClaudeHookInstallCurrent,
+  isClaudeIgnored,
+} from "../../agents/claude/installer.ts";
+import {
+  areCodexHooksInstalled,
+  isCodexConsented,
+  isCodexHookInstallCurrent,
+  isCodexIgnored,
+} from "../../agents/codex/installer.ts";
+import {
+  areGeminiHooksInstalled,
+  isGeminiConsented,
+  isGeminiHookInstallCurrent,
+  isGeminiIgnored,
+} from "../../agents/gemini/installer.ts";
+import {
+  isOpenCodeConsented,
+  isOpenCodeIgnored,
+  isOpenCodePluginCurrent,
+  isOpenCodePluginInstalled,
+} from "../../agents/opencode/installer.ts";
 
 const isInstalledClaude = () => areClaudeHooksInstalled();
 const isInstalledCodex = () => areCodexHooksInstalled();
@@ -31,6 +51,7 @@ interface AgentBinaryInfo {
   installLabel: "hooks" | "plugin";
   isConsented: () => boolean;
   isIgnored: () => boolean;
+  isInstallCurrent: () => Promise<boolean>;
   isInstalled: () => Promise<boolean>;
   type: AgentType;
 }
@@ -41,6 +62,7 @@ const AGENTS: AgentBinaryInfo[] = [
     installLabel: "hooks",
     isConsented: () => isClaudeConsented(),
     isIgnored: () => isClaudeIgnored(),
+    isInstallCurrent: () => isClaudeHookInstallCurrent(),
     isInstalled: isInstalledClaude,
     type: "claude",
   },
@@ -49,6 +71,7 @@ const AGENTS: AgentBinaryInfo[] = [
     installLabel: "plugin",
     isConsented: () => isOpenCodeConsented(),
     isIgnored: () => isOpenCodeIgnored(),
+    isInstallCurrent: () => isOpenCodePluginCurrent(),
     isInstalled: isInstalledOpenCode,
     type: "opencode",
   },
@@ -57,6 +80,7 @@ const AGENTS: AgentBinaryInfo[] = [
     installLabel: "hooks",
     isConsented: () => isGeminiConsented(),
     isIgnored: () => isGeminiIgnored(),
+    isInstallCurrent: () => isGeminiHookInstallCurrent(),
     isInstalled: isInstalledGemini,
     type: "gemini",
   },
@@ -65,6 +89,7 @@ const AGENTS: AgentBinaryInfo[] = [
     installLabel: "hooks",
     isConsented: () => isCodexConsented(),
     isIgnored: () => isCodexIgnored(),
+    isInstallCurrent: () => isCodexHookInstallCurrent(),
     isInstalled: isInstalledCodex,
     type: "codex",
   },
@@ -177,9 +202,16 @@ export function useAgentBinaryDetection({
           const installed = await info.isInstalled();
           if (cancelled) return;
           // Installed + consent recorded → nothing to do.
-          // Installed + no consent → prompt to upgrade (e.g. stale script from a
-          // prior install whose consent was lost).
           if (installed && info.isConsented()) continue;
+          // Installed + no consent → only prompt to upgrade if the on-disk
+          // install actually differs from the bundled version. If it matches,
+          // there's nothing to upgrade and the dialog would be a lie.
+          if (installed && (await info.isInstallCurrent())) {
+            if (cancelled) return;
+            promptedRef.current.add(agentType);
+            continue;
+          }
+          if (cancelled) return;
 
           // Already prompted this session → stays in deferred
           if (promptedRef.current.has(agentType)) continue;
