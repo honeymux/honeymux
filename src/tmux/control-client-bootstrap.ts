@@ -124,8 +124,11 @@ export function buildControlClientWindowStyle(fg: RGB): string {
   return `fg=${fgHex},bg=terminal`;
 }
 
-export function buildDefaultPaneBorderFormat(colors: { accent: string; textDim: string } = theme): string {
-  return `#{?pane_active,#[fg=${colors.accent}],#[fg=${colors.textDim}]}┤ #{pane_current_command} ├#[default]#[align=right]#{?pane_active,#[fg=${colors.textDim}] ≡ ,───}#[default]─`;
+export function buildDefaultPaneBorderFormat(
+  colors: { accent: string; textBright: string; textDim: string } = theme,
+): string {
+  const menuColor = `#{?@hmx-pane-menu-open,#[fg=${colors.textBright}],#[fg=${colors.textDim}]}`;
+  return `#{?pane_active,#[fg=${colors.accent}],#[fg=${colors.textDim}]}┤ #{pane_current_command} ├#[default]#[align=right]#{?pane_active,${menuColor} ≡ ,───}#[default]─`;
 }
 
 /**

@@ -12,8 +12,8 @@ import {
 
 describe("control client bootstrap helpers", () => {
   test("builds the default pane border format from theme colors", () => {
-    expect(buildDefaultPaneBorderFormat({ accent: "#123456", textDim: "#abcdef" })).toBe(
-      "#{?pane_active,#[fg=#123456],#[fg=#abcdef]}┤ #{pane_current_command} ├#[default]#[align=right]#{?pane_active,#[fg=#abcdef] ≡ ,───}#[default]─",
+    expect(buildDefaultPaneBorderFormat({ accent: "#123456", textBright: "#fedcba", textDim: "#abcdef" })).toBe(
+      "#{?pane_active,#[fg=#123456],#[fg=#abcdef]}┤ #{pane_current_command} ├#[default]#[align=right]#{?pane_active,#{?@hmx-pane-menu-open,#[fg=#fedcba],#[fg=#abcdef]} ≡ ,───}#[default]─",
     );
   });
 

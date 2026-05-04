@@ -85,7 +85,8 @@ export function buildBorderFormat(tabs: PaneTab[], activeIndex: number, borderLi
     parts.push(`#[fg=${theme.textDim}]${left} +${overflowCount} ${right}#[default]${h}`);
   }
 
-  parts.push(`#[align=right]#{?pane_active,#[fg=${theme.textDim}] ${MENU_GLYPH} ,${h.repeat(3)}}#[default]${h}`);
+  const menuColor = `#{?@hmx-pane-menu-open,#[fg=${theme.textBright}],#[fg=${theme.textDim}]}`;
+  parts.push(`#[align=right]#{?pane_active,${menuColor} ${MENU_GLYPH} ,${h.repeat(3)}}#[default]${h}`);
   return parts.join("");
 }
 
@@ -131,7 +132,8 @@ export function buildDragBorderFormat(
     parts.push(`#[fg=${theme.textDim}]${left} +${overflowCount} ${right}#[default]${h}`);
   }
 
-  parts.push(`#[align=right]#{?pane_active,#[fg=${theme.textDim}] ${MENU_GLYPH} ,${h.repeat(3)}}#[default]${h}`);
+  const menuColor = `#{?@hmx-pane-menu-open,#[fg=${theme.textBright}],#[fg=${theme.textDim}]}`;
+  parts.push(`#[align=right]#{?pane_active,${menuColor} ${MENU_GLYPH} ,${h.repeat(3)}}#[default]${h}`);
   return parts.join("");
 }
 
