@@ -5,7 +5,7 @@ import type { AgentSession } from "../agents/types.ts";
 import type { TmuxSession, TmuxWindow } from "../tmux/types.ts";
 import type { UIMode } from "../util/config.ts";
 
-import { SESSION_PALETTE, theme } from "../themes/theme.ts";
+import { SESSION_PALETTE, isBright, theme } from "../themes/theme.ts";
 import { isMarqueeMode } from "../util/config.ts";
 import { stringWidth } from "../util/text.ts";
 import { HotkeyHint } from "./hotkey-hint.tsx";
@@ -428,7 +428,7 @@ export function TabBar({
             <text
               bg={badgeColor ?? SESSION_PALETTE[0]}
               content={badgeLabel}
-              fg={theme.textOnBright}
+              fg={isBright(badgeColor ?? SESSION_PALETTE[0]!) ? theme.textOnBright : theme.textBright}
               selectable={false}
             />
             <text content={"▀".repeat(badgeWidth)} fg={badgeColor ?? SESSION_PALETTE[0]} selectable={false} />
