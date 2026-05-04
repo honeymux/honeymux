@@ -409,11 +409,18 @@ export function identifyKeySequence(seq: string): null | string {
   // CSI u key with modifiers: ESC [ <code> ; <mod> u  (kitty protocol)
   // Kitty keyboard may append :<event-type> after the modifier (e.g. 5:1 for ctrl+press).
   // Modifier value is (flags + 1), so subtract 1 before checking bits.
-  const csiU = seq.match(/^\x1b\[(\d+)(?::\d+)*;(\d+)(?::\d+)?u$/);
+  const csiUAssociatedText = seq.match(/^\x1b\[(\d+)((?::\d*)*);(\d*)(?::\d+)?;[\d:]+u$/);
+  if (csiUAssociatedText) {
+    const code = parseInt(csiUAssociatedText[1]!, 10);
+    const mods = csiUAssociatedText[3] ? parseInt(csiUAssociatedText[3], 10) - 1 : 0;
+    return identifyCodeWithModifiers(keybindingCode(code, csiUAssociatedText[2]!, mods), mods);
+  }
+
+  const csiU = seq.match(/^\x1b\[(\d+)((?::\d*)*);(\d+)(?::\d+)?u$/);
   if (csiU) {
     const code = parseInt(csiU[1]!, 10);
-    const mods = parseInt(csiU[2]!, 10) - 1;
-    return identifyCodeWithModifiers(code, mods);
+    const mods = parseInt(csiU[3]!, 10) - 1;
+    return identifyCodeWithModifiers(keybindingCode(code, csiU[2]!, mods), mods);
   }
 
   // xterm modifyOtherKeys: ESC [ 27 ; <mod> ; <code> ~
@@ -434,6 +441,13 @@ export function identifyKeySequence(seq: string): null | string {
     // match against Kitty-encoded bare keys. Tab and backspace (9, 127) fall
     // through to the named-key path below.
     if (code >= 32 && code <= 126) return String.fromCharCode(code);
+    return identifyCodeWithModifiers(code, 0);
+  }
+
+  // CSI u key without modifiers but with alternate key fields.
+  const csiUPlainAlternate = seq.match(/^\x1b\[(\d+)(?::\d*)+u$/);
+  if (csiUPlainAlternate) {
+    const code = parseInt(csiUPlainAlternate[1]!, 10);
     return identifyCodeWithModifiers(code, 0);
   }
 
@@ -526,6 +540,21 @@ function joinModsAndKey(mods: number, key: string): string {
   if (mods & 1) parts.push("shift");
   parts.push(key);
   return parts.join("+");
+}
+
+function keybindingCode(code: number, alternates: string, mods: number): number {
+  if (mods === 0) return code;
+  const alternate = lastAlternateCode(alternates);
+  return alternate > 0 ? alternate : code;
+}
+
+function lastAlternateCode(alternates: string): number {
+  const last = alternates
+    .split(":")
+    .slice(1)
+    .toReversed()
+    .find((field) => field.length > 0);
+  return last ? parseInt(last, 10) : 0;
 }
 
 // ---------------------------------------------------------------------------
@@ -722,7 +751,15 @@ export function formatModifierKeyCode(code: number): string {
  */
 export function parseRawKeyEvent(seq: string): RawKeyEvent | null {
   // CSI u with modifiers: ESC [ code (:shifted)* ; mods (:event_type)? u
-  const csiU = seq.match(/^\x1b\[(\d+)(?::\d+)*;(\d+)(?::(\d+))?u$/);
+  const csiUAssociatedText = seq.match(/^\x1b\[(\d+)(?::\d*)*;(\d*)(?::(\d+))?;[\d:]+u$/);
+  if (csiUAssociatedText) {
+    const code = parseInt(csiUAssociatedText[1]!, 10);
+    const mods = csiUAssociatedText[2] ? parseInt(csiUAssociatedText[2], 10) - 1 : 0;
+    const eventType = csiUAssociatedText[3] ? parseInt(csiUAssociatedText[3], 10) : 1;
+    return { code, eventType, isModifierOnly: code >= 57441 && code <= 57454, mods };
+  }
+
+  const csiU = seq.match(/^\x1b\[(\d+)(?::\d*)*;(\d+)(?::(\d+))?u$/);
   if (csiU) {
     const code = parseInt(csiU[1]!, 10);
     const mods = parseInt(csiU[2]!, 10) - 1;
@@ -736,6 +773,12 @@ export function parseRawKeyEvent(seq: string): RawKeyEvent | null {
     const code = parseInt(plain[1]!, 10);
     const eventType = plain[2] ? parseInt(plain[2], 10) : 1;
     return { code, eventType, isModifierOnly: code >= 57441 && code <= 57454, mods: 0 };
+  }
+
+  const plainAlternate = seq.match(/^\x1b\[(\d+)(?::\d*)+u$/);
+  if (plainAlternate) {
+    const code = parseInt(plainAlternate[1]!, 10);
+    return { code, eventType: 1, isModifierOnly: code >= 57441 && code <= 57454, mods: 0 };
   }
 
   // CSI arrow/special with event type: ESC [ (num)? ; mods (:event_type)? ABCDFHPQS~

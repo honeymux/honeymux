@@ -42,7 +42,7 @@ export interface InputRouterCallbacks {
   isMobileMode?: () => boolean;
   isMuxotronFocusActive?: () => boolean;
   isQuickTerminalOpen?: () => boolean;
-  /** Whether CSI u re-encoding is active (Kitty flags 15). */
+  /** Whether CSI u re-encoding is active (Kitty keyboard protocol). */
   isReEncodeActive?: () => boolean;
   isReady: () => boolean;
   /** True when the review session is latched — keys route to the agent PTY. */
