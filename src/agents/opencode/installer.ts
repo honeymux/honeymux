@@ -36,6 +36,17 @@ export function isOpenCodeIgnored(hostId: string = "local"): boolean {
   return readHostConsent(CONSENT_FILE, hostId).ignored === true;
 }
 
+/**
+ * True when the on-disk plugin already matches the bundled version — i.e.
+ * running sync would be a no-op. Used to suppress the "upgrade" prompt when
+ * nothing is actually stale.
+ */
+export async function isOpenCodePluginCurrent(host: InstallHost = localInstallHost): Promise<boolean> {
+  const destPath = join(await getPluginsDir(host), PLUGIN_SCRIPT_NAME);
+  const current = await host.readFile(destPath);
+  return current === PLUGIN_CONTENT;
+}
+
 export async function isOpenCodePluginInstalled(host: InstallHost = localInstallHost): Promise<boolean> {
   const destPath = join(await getPluginsDir(host), PLUGIN_SCRIPT_NAME);
   return (await host.readFile(destPath)) !== null;

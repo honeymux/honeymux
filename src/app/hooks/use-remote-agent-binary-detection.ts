@@ -15,10 +15,30 @@ import type { InstallHost } from "../../agents/install-host.ts";
 import type { RemoteServerManager } from "../../remote/remote-server-manager.ts";
 import type { AgentType } from "./agent-binary-detection-core.ts";
 
-import { areClaudeHooksInstalled, isClaudeConsented, isClaudeIgnored } from "../../agents/claude/installer.ts";
-import { areCodexHooksInstalled, isCodexConsented, isCodexIgnored } from "../../agents/codex/installer.ts";
-import { areGeminiHooksInstalled, isGeminiConsented, isGeminiIgnored } from "../../agents/gemini/installer.ts";
-import { isOpenCodeConsented, isOpenCodeIgnored, isOpenCodePluginInstalled } from "../../agents/opencode/installer.ts";
+import {
+  areClaudeHooksInstalled,
+  isClaudeConsented,
+  isClaudeHookInstallCurrent,
+  isClaudeIgnored,
+} from "../../agents/claude/installer.ts";
+import {
+  areCodexHooksInstalled,
+  isCodexConsented,
+  isCodexHookInstallCurrent,
+  isCodexIgnored,
+} from "../../agents/codex/installer.ts";
+import {
+  areGeminiHooksInstalled,
+  isGeminiConsented,
+  isGeminiHookInstallCurrent,
+  isGeminiIgnored,
+} from "../../agents/gemini/installer.ts";
+import {
+  isOpenCodeConsented,
+  isOpenCodeIgnored,
+  isOpenCodePluginCurrent,
+  isOpenCodePluginInstalled,
+} from "../../agents/opencode/installer.ts";
 import { detectRemoteRunningAgentTypes } from "../../remote/agent-binary-detection.ts";
 import { RemoteInstallHost } from "../../remote/remote-install-host.ts";
 
@@ -29,27 +49,32 @@ const AGENT_CHECKS: Record<
   {
     isConsented: (hostId: string) => boolean;
     isIgnored: (hostId: string) => boolean;
+    isInstallCurrent: (host: InstallHost) => Promise<boolean>;
     isInstalled: (host: InstallHost) => Promise<boolean>;
   }
 > = {
   claude: {
     isConsented: (hostId) => isClaudeConsented(hostId),
     isIgnored: (hostId) => isClaudeIgnored(hostId),
+    isInstallCurrent: (host) => isClaudeHookInstallCurrent(host),
     isInstalled: (host) => areClaudeHooksInstalled(host),
   },
   codex: {
     isConsented: (hostId) => isCodexConsented(hostId),
     isIgnored: (hostId) => isCodexIgnored(hostId),
+    isInstallCurrent: (host) => isCodexHookInstallCurrent(host),
     isInstalled: (host) => areCodexHooksInstalled(host),
   },
   gemini: {
     isConsented: (hostId) => isGeminiConsented(hostId),
     isIgnored: (hostId) => isGeminiIgnored(hostId),
+    isInstallCurrent: (host) => isGeminiHookInstallCurrent(host),
     isInstalled: (host) => areGeminiHooksInstalled(host),
   },
   opencode: {
     isConsented: (hostId) => isOpenCodeConsented(hostId),
     isIgnored: (hostId) => isOpenCodeIgnored(hostId),
+    isInstallCurrent: (host) => isOpenCodePluginCurrent(host),
     isInstalled: (host) => isOpenCodePluginInstalled(host),
   },
 };
@@ -194,8 +219,23 @@ export function useRemoteAgentBinaryDetection({
           }
           if (cancelled) return;
           // Installed + consent recorded for this remote → nothing to do.
-          // Installed + no consent → prompt to upgrade.
           if (installed && checks.isConsented(serverName)) continue;
+          // Installed + no consent → only prompt to upgrade if the on-disk
+          // install actually differs from the bundled version. If it matches,
+          // there's nothing to upgrade and the dialog would be a lie.
+          if (installed) {
+            let current: boolean;
+            try {
+              current = await checks.isInstallCurrent(installHost);
+            } catch {
+              continue;
+            }
+            if (cancelled) return;
+            if (current) {
+              promptedRef.current.add(key);
+              continue;
+            }
+          }
 
           promptedRef.current.add(key);
           setDialogForAgent(agent, serverName, installed ? "upgrade" : "install");

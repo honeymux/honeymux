@@ -108,6 +108,28 @@ export function isCodexConsented(hostId: string = "local"): boolean {
   return readHostConsent(CONSENT_FILE, hostId).consented === true;
 }
 
+/**
+ * True when the on-disk hook script, hooks.json, and config.toml already
+ * match what `installCodexHooks` would produce — i.e. sync would be a no-op.
+ * Used to suppress the "upgrade" prompt when nothing is actually stale.
+ */
+export async function isCodexHookInstallCurrent(host: InstallHost = localInstallHost): Promise<boolean> {
+  const scriptPath = join(await getHooksDir(host), HOOK_SCRIPT_NAME);
+  const currentScript = await host.readFile(scriptPath);
+  if (currentScript !== HOOK_CONTENT) return false;
+  const resolver = await buildHostResolver(host);
+  const command = buildCodexHookCommand(scriptPath, resolver);
+  if (!command) return false;
+  const hooksFile = await getHooksFile(host);
+  const currentHooksText = await host.readFile(hooksFile);
+  if (currentHooksText === null) return false;
+  const nextHooksText = JSON.stringify(upsertCodexHookSettings(safeParseJson(currentHooksText), command), null, 2);
+  if (currentHooksText !== nextHooksText) return false;
+  const configFile = await getConfigFile(host);
+  const currentConfigText = (await host.readFile(configFile)) ?? "";
+  return currentConfigText === ensureCodexHooksFeature(currentConfigText);
+}
+
 export function isCodexIgnored(hostId: string = "local"): boolean {
   return readHostConsent(CONSENT_FILE, hostId).ignored === true;
 }
