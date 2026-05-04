@@ -80,6 +80,30 @@ export function usePaneTabsIntegration({
   }, []);
   paneTabsApi.onMenuButtonClickRef.current = openPaneBorderMenu;
 
+  // Highlight the pane's ≡ glyph in accent color while its border menu is open.
+  // The pane-border-format consults @hmx-pane-menu-open via a tmux conditional;
+  // we toggle that per-pane user option and force a status redraw.
+  useEffect(() => {
+    const client = clientRef.current;
+    if (!client) return;
+    const paneId = paneBorderMenu?.paneId ?? null;
+    if (!paneId) return;
+    void (async () => {
+      try {
+        await client.setPaneUserOption(paneId, "@hmx-pane-menu-open", "1");
+        await client.runCommand("refresh-client -S");
+      } catch {}
+    })();
+    return () => {
+      void (async () => {
+        try {
+          await client.setPaneUserOption(paneId, "@hmx-pane-menu-open", null);
+          await client.runCommand("refresh-client -S");
+        } catch {}
+      })();
+    };
+  }, [clientRef, paneBorderMenu]);
+
   const [paneTabDisableConfirmOpen, setPaneTabDisableConfirmOpen] = useState(false);
   const [paneTabDisableConfirmButtonCol, setPaneTabDisableConfirmButtonCol] = useState(1);
 

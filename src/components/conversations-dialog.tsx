@@ -103,7 +103,7 @@ export function ConversationsDialog({
   const menuWidth = menuItemWidth + 2;
   const menuTop = dialogTop + 1;
   const menuLeft = dialogLeft + dialogWidth - menuWidth - 1;
-  const hamburgerLabel = menuOpen ? "▸≡ " : " ≡ ";
+  const hamburgerLabel = " ≡ ";
   const hamburgerLeft = dialogLeft + dialogWidth - stringWidth(hamburgerLabel) - 2;
   const searchMatcher = compileHistorySearchMatcher(query, {
     caseSensitive: caseSensitiveSearch,
@@ -397,7 +397,7 @@ export function ConversationsDialog({
       <text
         bg={theme.bgSurface}
         content={hamburgerLabel}
-        fg={theme.accent}
+        fg={menuOpen ? theme.textBright : theme.textDim}
         left={hamburgerLeft}
         onMouseDown={(event: MouseEvent) => {
           if (event.button === 0) onToggleMenu();
