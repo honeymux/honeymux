@@ -142,7 +142,7 @@ export function TmuxPaneOverlayLayer({
     onTreeAgentSelect,
     registryRef,
   } = agent;
-  const { dropdownInputRef, keyBindings, uiMode } = shared;
+  const { dropdownInputRef, keyBindings, textInputEscapeHandlerRef, uiMode } = shared;
   const { agentsDialogNode, onBufferZoom, overflow } = runtime;
   const topOffset = uiMode === "raw" || uiMode === "marquee-bottom" ? 0 : 3;
   const bottomOffset = uiMode === "marquee-bottom" ? 3 : 0;
@@ -213,6 +213,7 @@ export function TmuxPaneOverlayLayer({
             onSetSessionColor={onSetSessionColor}
             onTextInputActive={onTextInputActive}
             sessions={sessions}
+            textInputEscapeHandlerRef={textInputEscapeHandlerRef}
           />
         )}
       {layoutDropdownOpen &&

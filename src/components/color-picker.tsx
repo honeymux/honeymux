@@ -527,4 +527,3 @@ function greyAtIndex(i: number, steps: number): string {
   const v = steps <= 1 ? 1 : i / (steps - 1);
   return rgbToHex(hsvToRgb(0, 0, v));
 }
-
