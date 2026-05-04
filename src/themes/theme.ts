@@ -59,6 +59,13 @@ export function hsvToRgb(h: number, s: number, v: number): RGB {
   return [Math.round((r1 + m) * 255), Math.round((g1 + m) * 255), Math.round((b1 + m) * 255)];
 }
 
+/** Returns true if the color is light enough that dark text reads better on it. */
+export function isBright(hex: string): boolean {
+  const [r, g, b] = hexToRgb(hex);
+  // Perceived brightness (ITU-R BT.601)
+  return (r * 299 + g * 587 + b * 114) / 1000 > 128;
+}
+
 export function lerpRgb(a: RGB, b: RGB, t: number): RGB {
   return [
     Math.round(a[0] + (b[0] - a[0]) * t),
@@ -69,6 +76,26 @@ export function lerpRgb(a: RGB, b: RGB, t: number): RGB {
 
 export function rgbToHex([r, g, b]: RGB): string {
   return "#" + r.toString(16).padStart(2, "0") + g.toString(16).padStart(2, "0") + b.toString(16).padStart(2, "0");
+}
+
+/** Convert RGB (0..255) to HSV with h in [0, 360), s and v in [0, 1]. */
+export function rgbToHsv([r, g, b]: RGB): [number, number, number] {
+  const rn = r / 255;
+  const gn = g / 255;
+  const bn = b / 255;
+  const max = Math.max(rn, gn, bn);
+  const min = Math.min(rn, gn, bn);
+  const d = max - min;
+  let h = 0;
+  if (d !== 0) {
+    if (max === rn) h = ((gn - bn) / d) % 6;
+    else if (max === gn) h = (bn - rn) / d + 2;
+    else h = (rn - gn) / d + 4;
+    h *= 60;
+    if (h < 0) h += 360;
+  }
+  const s = max === 0 ? 0 : d / max;
+  return [h, s, max];
 }
 
 // ---------------------------------------------------------------------------
