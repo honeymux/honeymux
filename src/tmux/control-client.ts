@@ -862,6 +862,21 @@ export class TmuxControlClient extends EventEmitter {
   }
 
   /**
+   * Set or clear a pane-scoped tmux user option.
+   */
+  async setPaneUserOption(paneId: string, optionName: string, value: null | string): Promise<void> {
+    assertPaneId(paneId);
+    assertUserOptionName(optionName);
+    if (value !== null) {
+      await this.sendCommand(
+        `set-option -p -t ${paneId} ${quoteTmuxArg("optionName", optionName)} ${quoteTmuxArg("optionValue", value)}`,
+      );
+    } else {
+      await this.sendCommand(`set-option -pu -t ${paneId} ${quoteTmuxArg("optionName", optionName)}`);
+    }
+  }
+
+  /**
    * Set or clear the session color user option (@hmx-color).
    */
   async setSessionColor(sessionName: string, color: null | string): Promise<void> {
