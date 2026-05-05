@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+## v0.105.0 - 2026-05-04
+
+- Add "default" option to both cursor alert shape and blink settings
+- Add grey ramp to color picker and apply contrast logic to session label
+- Change default agent alert animation to scribble with a 3 cycle count
+- Change default session color to light grey
+- Don't tear down remote tmux mirror on session-group winlink churn
+- Ignore activate menu hotkey presses when the foreground dialog doesn't have a dropdown menu
+- On window creation, always position the new tab at the far right
+- Promote pane tabs feature out of experimental and enable by default
+- Return to session list when canceling a new session or rename session operation
+- Show sidebar and toolbar on fresh install
+- Suppress agent hooks upgrade prompt when the current install is already up to date
+- Unify the open-state indicator for the menu dropdown in all dialogs
+
 ## v0.104.0 - 2026-05-01
 
 - Change the default theme from dracula to spacemacs
