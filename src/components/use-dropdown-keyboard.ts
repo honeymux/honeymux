@@ -46,7 +46,20 @@ export function useDropdownKeyboard({
   onRight,
   onSelect,
 }: UseDropdownKeyboardOptions): { focusedIndex: number; setFocusedIndex: (i: number) => void } {
-  const [focusedIndex, setFocusedIndex] = useState(0);
+  const [focusedIndex, setFocusedIndex] = useState(() => {
+    const start = initialIndex != null && initialIndex >= 0 && initialIndex < itemCount ? initialIndex : 0;
+    if (disabledIndices && disabledIndices.has(start)) {
+      const count = itemCount;
+      if (count > 0) {
+        let next = start;
+        for (let i = 0; i < count; i++) {
+          next = (next + 1) % count;
+          if (!disabledIndices.has(next)) return next;
+        }
+      }
+    }
+    return start;
+  });
   const initialIndexRef = useRef(initialIndex);
   initialIndexRef.current = initialIndex;
 
