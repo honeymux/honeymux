@@ -6,7 +6,10 @@ import { overlayAtColumn, stringWidth, stripNonPrintingControlChars, truncateNam
 import { computeDragDisplayState } from "./drag.ts";
 import { buildTabLines, computeOverflow, computeTabDisplayNames, tabBoundsFromIndex, tabWidth } from "./layout.ts";
 
-const MAX_SESSION_DISPLAY = 10;
+/** Minimum cells of whitespace kept between the muxotron's right edge and the badge's left edge. */
+const MUXOTRON_BADGE_PADDING = 2;
+/** Cells the badge label adds around the name: " " + name + " ▾ " (▾ counts as 1 cell). */
+const BADGE_CHROME_WIDTH = 4;
 
 interface BuildTabBarModelOptions {
   activeIndex: number;
@@ -85,17 +88,21 @@ export function buildTabBarModel({
   width,
   windows,
 }: BuildTabBarModelOptions): TabBarModel {
-  const displayName = sessionName ? truncateName(stripNonPrintingControlChars(sessionName), MAX_SESSION_DISPLAY) : null;
-  const badgeLabel = displayName ? ` ${displayName} ▾ ` : null;
-  const badgeWidth = badgeLabel != null ? stringWidth(badgeLabel) : 0;
-
   const sidebarReserve = hasSidebarToggle ? 2 : 0;
   const toolbarIconReserve = hasToolbarToggle ? 3 : 0;
   const profileReserve = hasLayoutProfileClick ? 3 : 0;
   const toolbarReserve = toolbarIconReserve + profileReserve;
-  const badgeReserve = computeTabBarBadgeReserve({ hasLayoutProfileClick, hasToolbarToggle, sessionName });
 
   const muxotronEnabled = muxotronEnabledProp !== false;
+  const { badgeLabel, badgeWidth } = computeBadgeMetrics({
+    muxotronEnabled,
+    sessionName,
+    toolbarReserve,
+    uiMode,
+    width,
+  });
+  const badgeReserve = (badgeWidth > 0 ? badgeWidth + 2 : 0) + toolbarReserve;
+
   const muxotronWidth = getMuxotronWidth(width, uiMode, muxotronEnabled, false);
   const muxotronRight = Math.floor((width - muxotronWidth) / 2) + muxotronWidth;
   const badgeLeft = width - toolbarReserve - 1 - badgeWidth;
@@ -273,15 +280,22 @@ export function buildTabBarModel({
 export function computeTabBarBadgeReserve(opts: {
   hasLayoutProfileClick: boolean;
   hasToolbarToggle: boolean;
+  muxotronEnabled?: boolean;
   sessionName?: string;
+  uiMode?: UIMode;
+  width?: number;
 }): number {
   const { hasLayoutProfileClick, hasToolbarToggle, sessionName } = opts;
-  const displayName = sessionName ? truncateName(stripNonPrintingControlChars(sessionName), MAX_SESSION_DISPLAY) : null;
-  const badgeLabel = displayName ? ` ${displayName} ▾ ` : null;
-  const badgeWidth = badgeLabel != null ? stringWidth(badgeLabel) : 0;
   const toolbarIconReserve = hasToolbarToggle ? 3 : 0;
   const profileReserve = hasLayoutProfileClick ? 3 : 0;
   const toolbarReserve = toolbarIconReserve + profileReserve;
+  const { badgeWidth } = computeBadgeMetrics({
+    muxotronEnabled: opts.muxotronEnabled ?? true,
+    sessionName,
+    toolbarReserve,
+    uiMode: opts.uiMode ?? "adaptive",
+    width: opts.width ?? 0,
+  });
   return (badgeWidth > 0 ? badgeWidth + 2 : 0) + toolbarReserve;
 }
 
@@ -391,6 +405,42 @@ function composeDragOverlay({
   bot = overlayAtColumn(bot, floatLeft, "╰" + "─".repeat(dragWidth) + "╯");
 
   return { bot, mid, top };
+}
+
+/**
+ * Compute the session badge label and rendered width.
+ *
+ * The badge sizes itself to the current session's name with no hard cap. The
+ * name truncates with " …" only when the available horizontal room runs out:
+ * the badge keeps MUXOTRON_BADGE_PADDING cells of clearance from the muxotron's
+ * right edge (when visible), and never crosses the screen's left margin.
+ */
+function computeBadgeMetrics(opts: {
+  muxotronEnabled: boolean;
+  sessionName?: string;
+  toolbarReserve: number;
+  uiMode: UIMode;
+  width: number;
+}): { badgeLabel: null | string; badgeWidth: number } {
+  const { muxotronEnabled, sessionName, toolbarReserve, uiMode, width } = opts;
+  if (!sessionName) return { badgeLabel: null, badgeWidth: 0 };
+
+  const cleanName = stripNonPrintingControlChars(sessionName);
+  const nameLen = stringWidth(cleanName);
+
+  // The badge's rendered right edge sits at width - toolbarReserve - 2.
+  // Its left edge can extend up to the muxotron's right edge + 2 cells of
+  // clearance (when the muxotron is visible) or the screen's left margin.
+  const muxotronWidth = getMuxotronWidth(width, uiMode, muxotronEnabled, false);
+  const leftBound =
+    muxotronWidth > 0 ? Math.floor((width - muxotronWidth) / 2) + muxotronWidth + MUXOTRON_BADGE_PADDING : 0;
+  const availableBadge = Math.max(0, width - toolbarReserve - 2 - leftBound);
+  const availableSlot = Math.max(0, availableBadge - BADGE_CHROME_WIDTH);
+  const actualSlot = Math.min(nameLen, availableSlot);
+
+  const labelName = truncateName(cleanName, actualSlot);
+  const badgeLabel = ` ${labelName} ▾ `;
+  return { badgeLabel, badgeWidth: stringWidth(badgeLabel) };
 }
 
 function computeRenderedOverflowStartX(
