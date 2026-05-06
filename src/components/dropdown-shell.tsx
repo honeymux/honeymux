@@ -121,8 +121,9 @@ export function DropdownInputPanel({
           placeholderColor={theme.textDim}
           ref={textareaRef}
           textColor={theme.text}
-          width={itemWidth - 1}
+          width={itemWidth - 2}
         />
+        <text bg={theme.bgSurface} content=" " selectable={false} />
       </box>
       <text
         bg={theme.bgSurface}
