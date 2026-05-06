@@ -568,7 +568,7 @@ export function ServerTree({
               <text bg={bg} content={seg.text} fg={seg.fg} key={idx} />
             ))}
             <text bg={bg} content={restText} fg={accentFg} />
-            <text bg={bg} content={l.right} fg={isFocused ? theme.textBright : theme.textDim} />
+            <text bg={bg} content={l.right} fg={accentFg} />
           </box>
         );
       })}
