@@ -246,11 +246,15 @@ export function App({ sessionName }: AppProps) {
     }
   }
 
-  // Keep activePaneIdRef in sync when the user clicks a different pane within the same window
+  // Keep activePaneIdRef in sync when the user clicks a different pane within the same window.
+  // Filter by windowId: a cross-window swap-pane (used by pane-tabs to bring a staged tab
+  // into the visible slot) fires window-pane-changed for both windows, and unfiltered the
+  // staging window's event can clobber the ref with a now-hidden pane id.
   useEffect(() => {
     const client = clientRef.current;
     if (!client) return;
-    const handler = (_windowId: string, paneId: string) => {
+    const handler = (windowId: string, paneId: string) => {
+      if (windowId !== activeWindowIdRef.current) return;
       activePaneIdRef.current = paneId;
     };
     client.on("window-pane-changed", handler);
