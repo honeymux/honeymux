@@ -129,7 +129,7 @@ export function TabBar({
   layoutDropdownOpen,
   mainMenuBindingLabel,
   muxotronEnabled: muxotronEnabledProp,
-  muxotronExpanded,
+  muxotronExpanded: muxotronExpandedProp,
   muxotronFocusActive,
   onApprove,
   onCloseWindow,
@@ -246,6 +246,13 @@ export function TabBar({
     };
   }, []);
 
+  // Defer mux-o-tron expansion while a tab dropdown is open so layout doesn't shift
+  // under the user's interaction; release once the dropdown closes.
+  const [tabDialogActive, setTabDialogActive] = useState(false);
+  const muxotronExpandedSnapshotRef = useRef(!!muxotronExpandedProp);
+  if (!tabDialogActive) muxotronExpandedSnapshotRef.current = !!muxotronExpandedProp;
+  const muxotronExpanded = tabDialogActive ? muxotronExpandedSnapshotRef.current : muxotronExpandedProp;
+
   const MIN_HINT_WIDTH = 10; // minimum space (including 2 padding) to show hint
   const model = buildTabBarModel({
     activeIndex,
@@ -339,6 +346,11 @@ export function TabBar({
     width,
     windows,
   });
+
+  const tabDialogActiveDerived = contextMenuIndex !== null || renameWindowId !== null;
+  useEffect(() => {
+    setTabDialogActive(tabDialogActiveDerived);
+  }, [tabDialogActiveDerived]);
 
   const {
     handleBadgeMouseDown,
