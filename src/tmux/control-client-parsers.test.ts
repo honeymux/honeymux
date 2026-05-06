@@ -204,7 +204,9 @@ describe("control client parsers", () => {
   });
 
   test("parses pane inventory outputs", () => {
-    expect(parseAllPaneInfoOutput("123 bash /dev/pts/1 0 0 80 24 1 %3\n456 vim /dev/pts/2 81 0 80 24 0 %4")).toEqual([
+    expect(
+      parseAllPaneInfoOutput("123 bash /dev/pts/1 0 0 80 24 1 %3 0\n456 vim /dev/pts/2 81 0 80 24 0 %4 0"),
+    ).toEqual([
       {
         active: true,
         command: "bash",
@@ -215,6 +217,7 @@ describe("control client parsers", () => {
         top: 0,
         tty: "/dev/pts/1",
         width: 80,
+        windowZoomed: false,
       },
       {
         active: false,
@@ -226,6 +229,38 @@ describe("control client parsers", () => {
         top: 0,
         tty: "/dev/pts/2",
         width: 80,
+        windowZoomed: false,
+      },
+    ]);
+
+    // Zoomed window: inactive pane geometry is still reported, with windowZoomed=1
+    // for every pane in the window.
+    expect(
+      parseAllPaneInfoOutput("123 bash /dev/pts/1 0 0 160 48 1 %3 1\n456 vim /dev/pts/2 81 0 80 24 0 %4 1"),
+    ).toEqual([
+      {
+        active: true,
+        command: "bash",
+        height: 48,
+        id: "%3",
+        left: 0,
+        pid: 123,
+        top: 0,
+        tty: "/dev/pts/1",
+        width: 160,
+        windowZoomed: true,
+      },
+      {
+        active: false,
+        command: "vim",
+        height: 24,
+        id: "%4",
+        left: 81,
+        pid: 456,
+        top: 0,
+        tty: "/dev/pts/2",
+        width: 80,
+        windowZoomed: true,
       },
     ]);
 

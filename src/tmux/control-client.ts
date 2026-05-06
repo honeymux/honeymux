@@ -274,11 +274,12 @@ export class TmuxControlClient extends EventEmitter {
       top: number;
       tty: string;
       width: number;
+      windowZoomed: boolean;
     }>
   > {
     const targetFlag = targetSession ? ` -t ${quoteTmuxArg("targetSession", targetSession)}` : "";
     const output = await this.sendCommand(
-      `list-panes${targetFlag} -F '#{pane_pid} #{pane_current_command} #{pane_tty} #{pane_left} #{pane_top} #{pane_width} #{pane_height} #{pane_active} #{pane_id}'`,
+      `list-panes${targetFlag} -F '#{pane_pid} #{pane_current_command} #{pane_tty} #{pane_left} #{pane_top} #{pane_width} #{pane_height} #{pane_active} #{pane_id} #{window_zoomed_flag}'`,
     );
     return parseAllPaneInfoOutput(output);
   }

@@ -27,6 +27,7 @@ interface TmuxPaneInfo extends TmuxActivePaneGeometry {
   id: string;
   pid: number;
   tty: string;
+  windowZoomed: boolean;
 }
 
 interface TmuxSessionInfo {
@@ -120,7 +121,7 @@ export function parseAllPaneInfoOutput(output: string): TmuxPaneInfo[] {
     const trimmed = line.trim();
     if (!trimmed) continue;
     const parts = trimmed.split(" ");
-    if (parts.length < 9) continue;
+    if (parts.length < 10) continue;
     panes.push({
       active: parts[7] === "1",
       command: parts[1] ?? "",
@@ -131,6 +132,7 @@ export function parseAllPaneInfoOutput(output: string): TmuxPaneInfo[] {
       top: parseInt(parts[4]!, 10),
       tty: parts[2] ?? "",
       width: parseInt(parts[5]!, 10),
+      windowZoomed: parts[9] === "1",
     });
   }
   return panes;
