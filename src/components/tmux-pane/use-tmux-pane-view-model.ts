@@ -181,7 +181,10 @@ export function useTmuxPaneViewModel({
   const rightReserve = computeTabBarBadgeReserve({
     hasLayoutProfileClick: !!layout.onLayoutProfileClick,
     hasToolbarToggle: !!toolbar.onToolbarToggle,
+    muxotronEnabled,
     sessionName,
+    uiMode,
+    width,
   });
   const overflow = usePaneOverflow({
     activeIndex,
