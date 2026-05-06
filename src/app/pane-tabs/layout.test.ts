@@ -44,6 +44,16 @@ describe("pane tab drag helpers", () => {
       expect(hitTestPaneTab(tabs, 35)).toBe(-1);
     });
 
+    it("returns 0 only on the rendered tab area for a single-tab group", () => {
+      const single: PaneTab[] = [{ label: "bash", paneId: "%1" }];
+      // "┤ bash ├─" = 9 columns; with BORDER_PREFIX=2 the tab spans cols 2..10
+      expect(hitTestPaneTab(single, 1, 80, 0)).toBe(-1);
+      expect(hitTestPaneTab(single, 2, 80, 0)).toBe(0);
+      expect(hitTestPaneTab(single, 10, 80, 0)).toBe(0);
+      expect(hitTestPaneTab(single, 11, 80, 0)).toBe(-1);
+      expect(hitTestPaneTab(single, 40, 80, 0)).toBe(-1);
+    });
+
     it("uses terminal cell widths for wide CJK labels", () => {
       const wideTabs: PaneTab[] = [
         { label: "漢字", paneId: "%1" },

@@ -144,7 +144,7 @@ export function usePaneTabInteractions({
         const group = getPaneTabGroup(paneId);
         if (!group) return false;
         const maxWidth = borderMaxWidth(group.slotWidth);
-        const hit = group.tabs.length <= 1 ? 0 : hitTestPaneTab(group.tabs, xOffset, maxWidth, group.activeIndex);
+        const hit = hitTestPaneTab(group.tabs, xOffset, maxWidth, group.activeIndex);
         if (hit === -2) {
           const visibleCount = computePaneTabVisible(group.tabs, maxWidth);
           setPaneTabOverflow({ screenX, screenY, slotKey: group.slotKey, visibleCount });
