@@ -43,8 +43,11 @@ export function useDimInactivePanes({ clientRef, connected, enabled, targetSessi
         const panes = await client.getAllPaneInfo(targetSession);
         if (cancelled) return;
 
+        // When a window is zoomed, tmux still reports inactive panes at their
+        // pre-zoom geometry — but the active pane covers the whole window, so
+        // dimming those rects would tint the visible zoomed pane.
         const rects: DimPaneRect[] = panes
-          .filter((p) => !p.active)
+          .filter((p) => !p.active && !p.windowZoomed)
           .map((p) => ({ height: p.height, left: p.left, top: p.top, width: p.width }));
 
         const json = JSON.stringify(rects);
