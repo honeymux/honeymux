@@ -155,6 +155,15 @@ export class RemoteServerManager extends EventEmitter {
       // Respawn the remote pane with a shell
       await client.sendCommand(`respawn-pane -k -t ${remotePaneId}`);
 
+      // The remote pane's content was just reset by `respawn-pane`. Drop
+      // the mirror's cached layout assertion for the enclosing window so
+      // the next syncWindowPanes (triggered by the local respawn below)
+      // re-applies select-layout — that's what kicks tmux to re-assert
+      // pane geometry against the current client size and flush the
+      // freshly spawned shell's output to control-mode subscribers.
+      const localMeta = await this.getLocalPaneMetadata(localPaneId);
+      if (localMeta) mirror.invalidateLayoutForLocalWindow(localMeta.windowId);
+
       // Mark the pane as remote and set the remote border format BEFORE the
       // local respawn, so that the layout-change tmux emits during the respawn
       // is observed by downstream features (e.g. pane tabs bootstrap) with the
@@ -463,6 +472,10 @@ export class RemoteServerManager extends EventEmitter {
       const mirror = new MirrorLayoutManager(this.localClient, client);
       mirror.isRemotePaneActive = (remotePaneId: string) => {
         return this.findLocalPaneForRemote(config.name, remotePaneId) !== undefined;
+      };
+      mirror.onIntegrityWarning = (message: string) => {
+        log("remote", `mirror integrity issue for ${this.serverTag(config.name)}: ${message}`);
+        this.emit("warning", `Remote mirror integrity (${config.name}): ${message}`);
       };
       this.mirrors.set(config.name, mirror);
 
