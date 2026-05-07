@@ -83,6 +83,37 @@ describe("RemoteControlClient parser wiring", () => {
     expect(args).toContain("StreamLocalBindUnlink=yes");
   });
 
+  test("disables the remote hook forward after the server rejects stream-local forwarding", () => {
+    const client = new RemoteControlClient(
+      {
+        host: "example-host",
+        name: "dev-box",
+      },
+      "mirror-alpha",
+      { localSocketPath: "/tmp/hmx-local.sock" },
+    );
+
+    (client as unknown as { resolvedRemoteHookSocketPath: string }).resolvedRemoteHookSocketPath =
+      "/home/dev/.local/state/honeymux/runtime/hmx-remote.sock";
+
+    const onWarning = mock((_message: string) => {});
+    client.on("warning", onWarning);
+
+    const detect = (
+      client as unknown as { maybeMarkHookForwardingFailure: (chunk: string) => void }
+    ).maybeMarkHookForwardingFailure.bind(client);
+    detect("remote port forwarding failed for listen path /home/dev/.local/state/honeymux/runtime/hmx-remote.sock\n");
+    detect("remote port forwarding failed for listen path /home/dev/.local/state/honeymux/runtime/hmx-remote.sock\n");
+
+    expect(client.hookForwardingRejected).toBe(true);
+    expect(onWarning).toHaveBeenCalledTimes(1);
+
+    const args = (client as unknown as { buildSshArgs: (includeHookForward?: boolean) => string[] }).buildSshArgs(true);
+    expect(args).not.toContain("-R");
+    expect(args).not.toContain("ExitOnForwardFailure=yes");
+    expect(args).not.toContain("StreamLocalBindUnlink=yes");
+  });
+
   test("builds a remote hook path probe command without escaping shell expansion", () => {
     const command = buildRemoteHookSocketPathProbeCommand("hmx-remote-hook.sock");
 

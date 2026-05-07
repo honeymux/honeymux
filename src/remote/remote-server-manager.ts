@@ -631,6 +631,7 @@ export class RemoteServerManager extends EventEmitter {
     const client = this.clients.get(serverName);
     const remoteHookSocketPath = client?.remoteHookSocketPath;
     if (!client || !remoteHookSocketPath) return;
+    if (client.hookForwardingRejected) return;
 
     await client.sendCommand(
       `set-option -gq ${REMOTE_HOOK_SOCKET_TMUX_OPTION} ${quoteTmuxArg("remote hook socket path", remoteHookSocketPath)}`,

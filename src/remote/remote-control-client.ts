@@ -30,6 +30,10 @@ const REMOTE_HOOK_SOCKET_PATH_SCRIPT = [
 ].join("\n");
 const MAX_SSH_STDERR_CHARS = 8 * 1024;
 const MAX_SSH_WARNING_CHARS = 512;
+// OpenSSH client error printed when the server rejects a remote (-R) Unix-socket
+// forward. Seen e.g. with Tailscale SSH and with sshd_config
+// AllowStreamLocalForwarding=no.
+const HOOK_FORWARD_REJECTED_PATTERN = "remote port forwarding failed for listen path";
 
 /**
  * SSH-tunneled tmux control mode client.
@@ -51,6 +55,9 @@ const MAX_SSH_WARNING_CHARS = 512;
  *   warning(message: string)
  */
 export class RemoteControlClient extends EventEmitter {
+  get hookForwardingRejected(): boolean {
+    return this.hookForwardingFailed;
+  }
   get isConnected(): boolean {
     return !this.closed && this.proc !== null;
   }
@@ -61,6 +68,7 @@ export class RemoteControlClient extends EventEmitter {
     return this.proc?.pid;
   }
   private closed = false;
+  private hookForwardingFailed = false;
   private intentionallyClosed = false;
   private lastStderr = "";
   private lastStderrWasTruncated = false;
@@ -245,7 +253,7 @@ export class RemoteControlClient extends EventEmitter {
     if (this.config.port) args.push("-p", String(this.config.port));
     if (this.config.identityFile) args.push("-i", this.config.identityFile);
     if (this.config.agentForwarding) args.push("-A");
-    if (includeHookForward && this.hookForward && this.resolvedRemoteHookSocketPath) {
+    if (includeHookForward && this.hookForward && this.resolvedRemoteHookSocketPath && !this.hookForwardingFailed) {
       args.push("-o", "ExitOnForwardFailure=yes");
       args.push("-o", "StreamLocalBindUnlink=yes");
       args.push("-R", `${this.resolvedRemoteHookSocketPath}:${this.hookForward.localSocketPath}`);
@@ -295,6 +303,7 @@ export class RemoteControlClient extends EventEmitter {
           const next = appendBoundedSshText(this.lastStderr, chunk, MAX_SSH_STDERR_CHARS);
           this.lastStderr = next.text;
           this.lastStderrWasTruncated ||= next.wasTruncated;
+          this.maybeMarkHookForwardingFailure(chunk);
           const message = truncateSshText(chunk, MAX_SSH_WARNING_CHARS);
           if (message) {
             this.emit("warning", message);
@@ -305,6 +314,7 @@ export class RemoteControlClient extends EventEmitter {
           const next = appendBoundedSshText(this.lastStderr, tail, MAX_SSH_STDERR_CHARS);
           this.lastStderr = next.text;
           this.lastStderrWasTruncated ||= next.wasTruncated;
+          this.maybeMarkHookForwardingFailure(tail);
           const message = truncateSshText(tail, MAX_SSH_WARNING_CHARS);
           if (message) {
             this.emit("warning", message);
@@ -346,6 +356,22 @@ export class RemoteControlClient extends EventEmitter {
   private getRemoteHookSocketName(): string {
     const digest = createHash("sha256").update(`${this.config.name}\0${this.mirrorSession}`).digest("hex").slice(0, 16);
     return `hmx-remote-hook-${digest}.sock`;
+  }
+
+  private maybeMarkHookForwardingFailure(chunk: string): void {
+    if (this.hookForwardingFailed) return;
+    if (!this.hookForward) return;
+    if (!chunk.includes(HOOK_FORWARD_REJECTED_PATTERN)) return;
+    this.hookForwardingFailed = true;
+    log(
+      "remote",
+      `remote ssh server rejected hook socket forward (${this.config.name}); agent hooks disabled for this server`,
+    );
+    this.emit(
+      "warning",
+      "remote ssh server rejected hook socket forwarding; agent hooks disabled for this server. " +
+        "(Tailscale SSH and sshd with AllowStreamLocalForwarding=no are common causes.)",
+    );
   }
 
   private async runRemoteProcess(
