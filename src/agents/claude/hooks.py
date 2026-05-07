@@ -133,6 +133,64 @@ def get_tmux_pane_id():
     return pane_id
 
 
+def resolve_claude_session_pid(initial_pid):
+    """Return a stable pid for the running Claude Code agent.
+
+    On some Claude Code builds, hook commands are dispatched through
+    ``/bin/sh -c <command>`` (e.g. via Node's ``child_process`` with
+    ``shell: true``) rather than exec'd directly. ``os.getppid()`` in
+    the hook script then returns the wrapper shell's pid, not the
+    long-lived ``claude`` process. The wrapper exits as soon as the
+    hook script returns, leaving honeymux's pid-based liveness check
+    to mark the agent ``ended`` ~5s later.
+
+    For ``async: true`` hooks (e.g. SessionStart) this happens
+    immediately because the hook returns in milliseconds. Synchronous
+    hooks (PermissionRequest) mask the bug while python blocks on the
+    socket, but the wrapper still dies right after the user answers,
+    so the session disappears on the next liveness tick.
+
+    Walking up the parent chain to find the nearest ancestor whose
+    ``comm`` is ``claude`` yields a pid that lives for the full
+    session and works regardless of whether the hook is exec'd
+    directly or through ``sh -c``.
+    """
+    max_depth = 8
+    pid = initial_pid
+    seen = set()
+    for _ in range(max_depth):
+        if pid <= 1 or pid in seen:
+            break
+        seen.add(pid)
+        try:
+            proc = subprocess.run(
+                ["ps", "-o", "ppid=,comm=", "-p", str(pid)],
+                capture_output=True,
+                stdin=subprocess.DEVNULL,
+                text=True,
+                timeout=1,
+            )
+        except (OSError, subprocess.SubprocessError):
+            break
+        if proc.returncode != 0:
+            break
+        line = proc.stdout.strip()
+        if not line:
+            break
+        parts = line.split(None, 1)
+        if len(parts) != 2:
+            break
+        try:
+            ppid = int(parts[0])
+        except ValueError:
+            break
+        comm = parts[1].strip()
+        if comm == "claude" or comm.endswith("/claude"):
+            return pid
+        pid = ppid
+    return initial_pid
+
+
 def is_original_parent_alive(parent_pid):
     if parent_pid <= 1:
         return False
@@ -192,7 +250,7 @@ def main():
     tool_name = data.get("tool_name")
     tool_input = data.get("tool_input")
     tool_use_id = data.get("tool_use_id")
-    parent_pid = os.getppid()
+    parent_pid = resolve_claude_session_pid(os.getppid())
 
     remote_socket_path = get_tmux_remote_socket_path()
     pane_id = get_tmux_pane_id()
