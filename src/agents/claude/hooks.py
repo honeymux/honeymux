@@ -195,15 +195,40 @@ def is_original_parent_alive(parent_pid):
     if parent_pid <= 1:
         return False
 
-    if os.getppid() != parent_pid:
-        return False
-
-    try:
-        os.kill(parent_pid, 0)
-    except OSError:
-        return False
-
-    return True
+    # parent_pid is the resolved claude ancestor, not necessarily our
+    # direct parent (an intermediate ``sh -c`` wrapper may sit between
+    # us and claude). Confirm the claude pid is still in our ancestor
+    # chain — if claude exits, the wrapper is reparented to init and
+    # parent_pid no longer appears above us.
+    pid = os.getppid()
+    seen = set()
+    for _ in range(8):
+        if pid <= 1 or pid in seen:
+            break
+        seen.add(pid)
+        if pid == parent_pid:
+            try:
+                os.kill(parent_pid, 0)
+            except OSError:
+                return False
+            return True
+        try:
+            proc = subprocess.run(
+                ["ps", "-o", "ppid=", "-p", str(pid)],
+                capture_output=True,
+                stdin=subprocess.DEVNULL,
+                text=True,
+                timeout=1,
+            )
+        except (OSError, subprocess.SubprocessError):
+            return False
+        if proc.returncode != 0:
+            return False
+        try:
+            pid = int(proc.stdout.strip())
+        except ValueError:
+            return False
+    return False
 
 
 def read_permission_response(sock, parent_pid):
