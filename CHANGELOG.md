@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+## v0.106.0 - 2026-05-07
+
+- Auto-resize the session dropdown badge to accomodate longer names without string truncation
+- Defer mux-o-tron expansion while the window tab context menu is active
+- Disable inactive pane dimming when a pane is zoomed via tmux
+- Fix bug that caused unintended mux-o-tron expansion when the requesting agent was still in focus in a multi-tab pane
+- Fix minor display bug by always rendering dropdown menus with the initial index set to the focus index
+- Fix minor display padding issue with dropdown text input fields
+- Fix too-wide right-click hit zone in single tab pane borders
+- Highlight all server tree columns in the sidebar for the currently focused pane
+- Refactor remote mirror handling to prevent the remote layout from diverging from the local layout
+
 ## v0.105.0 - 2026-05-04
 
 - Add "default" option to both cursor alert shape and blink settings
