@@ -1,4 +1,7 @@
 import { describe, expect, it, mock } from "bun:test";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 import type { AgentEvent } from "../agents/types.ts";
 import type { RemoteAgentIngress, RemotePermissionRoute } from "./agent-transport.ts";
@@ -747,5 +750,61 @@ describe("RemoteServerManager remote hook ingress", () => {
       .map((call: unknown[]) => call[0] as string[])
       .find((a: string[]) => a[0] === "set-option" && a[4] === "@hmx-remote-token");
     expect(tokenSet).toEqual(["set-option", "-p", "-t", "%10", "@hmx-remote-token", proxyToken]);
+  });
+
+  it("drives the remote install host through the per-server ssh exec when refreshing hooks", async () => {
+    // The four refresh* helpers short-circuit when host-level consent is
+    // missing. claude reads HOME lazily through a function so we can grant
+    // consent in a redirected HOME dir within the test; the other three read
+    // HOME at module load and therefore stay short-circuited here. Consent
+    // for claude alone is enough to prove the wire-up reaches the per-server
+    // ssh exec seam — which is the manager's responsibility. The other three
+    // helpers are exercised by their own dedicated tests.
+    const tempHome = mkdtempSync(join(tmpdir(), "hmx-srvmgr-"));
+    const originalHome = process.env.HOME;
+    process.env.HOME = tempHome;
+    const consentDir = join(tempHome, ".local", "state", "honeymux");
+    mkdirSync(consentDir, { recursive: true });
+    writeFileSync(
+      join(consentDir, "claude-hooks-consent.json"),
+      JSON.stringify({ hosts: { "dev-box": { consented: true, savedAt: 1 } }, version: 2 }),
+    );
+
+    try {
+      const localClient = {} as any;
+      const manager = new RemoteServerManager(localClient, [{ host: "dev-box", name: "dev-box" }]);
+
+      const probedScriptPaths: string[] = [];
+      const runRemoteShellCommand = mock(async (argv: string[]) => {
+        const joined = argv.join(" ");
+        if (joined.includes('printf "%s" "$HOME"')) {
+          return { exitCode: 0, stderr: "", stdout: "/home/dev" };
+        }
+        if (joined.includes('if [ -e "$1" ]; then cat -- "$1"')) {
+          const scriptPath = argv[argv.length - 1] ?? "";
+          probedScriptPaths.push(scriptPath);
+          return { exitCode: 3, stderr: "", stdout: "" };
+        }
+        return { exitCode: 0, stderr: "", stdout: "" };
+      });
+
+      (manager as any).clients.set("dev-box", { runRemoteShellCommand });
+
+      await (manager as any).refreshRemoteHooksIfConsented("dev-box");
+
+      // Claude's refresh ran through the manager's exec seam and probed for
+      // the script under the remote-reported HOME — the wire-up works.
+      expect(probedScriptPaths).toContain("/home/dev/.claude/hooks/honeymux.py");
+    } finally {
+      if (originalHome === undefined) delete process.env.HOME;
+      else process.env.HOME = originalHome;
+      rmSync(tempHome, { force: true, recursive: true });
+    }
+  });
+
+  it("is a no-op when there is no client for the server", async () => {
+    const localClient = {} as any;
+    const manager = new RemoteServerManager(localClient, [{ host: "dev-box", name: "dev-box" }]);
+    await expect((manager as any).refreshRemoteHooksIfConsented("dev-box")).resolves.toBeUndefined();
   });
 });
