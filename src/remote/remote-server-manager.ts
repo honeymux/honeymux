@@ -11,6 +11,10 @@ import type {
 } from "./agent-transport.ts";
 import type { RemoteConnectionStatus, RemotePaneMapping, RemoteServerConfig, RemoteServerState } from "./types.ts";
 
+import { refreshClaudeHooksIfConsented } from "../agents/claude/installer.ts";
+import { refreshCodexHooksIfConsented } from "../agents/codex/installer.ts";
+import { refreshGeminiHooksIfConsented } from "../agents/gemini/installer.ts";
+import { refreshOpenCodePluginIfConsented } from "../agents/opencode/installer.ts";
 import { escapeTmuxFormatLiteral, quoteTmuxArg } from "../tmux/escape.ts";
 import { EventEmitter } from "../util/event-emitter.ts";
 import { log } from "../util/log.ts";
@@ -22,6 +26,7 @@ import { extractBracketedPastePayload, pasteTextIntoRemotePane } from "./paste.t
 import { buildRemoteProxyProcessArgv } from "./proxy-command.ts";
 import { RemoteProxyServer } from "./proxy-server.ts";
 import { RemoteControlClient } from "./remote-control-client.ts";
+import { RemoteInstallHost } from "./remote-install-host.ts";
 import { validateSshDestination } from "./ssh.ts";
 
 const REMOTE_TTY_CACHE_MS = 1_000;
@@ -509,6 +514,9 @@ export class RemoteServerManager extends EventEmitter {
             log("remote", `remote hook option setup failed for ${this.serverTag(config.name)}: ${err.message}`);
             this.emit("warning", `Remote hook option setup failed for ${config.name}: ${err.message}`);
           });
+          this.refreshRemoteHooksIfConsented(config.name).catch(() => {
+            // best-effort — refresh* helpers swallow per-agent errors internally
+          });
           mirror
             .fullSync()
             .then(() => this.recoverPaneMappings(config.name))
@@ -888,6 +896,32 @@ export class RemoteServerManager extends EventEmitter {
     }
 
     this.emit("agent-event", normalized);
+  }
+
+  /**
+   * Re-sync hook scripts on a remote server when the user has previously
+   * consented for that host. Mirrors the local startup pass run for the local
+   * agent installs (see `bootstrap-connected-session.ts`); each per-agent
+   * helper compares its bundled script against what's on disk and writes only
+   * if they differ. Without this, an upgraded Honeymux ships new hook content
+   * that never reaches an already-consented remote — the upgrade-prompt path
+   * is gated on missing consent.
+   *
+   * Best-effort: each helper swallows its own errors, and a missing or
+   * unconsented agent is a silent no-op.
+   */
+  private async refreshRemoteHooksIfConsented(serverName: string): Promise<void> {
+    const client = this.clients.get(serverName);
+    if (!client) return;
+    const host = new RemoteInstallHost(serverName, {
+      exec: (argv, options) => client.runRemoteShellCommand(argv, options),
+    });
+    await Promise.all([
+      refreshClaudeHooksIfConsented(host),
+      refreshCodexHooksIfConsented(host),
+      refreshGeminiHooksIfConsented(host),
+      refreshOpenCodePluginIfConsented(host),
+    ]);
   }
 
   private async resetPaneBorder(localPaneId: string): Promise<void> {
