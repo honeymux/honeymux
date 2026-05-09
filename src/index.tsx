@@ -23,6 +23,7 @@ import { loadConfig, validateConfig } from "./util/config.ts";
 // resetting, so the cursor stays visually distinct.
 import { cursorAlertPostRender } from "./util/cursor-alert.ts";
 import { formatFatalConsoleMessage, writeFatalReport } from "./util/fatal-report.ts";
+import { installHostPalette } from "./util/ghostty-palette-remap.ts";
 import {
   acquireLock,
   checkExistingInstance,
@@ -214,7 +215,13 @@ if (savedConfig) {
 const themeName = resolveThemeName(savedConfig?.themeMode ?? "built-in", savedConfig?.themeBuiltin ?? DEFAULT_SCHEME);
 const probe = await probeTerminal({
   queryCursorStyle: true,
-  queryPalette: false,
+  // Always probe the outer 0-15 palette so we can remap ghostty-opentui's
+  // hardcoded Tomorrow Night palette onto the user's actual theme — without
+  // this, any pane program that uses base ANSI colors (fish, ls, vim, …)
+  // will paint with ghostty-vt's defaults instead of the user's terminal.
+  // The 16 OSC 4 queries piggy-back on the existing CPR-sentinel batch, so
+  // the cost is one extra response burst per query, not a round-trip each.
+  queryPalette: true,
 });
 
 // Distribute probe results to modules that expose them as singletons.
@@ -239,6 +246,14 @@ initTheme(
   },
   savedConfig?.themeCustom,
 );
+
+// Push the outer terminal's user-configured 0-15 ANSI palette into
+// ghostty-vt so pane content rendered through hmx uses the host theme
+// rather than ghostty-vt's hardcoded Tomorrow Night defaults. Independent
+// of honeymux's own UI theme: even when the user picks a custom built-in
+// scheme for hmx chrome, raw pane output should still match what the
+// outer terminal would paint without hmx in the loop.
+installHostPalette(probe.paletteColors);
 
 // Runtime UTF-8 probe failed — the terminal is interpreting bytes, not UTF-8.
 if (terminalIsUtf8 === false) {
