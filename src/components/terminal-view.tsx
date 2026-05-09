@@ -1,8 +1,7 @@
+import { RGBA } from "@opentui/core";
 import { extend } from "@opentui/react";
 import { GhosttyTerminalRenderable } from "ghostty-opentui/terminal-buffer";
-import { useEffect, useRef } from "react";
-
-import { rgbToHex, terminalBgRgb } from "../themes/theme.ts";
+import { useEffect, useMemo, useRef } from "react";
 
 // Register the ghostty terminal component for JSX use
 extend({ "ghostty-terminal": GhosttyTerminalRenderable });
@@ -15,7 +14,7 @@ declare module "@opentui/react" {
 }
 
 interface TerminalViewProps {
-  bg?: string;
+  bg?: RGBA | string;
   cols: number;
   onReady?: (terminal: GhosttyTerminalRenderable) => void;
   rows: number;
@@ -40,12 +39,11 @@ export function TerminalView({ bg, cols, onReady, rows, showCursor = false }: Te
     }
   });
 
-  // Match the outer terminal emulator's background (queried via OSC 11 at
-  // startup) so the honeymux pane area blends into the host terminal
-  // instead of painting its own color on top.  ghostty-opentui v1.4.10
-  // changed GhosttyTerminalRenderable to hard-code #1e1e1e when no bg is
-  // passed, which produced a visible gray rectangle that clashed with the
-  // host terminal's actual bg — pass the probed color explicitly to fix.
+  // Default to the SGR-49 "default background" intent so the pane area
+  // adopts whatever bg the host terminal is currently using — same behavior
+  // as plain tmux, which never paints its own bg fill.  This avoids the
+  // wrong-color rectangle on terminals that don't reply to OSC 11 (e.g.
+  // Warp), where the probe falls back to a theme color.
   //
   // Passing explicit width={cols}/height={rows} is important for perf: it
   // makes the renderable's _width/_height literal numbers instead of the
@@ -56,10 +54,11 @@ export function TerminalView({ bg, cols, onReady, rows, showCursor = false }: Te
   // loop where every PTY feed triggers two renders: one from feed() and
   // one from the post-renderSelf updateTextInfo() call.  With explicit
   // numeric width/height, the fast path fires and the loop is broken.
+  const defaultBg = useMemo(() => RGBA.defaultBackground(), []);
   return (
     <box height={rows} overflow="hidden" width={cols}>
       <ghostty-terminal
-        bg={bg ?? rgbToHex(terminalBgRgb)}
+        bg={bg ?? defaultBg}
         cols={cols}
         height={rows}
         persistent={true}
