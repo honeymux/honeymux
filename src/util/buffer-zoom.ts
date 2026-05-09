@@ -12,7 +12,7 @@ import {
   supportsFadeTransitions,
 } from "./buffer-zoom-fade.ts";
 import { splitSequences } from "./csiu-reencode.ts";
-import { parseRawKeyEvent } from "./keybindings.ts";
+import { identifyKeySequence, parseRawKeyEvent } from "./keybindings.ts";
 import { writeTerminalOutput } from "./terminal-output.ts";
 import {
   ALT_SCREEN_ENTER,
@@ -53,12 +53,9 @@ export function consumeBufferZoomDismissChunk(
       nextPending = sequence;
       break;
     }
-
-    const rawEvent = parseRawKeyEvent(sequence);
-    if (rawEvent?.eventType === 3) continue;
-    if (rawEvent?.isModifierOnly) continue;
-    if (isBufferZoomMouseRelease(sequence)) continue;
-    return { dismiss: true, pending: "" };
+    if (isKeyboardKeypress(sequence)) {
+      return { dismiss: true, pending: "" };
+    }
   }
 
   return { dismiss: false, pending: nextPending };
@@ -336,13 +333,33 @@ export async function enterBufferZoom({
   }
 }
 
-function isBufferZoomMouseRelease(sequence: string): boolean {
-  if (!sequence.startsWith("\x1b[<") || !sequence.endsWith("m")) return false;
-  return /^\d+;\d+;\d+$/.test(sequence.slice(3, -1));
-}
-
 function isCompleteCsiSequence(sequence: string): boolean {
   if (!sequence.startsWith("\x1b[")) return true;
   const last = sequence.charCodeAt(sequence.length - 1);
   return last >= 0x40 && last <= 0x7e;
+}
+
+/**
+ * True only for sequences representing a real keyboard keypress.
+ * identifyKeySequence is the source of truth for which escape sequences
+ * map to recognized keys (arrows, Home/End, F-keys, CSI u, SS3,
+ * modifyOtherKeys, ctrl-bytes, Alt+char). Anything it doesn't recognize
+ * — terminal query responses (CPR/DA/DSR/XTWINOPS), focus events, mouse
+ * events of any kind (click/motion/wheel), bracketed-paste markers — is
+ * not a keypress and won't dismiss.
+ *
+ * Plain non-escape bytes bypass identifyKeySequence because it
+ * intentionally only names "special" keys; printable letters and digits
+ * fall through there but are obviously real input. Bare BEL is excluded
+ * because Warp/Terminal.app echo it back on stdin when they don't
+ * recognize the OSC 12 sequences we emit to glow the cursor.
+ */
+function isKeyboardKeypress(sequence: string): boolean {
+  if (sequence === "\x07") return false;
+  if (!sequence.startsWith("\x1b")) return true;
+  if (sequence === "\x1b") return true;
+  const rawEvent = parseRawKeyEvent(sequence);
+  if (rawEvent?.eventType === 3) return false;
+  if (rawEvent?.isModifierOnly) return false;
+  return identifyKeySequence(sequence) !== null;
 }
