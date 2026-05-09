@@ -45,6 +45,13 @@ interface NativeLibConfig {
   srcDir: string;
   /** Destination directory relative to node_modules/ for the current host's native package */
   destDir: string;
+  /**
+   * Explicit native library filename (e.g. "ghostty-opentui.node"). When set,
+   * we copy this exact file from `srcDir` to `destDir` and skip the
+   * platform-suffix candidate lookup. Use for packages that ship a single
+   * NAPI .node binary instead of the OpenTUI-style libopentui.{so,dylib,dll}.
+   */
+  fileName?: string;
 }
 
 interface PackageConfig {
@@ -52,6 +59,14 @@ interface PackageConfig {
   buildCmd?: string;
   /** Restrict source diffs to these paths (relative to sourceSubdir or repo root) */
   diffPaths?: string[];
+  /**
+   * Directories from the worktree to mirror into node_modules/<pkg>/<dir>/
+   * preserving structure. Use for packages whose package.json points at
+   * subpaths like "./dist/ffi.js" or "./src/ffi.ts" (bun condition). When
+   * not set, falls back to the legacy flat-dist behavior used by
+   * @opentui/core (dist/* → node_modules/<pkg>/*).
+   */
+  installPaths?: string[];
   /** Native library to copy after build (for packages with FFI bindings) */
   nativeLib?: NativeLibConfig;
   patches: PatchEntry[];
@@ -227,7 +242,8 @@ function resolveNativeLibrary(
   const relativeDestDir = expandRuntimePlaceholders(nativeLib.destDir);
   const destDir = join(ROOT, "node_modules", relativeDestDir);
 
-  for (const fileName of nativeLibraryCandidates()) {
+  const candidates = nativeLib.fileName ? [nativeLib.fileName] : nativeLibraryCandidates();
+  for (const fileName of candidates) {
     const src = join(srcDir, fileName);
     if (!existsSync(src)) continue;
     return {
@@ -439,6 +455,50 @@ async function exportSource(repoPath: string, config: PackageConfig, base: strin
 }
 
 /**
+ * Copy a built `dist/` directory's contents flat into `nmPkgDir` (as used
+ * by @opentui/core, whose package.json references files like `./index.js`
+ * at the root of the package).
+ */
+async function copyFlatDist(pkgSrcDir: string, nmPkgDir: string): Promise<boolean> {
+  const distDir = join(pkgSrcDir, "dist");
+  if (!existsSync(distDir)) {
+    console.error(`  ✗ build produced no dist/ directory`);
+    return false;
+  }
+
+  const oldFiles = await exec([
+    "find",
+    nmPkgDir,
+    "-maxdepth",
+    "1",
+    "-type",
+    "f",
+    "-name",
+    "*.js",
+    "-o",
+    "-name",
+    "*.js.map",
+  ]);
+  for (const f of oldFiles.trim().split("\n").filter(Boolean)) {
+    rmSync(f);
+  }
+
+  const distFiles = await exec(["find", distDir, "-maxdepth", "1", "-type", "f"]);
+  for (const src of distFiles.trim().split("\n").filter(Boolean)) {
+    const name = src.slice(distDir.length + 1);
+    cpSync(src, join(nmPkgDir, name));
+  }
+  const distDirs = await exec(["find", distDir, "-maxdepth", "1", "-mindepth", "1", "-type", "d"]);
+  for (const src of distDirs.trim().split("\n").filter(Boolean)) {
+    const name = src.slice(distDir.length + 1);
+    const dest = join(nmPkgDir, name);
+    if (existsSync(dest)) rmSync(dest, { recursive: true });
+    cpSync(src, dest, { recursive: true });
+  }
+  return true;
+}
+
+/**
  * Apply patches for a compiled package by building from patched source.
  * Creates a worktree at the base version, applies all source patches,
  * builds, and copies the dist output into node_modules.
@@ -555,45 +615,34 @@ async function applyCompiled(pkg: string, config: PackageConfig): Promise<boolea
     console.log(`  Building ${pkg}...`);
     await execSh(buildCmd, { cwd: pkgSrcDir });
 
-    // Copy dist output to node_modules
-    const distDir = join(pkgSrcDir, "dist");
     const nmPkgDir = join(ROOT, "node_modules", pkg);
-    if (!existsSync(distDir)) {
-      console.error(`  ✗ build produced no dist/ directory`);
-      return false;
-    }
 
-    // Clean old JS/map files from node_modules to avoid stale content-hashed chunks
-    const oldFiles = await exec([
-      "find",
-      nmPkgDir,
-      "-maxdepth",
-      "1",
-      "-type",
-      "f",
-      "-name",
-      "*.js",
-      "-o",
-      "-name",
-      "*.js.map",
-    ]);
-    for (const f of oldFiles.trim().split("\n").filter(Boolean)) {
-      rmSync(f);
-    }
-
-    // Copy dist files into node_modules
-    const distFiles = await exec(["find", distDir, "-maxdepth", "1", "-type", "f"]);
-    for (const src of distFiles.trim().split("\n").filter(Boolean)) {
-      const name = src.slice(distDir.length + 1);
-      cpSync(src, join(nmPkgDir, name));
-    }
-    // Also copy subdirectories
-    const distDirs = await exec(["find", distDir, "-maxdepth", "1", "-mindepth", "1", "-type", "d"]);
-    for (const src of distDirs.trim().split("\n").filter(Boolean)) {
-      const name = src.slice(distDir.length + 1);
-      const dest = join(nmPkgDir, name);
-      if (existsSync(dest)) rmSync(dest, { recursive: true });
-      cpSync(src, dest, { recursive: true });
+    if (config.installPaths && config.installPaths.length > 0) {
+      // Mirror requested directories from the worktree into node_modules,
+      // preserving structure. Used by packages whose package.json references
+      // subpaths like "./dist/ffi.js" or "./src/ffi.ts".
+      //
+      // Merge-copy (no pre-rm): this is intentional. ghostty-opentui ships
+      // prebuilt `.node` artifacts for every platform under
+      // dist/<platform>-<arch>/; our local build only rebuilds the host
+      // target. A wipe would leave Bun's compile-time native-lib.cjs
+      // require()s for the other targets dangling. cpSync with recursive
+      // overwrites matching files but leaves siblings (the other platforms'
+      // `.node`s) intact.
+      for (const rel of config.installPaths) {
+        const srcPath = join(pkgSrcDir, rel);
+        if (!existsSync(srcPath)) {
+          console.error(`  ✗ build produced no ${rel}/ directory`);
+          return false;
+        }
+        const destPath = join(nmPkgDir, rel);
+        cpSync(srcPath, destPath, { force: true, recursive: true });
+      }
+    } else {
+      // Legacy flat-dist behavior (used by @opentui/core): dist/* lands at
+      // the root of the package in node_modules.
+      const ok = await copyFlatDist(pkgSrcDir, nmPkgDir);
+      if (!ok) return false;
     }
 
     // Copy native library if configured

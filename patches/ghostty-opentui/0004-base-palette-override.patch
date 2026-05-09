@@ -1,0 +1,171 @@
+diff --git a/src/ffi.ts b/src/ffi.ts
+index c2eee65..adcf3c0 100644
+--- a/src/ffi.ts
++++ b/src/ffi.ts
+@@ -245,6 +245,30 @@ export function hasPersistentTerminalSupport(): boolean {
+   return native !== null && typeof native.createTerminal === "function"
+ }
+ 
++/**
++ * Push one entry of the host terminal's user-configured 0-15 ANSI palette
++ * into ghostty-vt. Subsequent terminals (created via PersistentTerminal,
++ * ptyToJson, ptyToText, or ptyToHtml) will resolve palette index `idx` to
++ * the given color instead of ghostty's hardcoded Tomorrow Night default.
++ *
++ * Indices 16-255 follow the standardized xterm-256color formula and need
++ * no override. Idempotent and thread-safe; no-op on platforms without the
++ * native module.
++ */
++export function setBasePaletteEntry(idx: number, r: number, g: number, b: number): void {
++  if (!native) return
++  native.setBasePaletteEntry(idx, r, g, b)
++}
++
++/**
++ * Clear all base palette overrides. Subsequent terminals revert to
++ * ghostty-vt's hardcoded defaults.
++ */
++export function clearBasePalette(): void {
++  if (!native) return
++  native.clearBasePalette()
++}
++
+ export interface PersistentTerminalOptions {
+   cols?: number
+   rows?: number
+diff --git a/src/lib.zig b/src/lib.zig
+index 6936561..91a0811 100644
+--- a/src/lib.zig
++++ b/src/lib.zig
+@@ -319,6 +319,69 @@ fn getArenaAllocator() std.mem.Allocator {
+     return arena.allocator();
+ }
+ 
++// =============================================================================
++// Base Palette Override
++// =============================================================================
++//
++// Consumers (e.g. an outer terminal multiplexer) can push their host
++// terminal's user-configured 0-15 ANSI palette into ghostty-vt so that
++// palette-indexed SGR codes (`\x1b[3Nm`, `\x1b[9Nm`, `\x1b[38;5;Nm` with
++// N < 16) resolve to the host's colors instead of ghostty's hardcoded
++// Tomorrow Night defaults. Without this, fg/bg hex written into spans is
++// ghostty's own palette, which silently overrides whatever the host
++// terminal would otherwise paint.
++//
++// The override is applied via `DynamicPalette.changeDefault(..)` at
++// terminal-init time, so it survives palette resets (OSC 104). Indices
++// 16-255 are left at ghostty's defaults — the standard xterm-256color
++// cube + grayscale formula matches every common host terminal byte for
++// byte, so only 0-15 need projection.
++
++var base_palette_mutex: std.Thread.Mutex = .{};
++var base_palette_override: [16]?color.RGB = .{null} ** 16;
++var base_palette_has_any: bool = false;
++
++/// Set entry `idx` (0-15) of the base palette override. Subsequent
++/// terminals (created via createTerminal/ptyToJson/ptyToText/ptyToHtml)
++/// will resolve palette index `idx` to this color instead of ghostty's
++/// default.
++fn setBasePaletteEntry(idx: u32, r: u32, g: u32, b: u32) !void {
++    if (idx >= 16) return error.InvalidIndex;
++    base_palette_mutex.lock();
++    defer base_palette_mutex.unlock();
++    base_palette_override[idx] = .{
++        .r = @intCast(r & 0xff),
++        .g = @intCast(g & 0xff),
++        .b = @intCast(b & 0xff),
++    };
++    base_palette_has_any = true;
++}
++
++/// Clear all base palette overrides. Subsequent terminals revert to
++/// ghostty's hardcoded default palette.
++fn clearBasePalette() void {
++    base_palette_mutex.lock();
++    defer base_palette_mutex.unlock();
++    base_palette_override = .{null} ** 16;
++    base_palette_has_any = false;
++}
++
++/// If any base palette override is set, build a fresh `Palette` based on
++/// ghostty's defaults, patch in our 0-15 overrides, and call
++/// `changeDefault()` so the new defaults survive any future palette
++/// reset by the inner application.
++fn applyBasePaletteOverride(t: *ghostty_vt.Terminal) void {
++    base_palette_mutex.lock();
++    defer base_palette_mutex.unlock();
++    if (!base_palette_has_any) return;
++
++    var new_palette: color.Palette = color.default;
++    for (base_palette_override, 0..) |maybe_rgb, i| {
++        if (maybe_rgb) |rgb| new_palette[i] = rgb;
++    }
++    t.colors.palette.changeDefault(new_palette);
++}
++
+ // =============================================================================
+ // Persistent Terminal Management
+ // =============================================================================
+@@ -350,6 +413,10 @@ const PersistentTerminal = struct {
+         // Enable linefeed mode so LF (\n) also performs carriage return
+         terminal.modes.set(.linefeed, true);
+ 
++        // Project the consumer's host palette over ghostty's defaults if any
++        // entries have been pushed via setBasePaletteEntry().
++        applyBasePaletteOverride(&terminal);
++
+         return .{
+             .terminal = terminal,
+             .allocator = alloc,
+@@ -584,6 +651,7 @@ fn ptyToJson(input: []const u8, cols: u32, rows: u32, offset: u32, limit: u32) !
+ 
+     // Enable linefeed mode so LF (\n) also performs carriage return (moves to column 0)
+     t.modes.set(.linefeed, true);
++    applyBasePaletteOverride(&t);
+ 
+     var stream = t.vtStream();
+     defer stream.deinit();
+@@ -638,6 +706,7 @@ fn ptyToText(input: []const u8, cols: u32, rows: u32) ![]const u8 {
+ 
+     // Enable linefeed mode so LF (\n) also performs carriage return (moves to column 0)
+     t.modes.set(.linefeed, true);
++    applyBasePaletteOverride(&t);
+ 
+     var stream = t.vtStream();
+     defer stream.deinit();
+@@ -667,6 +736,7 @@ fn ptyToHtml(input: []const u8, cols: u32, rows: u32) ![]const u8 {
+ 
+     // Enable linefeed mode so LF (\n) also performs carriage return (moves to column 0)
+     t.modes.set(.linefeed, true);
++    applyBasePaletteOverride(&t);
+ 
+     var stream = t.vtStream();
+     defer stream.deinit();
+@@ -705,6 +775,11 @@ fn initModule(js: *napigen.JsContext, exports: napigen.napi_value) anyerror!napi
+     try js.setNamedProperty(exports, "getTerminalCursor", try js.createFunction(getTerminalCursor));
+     try js.setNamedProperty(exports, "isTerminalReady", try js.createFunction(isTerminalReady));
+ 
++    // Base palette override: lets consumers project their host terminal's
++    // 0-15 ANSI palette over ghostty's hardcoded defaults.
++    try js.setNamedProperty(exports, "setBasePaletteEntry", try js.createFunction(setBasePaletteEntry));
++    try js.setNamedProperty(exports, "clearBasePalette", try js.createFunction(clearBasePalette));
++
+     return exports;
+ }
+ 
+diff --git a/src/native-lib.d.cts b/src/native-lib.d.cts
+index 2122b7c..fe3758e 100644
+--- a/src/native-lib.d.cts
++++ b/src/native-lib.d.cts
+@@ -14,6 +14,10 @@ export interface NativeModule {
+   getTerminalText(id: number): string
+   getTerminalCursor(id: number): string
+   isTerminalReady(id: number): boolean
++
++  // Base palette override
++  setBasePaletteEntry(idx: number, r: number, g: number, b: number): void
++  clearBasePalette(): void
+ }
+ 
+ export const native: NativeModule | null

@@ -62,9 +62,19 @@
     ]
   },
   "ghostty-opentui": {
+    "buildCmd": "bun run build:zig && bun run build",
     "diffPaths": [
       "src/"
     ],
+    "installPaths": [
+      "dist",
+      "src"
+    ],
+    "nativeLib": {
+      "destDir": "ghostty-opentui/dist/{platform}-{arch}",
+      "fileName": "ghostty-opentui.node",
+      "srcDir": "zig-out/lib"
+    },
     "sourceRepo": "~/src/ghostty-opentui",
     "version": "1.4.11",
     "patches": [
@@ -79,6 +89,12 @@
         "description": "Cache terminal text rendering between ANSI updates",
         "enabled": true,
         "file": "0003-cache-terminal-renders-between-ansi-updates.patch"
+      },
+      {
+        "branch": "base-palette-override",
+        "description": "Override ghostty-vt's hardcoded base 16 palette via DynamicPalette.changeDefault so the host terminal's user-configured ANSI colors survive the hmx render pipeline",
+        "enabled": true,
+        "file": "0004-base-palette-override.patch"
       }
     ]
   }
