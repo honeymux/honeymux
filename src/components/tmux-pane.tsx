@@ -1,8 +1,9 @@
+import { RGBA } from "@opentui/core";
 import { memo, useState } from "react";
 
 import type { TmuxPaneProps } from "./tmux-pane/types.ts";
 
-import { rgbToHex, terminalBgRgb, theme } from "../themes/theme.ts";
+import { theme } from "../themes/theme.ts";
 import { AgentsDialog } from "./agents-dialog.tsx";
 import { TerminalView } from "./terminal-view.tsx";
 import { computeReservedRightChromeMask } from "./tmux-pane/chrome-mask.ts";
@@ -155,11 +156,9 @@ export const TmuxPane = memo(function TmuxPane({
     uiMode: viewModel.uiMode,
     width,
   });
-  const terminalBg = rgbToHex(terminalBgRgb);
-
   const chromeMaskNode = reservedRightChromeMask ? (
     <box
-      backgroundColor={terminalBg}
+      backgroundColor={RGBA.defaultBackground()}
       height={reservedRightChromeMask.height}
       left={reservedRightChromeMask.left}
       position="absolute"
