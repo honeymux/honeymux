@@ -289,6 +289,15 @@ export async function enterBufferZoom({
       await altScreenFade.fadeIn();
       altScreenFade = null;
     }
+    // Re-show the outer terminal cursor. We hid it directly with \x1b[?25l
+    // before resume, bypassing opentui's cursor-state tracking; Zig's
+    // setCursorPosition(visible=true) calls during the post-resume renders
+    // dedupe to no-ops if its cached state still thinks the cursor was
+    // visible from before suspend, leaving the outer cursor stuck hidden.
+    // Observable when buffer zoom is invoked while a dialog (e.g. the main
+    // menu) had already driven terminal.showCursor to false — nothing
+    // toggles the renderer's cursor state during our run.
+    writeTerminalOutput("\x1b[?25h");
   } finally {
     if (glowTimer != null) {
       clearInterval(glowTimer);
@@ -318,7 +327,11 @@ export async function enterBufferZoom({
       }
     }
     altScreenFade?.cleanup();
-    if (terminal) terminal.showCursor = previousShowCursor;
+    // Only restore if our entry-time hide is still in effect. If a React
+    // effect (e.g. closing the main menu dialog that opened us) flipped
+    // the cursor back on while we were running, our snapshot is stale —
+    // leave the fresh truth alone.
+    if (terminal && !terminal.showCursor) terminal.showCursor = previousShowCursor;
     active = false;
   }
 }
