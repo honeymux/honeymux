@@ -62,7 +62,7 @@
     ]
   },
   "ghostty-opentui": {
-    "buildCmd": "bun run build:zig && bun run build",
+    "buildCmd": "zig build -Doptimize=ReleaseFast && bun run build",
     "diffPaths": [
       "src/"
     ],
