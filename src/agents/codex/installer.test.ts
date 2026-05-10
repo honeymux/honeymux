@@ -136,15 +136,15 @@ describe("upsertCodexHookSettings", () => {
 
 describe("ensureCodexHooksFeature", () => {
   it("adds the features section to an empty config without leading blank lines", () => {
-    expect(ensureCodexHooksFeature("")).toBe("[features]\ncodex_hooks = true\n");
+    expect(ensureCodexHooksFeature("")).toBe("[features]\nhooks = true\n");
   });
 
   it("preserves existing config and appends a features section with one separator", () => {
-    expect(ensureCodexHooksFeature("[other]\nkey = 1\n")).toBe("[other]\nkey = 1\n\n[features]\ncodex_hooks = true\n");
+    expect(ensureCodexHooksFeature("[other]\nkey = 1\n")).toBe("[other]\nkey = 1\n\n[features]\nhooks = true\n");
   });
 
   it("is idempotent — does not accumulate trailing newlines on repeat runs", () => {
-    const initial = "[features]\ncodex_hooks = true\n";
+    const initial = "[features]\nhooks = true\n";
     const once = ensureCodexHooksFeature(initial);
     const twice = ensureCodexHooksFeature(once);
     const thrice = ensureCodexHooksFeature(twice);
@@ -154,10 +154,10 @@ describe("ensureCodexHooksFeature", () => {
   });
 
   it("normalizes pre-existing trailing whitespace down to a single newline", () => {
-    expect(ensureCodexHooksFeature("[features]\ncodex_hooks = true\n\n\n\n")).toBe("[features]\ncodex_hooks = true\n");
+    expect(ensureCodexHooksFeature("[features]\nhooks = true\n\n\n\n")).toBe("[features]\nhooks = true\n");
   });
 
   it("inserts codex_hooks into an existing empty [features] section", () => {
-    expect(ensureCodexHooksFeature("[features]\n")).toBe("[features]\ncodex_hooks = true\n");
+    expect(ensureCodexHooksFeature("[features]\n")).toBe("[features]\nhooks = true\n");
   });
 });

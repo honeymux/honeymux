@@ -60,15 +60,15 @@ export function ensureCodexHooksFeature(configText: string): string {
     const trimmed = lines[i]!.trim();
     if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
       if (inFeatures && !inserted) {
-        lines.splice(i, 0, "codex_hooks = true");
+        lines.splice(i, 0, "hooks = true");
         inserted = true;
         break;
       }
       inFeatures = trimmed === "[features]";
       continue;
     }
-    if (inFeatures && /^codex_hooks\s*=/.test(trimmed)) {
-      lines[i] = "codex_hooks = true";
+    if (inFeatures && /^hooks\s*=/.test(trimmed)) {
+      lines[i] = "hooks = true";
       inserted = true;
       break;
     }
@@ -76,13 +76,13 @@ export function ensureCodexHooksFeature(configText: string): string {
 
   if (!inserted) {
     if (inFeatures) {
-      lines.push("codex_hooks = true");
+      lines.push("hooks = true");
     } else {
       if (lines.length > 0) {
         lines.push("");
       }
       lines.push("[features]");
-      lines.push("codex_hooks = true");
+      lines.push("hooks = true");
     }
   }
 
