@@ -139,6 +139,16 @@ export class AgentSessionStore extends EventEmitter {
       return;
     }
 
+    // PostToolUse (codex) — fires after a tool actually ran, signaling the
+    // permission was resolved (auto-approved by codex or approved by the user
+    // in the pane). The deny path doesn't fire PostToolUse, but a follow-up
+    // PermissionRequest will overwrite the unanswered state above.
+    if (event.hookEvent === "PostToolUse" && existing.status === "unanswered") {
+      existing.status = "alive";
+      this.emitChanged();
+      return;
+    }
+
     // Any other event on a non-ended session — keep alive, update metadata (already done above)
     if (existing.status === "ended") return;
     this.clearCleanupTimer(event.sessionId);

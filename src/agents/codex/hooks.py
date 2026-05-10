@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 """Codex CLI lifecycle hook for honeymux.
 
-Fire-and-forget notifier for SessionStart and PermissionRequest. The hook
-never emits a decision, so Codex always falls through to its own native
-approval prompt (see orchestrator.rs::request_approval). Honeymux uses the
-event purely to surface a notification; the user answers Codex's prompt
-directly in the pane. If Codex later adds a mode that lets the hook and
-native prompt run concurrently, this file is where we'd grow an interactive
-allow/deny path.
+Fire-and-forget notifier for SessionStart, PermissionRequest, and PostToolUse.
+The hook never emits a decision, so Codex always falls through to its own
+native approval prompt (see orchestrator.rs::request_approval). Honeymux uses
+PermissionRequest to surface a pending notification, and PostToolUse to clear
+it once the tool actually ran (whether codex auto-approved internally or the
+user answered codex's pane prompt). If Codex later adds a mode that lets the
+hook and native prompt run concurrently, this file is where we'd grow an
+interactive allow/deny path.
 """
 
 import json
@@ -21,8 +22,9 @@ import time
 
 
 EVENT_STATUS_MAP = {
-    "SessionStart": "alive",
     "PermissionRequest": "unanswered",
+    "PostToolUse": "alive",
+    "SessionStart": "alive",
 }
 
 REMOTE_HOOK_SOCKET_OPTION = "@hmx-agent-socket-path"

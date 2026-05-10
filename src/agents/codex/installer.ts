@@ -10,9 +10,11 @@ import { localInstallHost } from "../install-host.ts";
 import HOOK_CONTENT from "./hooks.py" with { type: "text" };
 
 const HOOK_SCRIPT_NAME = "honeymux.py";
-// SessionStart fires at session boot; PermissionRequest blocks Codex while the
-// honeymux UI collects an allow/deny decision from the user.
-const HOOK_EVENTS = ["PermissionRequest", "SessionStart"] as const;
+// SessionStart fires at session boot; PermissionRequest marks the session as
+// awaiting an approval decision; PostToolUse signals the approval was resolved
+// (whether by codex's auto-policy or by the user answering codex's native
+// prompt) so honeymux can clear the unanswered state.
+const HOOK_EVENTS = ["PermissionRequest", "PostToolUse", "SessionStart"] as const;
 
 type CodexSettings = {
   hooks?: Record<string, HookMatcherGroup[]>;

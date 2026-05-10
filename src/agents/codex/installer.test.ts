@@ -102,28 +102,21 @@ describe("upsertCodexHookSettings", () => {
     ]);
   });
 
-  it("registers PermissionRequest on a clean install", () => {
+  it("registers every supported event on a clean install", () => {
     const settings = upsertCodexHookSettings({}, "/usr/bin/python3 /home/me/.codex/hooks/honeymux.py");
-    expect(settings.hooks?.["PermissionRequest"]).toEqual([
+    const expectedGroup = [
       {
         hooks: [
           {
             command: "/usr/bin/python3 /home/me/.codex/hooks/honeymux.py",
-            type: "command",
+            type: "command" as const,
           },
         ],
       },
-    ]);
-    expect(settings.hooks?.["SessionStart"]).toEqual([
-      {
-        hooks: [
-          {
-            command: "/usr/bin/python3 /home/me/.codex/hooks/honeymux.py",
-            type: "command",
-          },
-        ],
-      },
-    ]);
+    ];
+    expect(settings.hooks?.["PermissionRequest"]).toEqual(expectedGroup);
+    expect(settings.hooks?.["PostToolUse"]).toEqual(expectedGroup);
+    expect(settings.hooks?.["SessionStart"]).toEqual(expectedGroup);
   });
 
   it("is idempotent across repeat installs", () => {
