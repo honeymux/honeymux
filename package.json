@@ -35,6 +35,6 @@
     "@opentui/react": "0.2.1",
     "ghostty-opentui": "1.4.11",
     "honeyshots": "github:honeymux/honeyshots",
-    "react": "^19.2.5"
+    "react": "^19.2.6"
   }
 }
