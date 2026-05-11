@@ -114,10 +114,21 @@ export function buildMuxotronHintButtons({
   // Permission-response strip: approve / deny / goto / dismiss. Approve and
   // deny are omitted when the alerted agent doesn't support honeymux-driven
   // hook decisions — for those agents the user must answer in-pane, so
-  // showing dead buttons here would be misleading.
+  // showing dead buttons here would be misleading. When the muxotron is
+  // perm-zoomed (latched via agentLatch), a leading "release" button mirrors
+  // the review-workflow strip so the user can see which key un-zooms. Esc
+  // also dismisses the perm-zoom (see keyboard-router), so it's surfaced
+  // alongside the agentLatch combo.
   if (!selectedSession) {
     const showApproveDeny = permissionAgentType ? AGENT_SUPPORTS_HOOK_DECISIONS[permissionAgentType] : true;
     const buttons: MuxotronHintButton[] = [];
+    if (latched) {
+      buttons.push({
+        color: MUXOTRON_HINT_COLORS.latch,
+        label: `${formatBinding(keybindings.agentLatch)} / esc: release`,
+        onClick: onLatchToggle,
+      });
+    }
     if (showApproveDeny) {
       buttons.push({
         color: canRespondToPermission ? MUXOTRON_HINT_COLORS.approve : theme.textDim,

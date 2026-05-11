@@ -42,6 +42,7 @@ interface TmuxPaneNormalModeProps {
   muxotronEnabled?: boolean;
   muxotronExpanded?: boolean;
   muxotronFocusActive?: boolean;
+  onAgentLatchToggle?: () => void;
   onApprove?: () => void;
   onCloseWindow?: (index: number) => void;
   onDeny?: () => void;
@@ -121,6 +122,7 @@ export function TmuxPaneNormalMode({
   muxotronEnabled,
   muxotronExpanded,
   muxotronFocusActive,
+  onAgentLatchToggle,
   onApprove,
   onCloseWindow,
   onDeny,
@@ -198,6 +200,7 @@ export function TmuxPaneNormalMode({
         muxotronEnabled={muxotronEnabled}
         muxotronExpanded={muxotronExpanded}
         muxotronFocusActive={muxotronFocusActive}
+        onAgentLatchToggle={onAgentLatchToggle}
         onApprove={onApprove}
         onCloseWindow={onCloseWindow}
         onDeny={onDeny}

@@ -55,6 +55,7 @@ interface TabBarProps {
   muxotronEnabled?: boolean;
   muxotronExpanded?: boolean;
   muxotronFocusActive?: boolean;
+  onAgentLatchToggle?: () => void;
   onApprove?: () => void;
   onCloseWindow?: (index: number) => void;
   onDeny?: () => void;
@@ -131,6 +132,7 @@ export function TabBar({
   muxotronEnabled: muxotronEnabledProp,
   muxotronExpanded: muxotronExpandedProp,
   muxotronFocusActive,
+  onAgentLatchToggle,
   onApprove,
   onCloseWindow,
   onDeny,
@@ -577,6 +579,7 @@ export function TabBar({
             infoCount={infoCount}
             muxotronExpanded={false}
             muxotronFocusActive={muxotronFocusActive}
+            onAgentLatchToggle={onAgentLatchToggle}
             onApprove={onApprove}
             onDeny={onDeny}
             onDismiss={onDismiss}
@@ -676,6 +679,7 @@ export function TabBar({
           maxExpandedWidth={maxExpandedWidth}
           muxotronExpanded={true}
           muxotronFocusActive={muxotronFocusActive}
+          onAgentLatchToggle={onAgentLatchToggle}
           onApprove={onApprove}
           onDeny={onDeny}
           onDismiss={onDismiss}

@@ -30,6 +30,7 @@ interface TmuxPaneMarqueeModeProps {
   interactiveAgent?: AgentSession | null;
   muxotronExpanded?: boolean;
   muxotronFocusActive?: boolean;
+  onAgentLatchToggle?: () => void;
   onApprove?: () => void;
   onDeny?: () => void;
   onDismiss?: () => void;
@@ -79,6 +80,7 @@ export function TmuxPaneMarqueeMode({
   interactiveAgent,
   muxotronExpanded,
   muxotronFocusActive,
+  onAgentLatchToggle,
   onApprove,
   onDeny,
   onDismiss,
@@ -121,6 +123,7 @@ export function TmuxPaneMarqueeMode({
     interactiveAgent,
     muxotronExpanded,
     muxotronFocusActive,
+    onAgentLatchToggle,
     onApprove,
     onDeny,
     onDismiss,
