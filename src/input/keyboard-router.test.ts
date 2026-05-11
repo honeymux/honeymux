@@ -143,6 +143,21 @@ describe("interactive agent muxotron input", () => {
     expect(writeToPty).not.toHaveBeenCalled();
   });
 
+  test("Ctrl-C dismisses the interactive surface instead of leaking to the PTY", () => {
+    const onMuxotronDismiss = mock(() => {});
+    const writeToPty = mock(() => {});
+    const callbacks = createCallbacks({
+      isInteractiveAgent: () => true,
+      onMuxotronDismiss,
+    });
+
+    const handled = routeKeyboardInput("\x03", writeToPty, callbacks, new Map());
+
+    expect(handled).toBe(true);
+    expect(onMuxotronDismiss).toHaveBeenCalledTimes(1);
+    expect(writeToPty).not.toHaveBeenCalled();
+  });
+
   test("plain typing forwards to the PTY when interactive (no zoom-shortcut interception)", () => {
     const onMuxotronDismiss = mock(() => {});
     const writeToPty = mock((_data: string) => {});

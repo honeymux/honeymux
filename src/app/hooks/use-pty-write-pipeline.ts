@@ -3,7 +3,7 @@ import type { CliRenderer } from "@opentui/core";
 import { useCallback, useRef } from "react";
 
 import type { AgentSession } from "../../agents/types.ts";
-import type { TmuxKeyBindings } from "../../tmux/types.ts";
+import type { TmuxKeyBindings, TmuxKeyName } from "../../tmux/types.ts";
 import type { AppRuntimeRefs } from "./use-app-runtime-refs.ts";
 import type { UiActionsApi } from "./use-ui-actions.ts";
 
@@ -26,10 +26,24 @@ interface HandlePermissionPromptInputOptions {
   data: string;
   paneId: null | string;
   respondToPermission: ((sessionId: string, toolUseId: string, decision: "allow" | "deny") => void) | null;
+  /** Inject the named resolution key directly into the agent's pane via
+   *  the main tmux control client. When provided, handle returns
+   *  `handled: true` and callers must NOT also write `data` to a local
+   *  transport (overlay PTY or main PTY) — the keystroke has already been
+   *  routed by tmux. Skipped when the matched session is remote, since the
+   *  remote manager owns input routing for those panes. */
+  sendKeyToPane: ((paneId: string, keyName: TmuxKeyName) => void) | null;
   store: PermissionPromptSessionStore | null;
 }
 
 type PermissionPromptAction = "deny" | "markAnswered";
+
+interface PermissionPromptResult {
+  action: PermissionPromptAction;
+  /** True when the resolution key was dispatched via the control client and
+   *  the caller should suppress its own PTY write to avoid double-delivery. */
+  handled: boolean;
+}
 
 interface PermissionPromptSessionStore {
   getSessions(): AgentSession[];
@@ -69,22 +83,34 @@ export function handlePermissionPromptInput({
   data,
   paneId,
   respondToPermission,
+  sendKeyToPane,
   store,
-}: HandlePermissionPromptInputOptions): PermissionPromptAction | null {
+}: HandlePermissionPromptInputOptions): PermissionPromptResult | null {
   if (!paneId || !store) return null;
 
   const match = store.getSessions().find((session) => session.paneId === paneId && session.status === "unanswered");
   if (!match) return null;
 
+  // Local panes can have the resolution keystroke routed via send-keys
+  // through the main control client (reliable; tmux acks delivery). Remote
+  // sessions own their own input routing via the remote manager, so we let
+  // the keystroke flow through the normal write path for those.
+  const canDispatchKey = !match.isRemote && sendKeyToPane !== null;
+
   if (shouldDenyPermissionPrompt(data)) {
-    if (!respondToPermission) return null;
-    respondToPermission(match.sessionId, match.lastEvent.toolUseId ?? match.sessionId, "deny");
-    return "deny";
+    respondToPermission?.(match.sessionId, match.lastEvent.toolUseId ?? match.sessionId, "deny");
+    // Clear unanswered state locally too — codex's hook is fire-and-forget and
+    // never reports the user's Esc/Ctrl-C back to us, and even for held-socket
+    // agents this just preempts the PermissionCancelled round-trip.
+    store.markAnswered(match.sessionId);
+    if (canDispatchKey) sendKeyToPane!(paneId, data === "\x03" ? "C-c" : "Escape");
+    return { action: "deny", handled: canDispatchKey };
   }
 
   if (shouldMarkPermissionPromptAnswered(data)) {
     store.markAnswered(match.sessionId);
-    return "markAnswered";
+    if (canDispatchKey) sendKeyToPane!(paneId, "Enter");
+    return { action: "markAnswered", handled: canDispatchKey };
   }
 
   return null;
@@ -156,10 +182,17 @@ export function usePtyWritePipeline({
 
   writeFnRef.current = (data: string) => {
     const activePaneId = activePaneIdRef.current;
+    // Direct-pane path: let respondToPermission + markAnswered run as side
+    // effects, but skip send-keys (sendKeyToPane: null). The keystroke will
+    // flow naturally through the local PTY → tmux → active pane, so there
+    // is no overlay PTY teardown to race. The bridge path (which spawns a
+    // grouped overlay PTY that does get torn down) passes a real
+    // sendKeyToPane so tmux can deliver the keystroke ahead of teardown.
     handlePermissionPromptInput({
       data,
       paneId: activePaneId,
       respondToPermission: handlePermissionRespondRef.current,
+      sendKeyToPane: null,
       store: storeRef.current,
     });
     if (activePaneId && remoteManagerRef.current?.routeInput(activePaneId, data)) {

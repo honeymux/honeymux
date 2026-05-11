@@ -22,6 +22,14 @@ export interface TmuxKeyBindings {
   splitVertical: string; // split-window -h
 }
 
+/**
+ * Tmux key names accepted by `send-keys` (without `-l`). Only the keys
+ * honeymux currently dispatches programmatically are listed; extend as
+ * needed. Values must not include user-supplied strings — they are
+ * interpolated raw into tmux commands.
+ */
+export type TmuxKeyName = "C-c" | "Enter" | "Escape";
+
 export interface TmuxPaneTtyMapping {
   paneId: string;
   sessionName: string;
