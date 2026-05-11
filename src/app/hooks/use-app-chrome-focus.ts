@@ -212,7 +212,7 @@ export function useAppChromeFocus({ refs, uiChromeState, width }: UseAppChromeFo
     if (!sidebarOpenRef.current) {
       setSidebarOpen(true);
     }
-    focusSidebar(0);
+    focusSidebar(getSidebarMinFocusIndex(sidebarView));
   };
   // While the review preview is open, moving the sidebar focus should
   // also re-point the preview at the newly focused row so the muxotron view
