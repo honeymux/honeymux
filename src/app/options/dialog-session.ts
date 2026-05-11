@@ -215,7 +215,7 @@ export function useOptionsDialogSession(
     () => initialConfig.activeWindowIdDisplayEnabled ?? false,
   );
   const [configTmuxKeyBindingHints, setConfigTmuxKeyBindingHintsState] = useState(
-    () => initialConfig.tmuxKeyBindingHints ?? true,
+    () => initialConfig.tmuxKeyBindingHints ?? false,
   );
   const [configRemoteServers, setConfigRemoteServersState] = useState<RemoteServer[]>(() =>
     configRemoteServersToDraft(initialConfig),
@@ -306,7 +306,7 @@ export function useOptionsDialogSession(
     setConfigCursorColorPickerOpenState(false);
     setConfigPaneTabsEnabledState(config.paneTabsEnabled ?? false);
     setConfigActiveWindowIdDisplayEnabledState(config.activeWindowIdDisplayEnabled ?? false);
-    setConfigTmuxKeyBindingHintsState(config.tmuxKeyBindingHints ?? true);
+    setConfigTmuxKeyBindingHintsState(config.tmuxKeyBindingHints ?? false);
     setConfigRemoteServersState(configRemoteServersToDraft(config));
     setConfigRemoteSelectedIndexState(0);
     setConfigRemoteEditingState(null);

@@ -236,7 +236,7 @@ export function buildAppPaneProps({
     sidebarViewActivateRef,
     sidebarViewZoomRef,
     sidebarWidth: uiChromeState.sidebarWidth,
-    tmuxKeyBindingHints: optionsWorkflow.config.tmuxKeyBindingHints ?? true,
+    tmuxKeyBindingHints: optionsWorkflow.config.tmuxKeyBindingHints ?? false,
     toolbarActivateRef: toolbarTimer?.activateRef,
     toolbarFocused: toolbarTimer != null && toolbarTimer.focusedIndex >= 0,
     toolbarFocusedIndex: toolbarTimer?.focusedIndex,
