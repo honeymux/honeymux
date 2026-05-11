@@ -7,6 +7,7 @@ import { useEffect, useRef, useState } from "react";
 import type { CodingAgentPaneOutputSample } from "../agents/pane-activity.ts";
 import type { AgentProviderRegistry } from "../agents/provider.ts";
 import type { AgentSession } from "../agents/types.ts";
+import type { TmuxControlClient } from "../tmux/control-client.ts";
 
 import { AGENT_COLORS, CLAUDE_ANIMATIONS } from "../agents/types.ts";
 import { useImperativeAnimation } from "../app/hooks/use-imperative-animation.ts";
@@ -42,6 +43,8 @@ interface AgentTreeProps {
   agentAlertAnimEqualizer?: boolean;
   agentAlertAnimGlow?: boolean;
   agentAlertAnimScribble?: boolean;
+  /** tmux client used to track which pane is currently focused — the matching agent row gets the textSecondary accent. */
+  clientRef?: MutableRefObject<TmuxControlClient | null>;
   configAgentsPreview?: null | string;
   focusedRow?: number;
   height: number;
@@ -95,6 +98,7 @@ export function AgentTree({
   agentAlertAnimEqualizer,
   agentAlertAnimGlow,
   agentAlertAnimScribble,
+  clientRef,
   configAgentsPreview,
   focusedRow = -1,
   height,
@@ -108,6 +112,7 @@ export function AgentTree({
   zoomRef,
 }: AgentTreeProps) {
   const [scrollOffset, setScrollOffset] = useState(0);
+  const activePaneId = useFocusedPaneId(clientRef);
 
   const rows = buildAgentTreeRows(sessions, registryRef);
 
@@ -307,7 +312,14 @@ export function AgentTree({
 
     const [left, right] = splitAtColumn(line, nodeZoneW);
 
-    const fg = row.active ? theme.statusWarning : row.type === "root" ? theme.textSecondary : theme.text;
+    const inFocusedPane = !!row.paneId && !!activePaneId && row.paneId === activePaneId;
+    const fg = row.active
+      ? theme.statusWarning
+      : row.type === "root"
+        ? theme.textSecondary
+        : inFocusedPane
+          ? theme.textSecondary
+          : theme.textDim;
     lines.push({ fg, left, right, row });
   }
 
@@ -392,7 +404,7 @@ export function AgentTree({
             ) : (
               <text bg={rowBg} content={leftContent} fg={leftFg} />
             )}
-            <text bg={rowBg} content={l.right} fg={isFocused ? theme.textBright : theme.textDim} />
+            <text bg={rowBg} content={l.right} fg={leftFg} />
           </box>
         );
       })}
@@ -576,6 +588,41 @@ function splitLeftAgentSegments(
     { fg: row.agentColor, text: agentText },
     { fg: baseFg, text: post },
   ];
+}
+
+/**
+ * Subscribe to tmux pane/window events and return the id of the pane that's
+ * currently active in tmux. Mirrors the data ownership pattern used by
+ * ServerTree, which fetches its own tree on every relevant event rather than
+ * relying on a value plumbed down from app state.
+ */
+function useFocusedPaneId(clientRef: MutableRefObject<TmuxControlClient | null> | undefined): null | string {
+  const [paneId, setPaneId] = useState<null | string>(null);
+  useEffect(() => {
+    const client = clientRef?.current;
+    if (!client) return;
+    let cancelled = false;
+    const refresh = () => {
+      client
+        .getAllPaneInfo()
+        .then((panes) => {
+          if (cancelled) return;
+          setPaneId(panes.find((p) => p.active)?.id ?? null);
+        })
+        .catch(() => {});
+    };
+    client.on("session-changed", refresh);
+    client.on("session-window-changed", refresh);
+    client.on("window-pane-changed", refresh);
+    refresh();
+    return () => {
+      cancelled = true;
+      client.off("session-changed", refresh);
+      client.off("session-window-changed", refresh);
+      client.off("window-pane-changed", refresh);
+    };
+  }, [clientRef]);
+  return paneId;
 }
 
 /** Characters that separate the prefix (tree-branch art) from the label. */

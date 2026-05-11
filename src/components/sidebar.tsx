@@ -232,6 +232,7 @@ export function SideBar({
             agentAlertAnimEqualizer={agentAlertAnimEqualizer}
             agentAlertAnimGlow={agentAlertAnimGlow}
             agentAlertAnimScribble={agentAlertAnimScribble}
+            clientRef={clientRef}
             configAgentsPreview={configAgentsPreview}
             focusedRow={activeFocusIndex}
             height={contentHeight}
