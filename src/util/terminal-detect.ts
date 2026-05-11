@@ -23,16 +23,18 @@ export function setTerminalName(name: null | string): void {
 /**
  * Return the terminal emulator base name without any trailing version
  * suffix.  Strips everything from the first whitespace or opening
- * bracket/brace/paren that precedes a digit.  Examples:
+ * bracket/brace/paren that precedes a digit, optionally prefixed by a
+ * lowercase `v`.  Examples:
  *
- *   "iTerm2 3.6.9"        → "iTerm2"
- *   "WezTerm 20240203"    → "WezTerm"
- *   "kitty(0.45.0)"       → "kitty"
- *   "foo[1.2]"            → "foo"
- *   "Ghostty"             → "Ghostty"
- *   null                  → null
+ *   "iTerm2 3.6.9"                          → "iTerm2"
+ *   "WezTerm 20240203"                      → "WezTerm"
+ *   "kitty(0.45.0)"                         → "kitty"
+ *   "foo[1.2]"                              → "foo"
+ *   "Warp(v0.2026.05.06.15.42.stable_03)"   → "Warp"
+ *   "Ghostty"                               → "Ghostty"
+ *   null                                    → null
  */
 export function terminalBaseName(): null | string {
   if (!terminalName) return null;
-  return terminalName.replace(/[\s({[]\d.*$/, "");
+  return terminalName.replace(/[\s({[]v?\d.*$/, "");
 }
