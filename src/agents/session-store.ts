@@ -206,22 +206,36 @@ export class AgentSessionStore extends EventEmitter {
     if (changed) this.emitChanged();
   }
 
-  startLivenessCheck(): void {
-    this.livenessTimer = setInterval(() => {
-      for (const session of this.sessions.values()) {
-        if (session.status === "ended") continue;
-        if (session.isRemote) continue;
-        const pid = session.lastEvent.pid;
-        if (!pid) continue;
-        try {
-          process.kill(pid, 0);
-        } catch {
-          session.status = "ended";
-          this.scheduleCleanup(session.sessionId);
-          this.emitChanged();
-        }
+  /**
+   * Run one pass of the liveness check. Marks any non-remote, non-ended
+   * session whose `lastEvent.pid` is no longer running as `ended` and
+   * emits `session-died` so hook providers can close any pending
+   * permission connection for that session. Exposed for tests; the
+   * timer in `startLivenessCheck` just calls this on a 5s interval.
+   */
+  runLivenessCheckOnce(): void {
+    for (const session of this.sessions.values()) {
+      if (session.status === "ended") continue;
+      if (session.isRemote) continue;
+      const pid = session.lastEvent.pid;
+      if (!pid) continue;
+      try {
+        process.kill(pid, 0);
+      } catch {
+        session.status = "ended";
+        this.scheduleCleanup(session.sessionId);
+        // Tell listeners (specifically the hook providers' socket
+        // servers) so they can hang up any pending permission
+        // connection for this session. Without that, hook scripts
+        // blocked on `sock.recv()` would wait forever.
+        this.emit("session-died", session.sessionId);
+        this.emitChanged();
       }
-    }, 5_000);
+    }
+  }
+
+  startLivenessCheck(): void {
+    this.livenessTimer = setInterval(() => this.runLivenessCheckOnce(), 5_000);
   }
 
   private clearCleanupTimer(sessionId: string): void {

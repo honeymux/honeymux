@@ -91,6 +91,34 @@ def normalize_tty(tty_name):
     return f"/dev/{tty}"
 
 
+def collect_process_snapshot():
+    """Snapshot the local process table for server-side ancestor resolution."""
+    try:
+        proc = subprocess.run(
+            ["ps", "-axww", "-o", "pid=,ppid=,tty=,command="],
+            capture_output=True,
+            stdin=subprocess.DEVNULL,
+            text=True,
+            timeout=2,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return ""
+    return proc.stdout if proc.returncode == 0 else ""
+
+
+def discard_resolved_pid_line(sock):
+    """Consume the server's `{"resolvedPid": N}` reply, then discard."""
+    buf = b""
+    while b"\n" not in buf:
+        try:
+            chunk = sock.recv(4096)
+        except (socket.error, OSError):
+            return
+        if not chunk:
+            return
+        buf += chunk
+
+
 def get_tty():
     """Get the TTY of the parent Gemini process."""
     ppid = os.getppid()
@@ -125,12 +153,14 @@ EVENT_MAP = {
 
 
 def send_event(event):
+    event["processSnapshot"] = collect_process_snapshot()
     sock_path = get_socket_path()
     try:
         sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         sock.settimeout(5)
         sock.connect(sock_path)
         sock.sendall((json.dumps(event) + "\n").encode())
+        discard_resolved_pid_line(sock)
         sock.close()
         return True
     except (socket.error, OSError):

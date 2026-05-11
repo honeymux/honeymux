@@ -101,7 +101,7 @@ describe("createSnapshotProcessLookup", () => {
     { command: "python hook.py", parentPid: 200, pid: 300, tty: null },
   ];
 
-  it("serves parent pid and stdin tty from a single snapshot", () => {
+  it("serves parent pid, stdin tty, and command from a single snapshot", () => {
     let reads = 0;
     const lookup = createSnapshotProcessLookup(() => {
       reads += 1;
@@ -111,6 +111,8 @@ describe("createSnapshotProcessLookup", () => {
     expect(lookup.getParentPid(200)).toBe(100);
     expect(lookup.getStdinTty(200)).toBe("/dev/ttys001");
     expect(lookup.getStdinTty(300)).toBeNull();
+    expect(lookup.getCommand(200)).toBe("node /opt/claude/bin/cli.js");
+    expect(lookup.getCommand(300)).toBe("python hook.py");
     expect(reads).toBe(1);
   });
 
@@ -120,6 +122,7 @@ describe("createSnapshotProcessLookup", () => {
     expect(lookup.getParentPid(1)).toBeNull();
     expect(lookup.getParentPid(0)).toBeNull();
     expect(lookup.getStdinTty(999)).toBeNull();
+    expect(lookup.getCommand(999)).toBeNull();
   });
 
   it("defers the snapshot until first call", () => {

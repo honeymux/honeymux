@@ -11,6 +11,7 @@ import {
   isPidDescendedFromPane,
   loadPersistedSessions,
   parseProcStatParentPid,
+  resolveAgentSessionPid,
 } from "./socket-server.ts";
 
 describe("parseProcStatParentPid", () => {
@@ -86,6 +87,7 @@ describe("isPidBoundToPane", () => {
 
     expect(
       isPidBoundToPane(900, "/dev/pts/7", 100, {
+        getCommand: () => null,
         getParentPid: (pid) => parents.get(pid) ?? null,
         getStdinTty: () => "/dev/pts/7",
       }),
@@ -95,6 +97,7 @@ describe("isPidBoundToPane", () => {
   it("rejects a pid on the wrong tty", () => {
     expect(
       isPidBoundToPane(900, "/dev/pts/7", 100, {
+        getCommand: () => null,
         getParentPid: () => 100,
         getStdinTty: () => "/dev/pts/8",
       }),
@@ -109,6 +112,7 @@ describe("isPidBoundToPane", () => {
 
     expect(
       isPidBoundToPane(900, "/dev/pts/7", 100, {
+        getCommand: () => null,
         getParentPid: (pid) => parents.get(pid) ?? null,
         getStdinTty: () => "/dev/pts/7",
       }),
@@ -126,6 +130,7 @@ describe("isPidDescendedFromPane", () => {
 
     expect(
       isPidDescendedFromPane(900, 100, {
+        getCommand: () => null,
         getParentPid: (pid) => parents.get(pid) ?? null,
         getStdinTty: () => null,
       }),
@@ -140,10 +145,91 @@ describe("isPidDescendedFromPane", () => {
 
     expect(
       isPidDescendedFromPane(900, 100, {
+        getCommand: () => null,
         getParentPid: (pid) => parents.get(pid) ?? null,
         getStdinTty: () => null,
       }),
     ).toBe(false);
+  });
+});
+
+describe("resolveAgentSessionPid", () => {
+  function fakeLookup(processes: Array<{ command: string; parentPid: null | number; pid: number }>) {
+    const byPid = new Map(processes.map((p) => [p.pid, p]));
+    return {
+      getCommand: (pid: number) => byPid.get(pid)?.command ?? null,
+      getParentPid: (pid: number) => byPid.get(pid)?.parentPid ?? null,
+      getStdinTty: () => null,
+    };
+  }
+
+  it("substitutes the wrapper shell pid with the claude ancestor", () => {
+    // claude (911803) → /bin/sh -c "... hook ..." (912389) → python honeymux.py
+    // os.getppid() in the hook reports the wrapper sh as event.pid; we walk
+    // up and find the claude ancestor instead.
+    const lookup = fakeLookup([
+      { command: "claude", parentPid: 100, pid: 911803 },
+      { command: "sh -c /path/to/honeymux.py", parentPid: 911803, pid: 912389 },
+    ]);
+    expect(resolveAgentSessionPid(912389, "claude", 100, lookup)).toBe(911803);
+  });
+
+  it("leaves the pid unchanged when the hook was exec'd directly by claude", () => {
+    // No wrapper — claude is the immediate parent and matches on the first hop.
+    const lookup = fakeLookup([{ command: "claude", parentPid: 100, pid: 911803 }]);
+    expect(resolveAgentSessionPid(911803, "claude", 100, lookup)).toBe(911803);
+  });
+
+  it("matches a node-wrapped claude binary by word boundary", () => {
+    const lookup = fakeLookup([
+      { command: "node /Users/aaron/.local/bin/claude --resume", parentPid: 100, pid: 911803 },
+      { command: "/bin/sh -c python hook.py", parentPid: 911803, pid: 912389 },
+    ]);
+    expect(resolveAgentSessionPid(912389, "claude", 100, lookup)).toBe(911803);
+  });
+
+  it("picks the nearest teammate, not the lead, for team setups", () => {
+    // lead_claude → teammate_claude → sh -c → hook. The teammate's session
+    // should report the teammate pid, not the lead, so liveness tracks the
+    // teammate's actual lifetime.
+    const lookup = fakeLookup([
+      { command: "claude", parentPid: 100, pid: 5000 }, // lead
+      { command: "claude --team-member", parentPid: 5000, pid: 6000 }, // teammate
+      { command: "sh -c python hook.py", parentPid: 6000, pid: 7000 }, // wrapper
+    ]);
+    expect(resolveAgentSessionPid(7000, "claude", 100, lookup)).toBe(6000);
+  });
+
+  it("returns the original pid when no ancestor matches the agent binary", () => {
+    const lookup = fakeLookup([
+      { command: "sh", parentPid: 100, pid: 912389 },
+      // Note: no claude ancestor in the chain.
+    ]);
+    expect(resolveAgentSessionPid(912389, "claude", 100, lookup)).toBe(912389);
+  });
+
+  it("stops at the pane shell pid", () => {
+    // Even if the pane shell's command happens to contain "claude" in argv,
+    // we don't substitute it — the pane shell isn't the agent.
+    const lookup = fakeLookup([
+      { command: "/bin/zsh /path/with/claude/in/it", parentPid: 1, pid: 100 }, // pane shell
+      { command: "sh -c python hook.py", parentPid: 100, pid: 912389 },
+    ]);
+    expect(resolveAgentSessionPid(912389, "claude", 100, lookup)).toBe(912389);
+  });
+
+  it("tolerates ppid cycles defensively", () => {
+    // Synthetic cycle — should not loop forever, returns original on failure.
+    const lookup = fakeLookup([{ command: "sh", parentPid: 912389, pid: 912389 }]);
+    expect(resolveAgentSessionPid(912389, "claude", 100, lookup)).toBe(912389);
+  });
+
+  it("stops at pid 1 (init reparented after agent exit)", () => {
+    // If the agent already exited, the wrapper sh gets reparented to init.
+    // We walk to init, find no match, and return the original pid — the
+    // liveness check will then correctly mark the (now-dead) wrapper ended.
+    const lookup = fakeLookup([{ command: "sh", parentPid: 1, pid: 912389 }]);
+    expect(resolveAgentSessionPid(912389, "claude", 100, lookup)).toBe(912389);
   });
 });
 
@@ -342,5 +428,251 @@ describe("HookSocketServer", () => {
     expect(endCount).toBe(1);
     expect((server as any).pendingConnections.size).toBe(0);
     expect((server as any).pendingConnectionKeysBySessionId.size).toBe(0);
+  });
+
+  it("cancelPendingPermissionsForSession hangs up a held permission socket", async () => {
+    // Simulates what happens when the session-store's liveness check
+    // notices the agent has exited: it tells the provider, which calls
+    // through to this method, which closes the socket so the hook
+    // script (blocked in recv) sees EOF and gives up instead of waiting
+    // forever for a decision that will never come.
+    const server = new HookSocketServer(join(tempDir, "honeymux", "remote-hook.sock"), true, {
+      eventValidator: async () => true,
+      persistEvents: false,
+    });
+
+    let endCount = 0;
+    const permissionSocket = {
+      data: { buffer: "", pendingWork: Promise.resolve() },
+      end() {
+        endCount += 1;
+      },
+      flush() {},
+      write(data: string) {
+        return data.length;
+      },
+    };
+
+    await (server as any).processLine(
+      permissionSocket,
+      JSON.stringify({
+        agentType: "claude",
+        cwd: "/srv/project",
+        hookEvent: "PermissionRequest",
+        pid: 900,
+        sessionId: "sess-orphaned",
+        status: "unanswered",
+        timestamp: 1,
+        toolUseId: "tool-1",
+        tty: "/dev/pts/7",
+      }),
+    );
+
+    expect((server as any).pendingConnections.size).toBe(1);
+
+    const closed = server.cancelPendingPermissionsForSession("sess-orphaned");
+    expect(closed).toBe(true);
+    expect(endCount).toBe(1);
+    expect((server as any).pendingConnections.size).toBe(0);
+    expect((server as any).pendingConnectionKeysBySessionId.size).toBe(0);
+
+    // Idempotent: a second call for an already-cleaned session is a no-op.
+    expect(server.cancelPendingPermissionsForSession("sess-orphaned")).toBe(false);
+  });
+
+  it("hands a snapshot-backed ProcessLookup to the validator when processSnapshot is supplied", async () => {
+    let observedCtx: { processLookup?: unknown } | null = null;
+    const server = new HookSocketServer(join(tempDir, "honeymux", "remote-hook.sock"), true, {
+      eventValidator: (_event, ctx) => {
+        observedCtx = ctx;
+        return true;
+      },
+      persistEvents: false,
+    });
+
+    const socket = {
+      data: { buffer: "", pendingWork: Promise.resolve() },
+      end() {},
+      flush() {},
+      write(data: string) {
+        return data.length;
+      },
+    };
+
+    const snapshot = ["100 1 ? bash", "500 100 ? claude --resume", "900 500 ? sh -c python hook.py"].join("\n");
+
+    await (server as any).processLine(
+      socket,
+      JSON.stringify({
+        agentType: "claude",
+        cwd: "/srv/project",
+        hookEvent: "SessionStart",
+        pid: 900,
+        processSnapshot: snapshot,
+        sessionId: "sess-snap",
+        status: "alive",
+        timestamp: 1,
+        tty: "/dev/pts/7",
+      }),
+    );
+
+    expect(observedCtx).not.toBeNull();
+    const lookup = observedCtx!.processLookup as
+      | { getCommand: (pid: number) => null | string; getParentPid: (pid: number) => null | number }
+      | undefined;
+    expect(lookup).toBeDefined();
+    expect(lookup!.getCommand(500)).toBe("claude --resume");
+    expect(lookup!.getParentPid(900)).toBe(500);
+  });
+
+  it("writes the resolution line first on successful validation", async () => {
+    const server = new HookSocketServer(join(tempDir, "honeymux", "remote-hook.sock"), true, {
+      eventValidator: (event) => {
+        // Simulate the wrapper-shell → agent-pid substitution that the
+        // real local validator performs.
+        event.pid = 911803;
+        return true;
+      },
+      persistEvents: false,
+    });
+
+    const writes: string[] = [];
+    const socket = {
+      data: { buffer: "", pendingWork: Promise.resolve() },
+      end() {},
+      flush() {},
+      write(data: string) {
+        writes.push(data);
+        return data.length;
+      },
+    };
+
+    await (server as any).processLine(
+      socket,
+      JSON.stringify({
+        agentType: "claude",
+        cwd: "/srv/project",
+        hookEvent: "SessionStart",
+        pid: 912389,
+        sessionId: "sess-resolve",
+        status: "alive",
+        timestamp: 1,
+        tty: "/dev/pts/7",
+      }),
+    );
+
+    expect(writes[0]).toBe(JSON.stringify({ resolvedPid: 911803 }) + "\n");
+  });
+
+  it("writes resolution line before decision line for held permission sockets", async () => {
+    const server = new HookSocketServer(join(tempDir, "honeymux", "remote-hook.sock"), true, {
+      eventValidator: () => true,
+      persistEvents: false,
+    });
+
+    const writes: string[] = [];
+    const socket = {
+      data: { buffer: "", pendingWork: Promise.resolve() },
+      end() {},
+      flush() {},
+      write(data: string) {
+        writes.push(data);
+        return data.length;
+      },
+    };
+
+    await (server as any).processLine(
+      socket,
+      JSON.stringify({
+        agentType: "claude",
+        cwd: "/srv/project",
+        hookEvent: "PermissionRequest",
+        pid: 900,
+        sessionId: "sess-perm",
+        status: "unanswered",
+        timestamp: 1,
+        toolUseId: "tool-perm",
+        tty: "/dev/pts/7",
+      }),
+    );
+
+    expect(writes).toHaveLength(1);
+    expect(writes[0]).toBe(JSON.stringify({ resolvedPid: 900 }) + "\n");
+
+    server.respondToPermission("tool-perm", "allow");
+
+    expect(writes).toHaveLength(2);
+    expect(writes[1]).toBe(JSON.stringify({ decision: "allow" }) + "\n");
+  });
+
+  it("skips the resolution line on the deny path", async () => {
+    const server = new HookSocketServer(join(tempDir, "honeymux", "remote-hook.sock"), true, {
+      eventValidator: () => false,
+      persistEvents: false,
+    });
+
+    const writes: string[] = [];
+    const socket = {
+      data: { buffer: "", pendingWork: Promise.resolve() },
+      end() {},
+      flush() {},
+      write(data: string) {
+        writes.push(data);
+        return data.length;
+      },
+    };
+
+    await (server as any).processLine(
+      socket,
+      JSON.stringify({
+        agentType: "claude",
+        cwd: "/srv/project",
+        hookEvent: "PermissionRequest",
+        pid: 900,
+        sessionId: "sess-deny",
+        status: "unanswered",
+        timestamp: 1,
+        toolUseId: "tool-deny",
+        tty: "/dev/pts/7",
+      }),
+    );
+
+    expect(writes).toEqual([JSON.stringify({ decision: "deny" }) + "\n"]);
+  });
+
+  it("passes ctx.processLookup undefined when the event omits processSnapshot", async () => {
+    const observed: { hasLookup?: boolean } = {};
+    const server = new HookSocketServer(join(tempDir, "honeymux", "remote-hook.sock"), true, {
+      eventValidator: (_event, ctx) => {
+        observed.hasLookup = ctx.processLookup !== undefined;
+        return true;
+      },
+      persistEvents: false,
+    });
+
+    const socket = {
+      data: { buffer: "", pendingWork: Promise.resolve() },
+      end() {},
+      flush() {},
+      write(data: string) {
+        return data.length;
+      },
+    };
+
+    await (server as any).processLine(
+      socket,
+      JSON.stringify({
+        agentType: "claude",
+        cwd: "/srv/project",
+        hookEvent: "SessionStart",
+        pid: 900,
+        sessionId: "sess-no-snap",
+        status: "alive",
+        timestamp: 1,
+        tty: "/dev/pts/7",
+      }),
+    );
+
+    expect(observed.hasLookup).toBe(false);
   });
 });

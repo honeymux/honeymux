@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto";
 
+import type { HookEventValidatorContext } from "../agents/socket-server.ts";
 import type { AgentEvent } from "../agents/types.ts";
 import type { TmuxControlClient } from "../tmux/control-client.ts";
 import type {
@@ -456,7 +457,7 @@ export class RemoteServerManager extends EventEmitter {
           },
         };
         const ingressOptions: RemoteAgentIngressOptions = {
-          eventValidator: (event) => this.validateRemoteHookEvent(config.name, event),
+          eventValidator: (event, ctx) => this.validateRemoteHookEvent(config.name, event, ctx),
         };
         ingress = this.agentIngressFactory.create(config.name, handlers, ingressOptions);
         ingress.start();
@@ -998,8 +999,13 @@ export class RemoteServerManager extends EventEmitter {
     });
   }
 
-  private async validateRemoteHookEvent(serverName: string, event: AgentEvent): Promise<boolean> {
+  private async validateRemoteHookEvent(
+    serverName: string,
+    event: AgentEvent,
+    ctx: HookEventValidatorContext,
+  ): Promise<boolean> {
     const valid = await validateRemoteAgentEvent(event, {
+      processLookup: ctx.processLookup,
       resolvePaneBinding: (tty) => this.getRemotePaneBindingForTty(serverName, tty),
       validateProcessBinding: (pid, tty, panePid) => this.isRemotePidBoundToPane(serverName, pid, tty, panePid),
     });

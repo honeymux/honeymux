@@ -1,6 +1,16 @@
 import { readFileSync, readlinkSync } from "node:fs";
 
 export interface ProcessLookup {
+  /**
+   * Best-effort identifier for the process's executable. On Linux this is
+   * `/proc/<pid>/comm` (kernel-set, truncated to 15 chars, but reflects
+   * `prctl(PR_SET_NAME)` overrides like Node's `process.title = "claude"`).
+   * On other platforms it's the full command line from a single `ps -axww`
+   * snapshot, so a node-wrapped CLI may surface as `"node /usr/local/.../claude"`
+   * rather than just `"claude"` — callers matching agent binaries should use
+   * a word-boundary check rather than exact equality.
+   */
+  getCommand(pid: number): null | string;
   getParentPid(pid: number): null | number;
   getStdinTty(pid: number): null | string;
 }
@@ -65,6 +75,7 @@ export function collectProcessSubtreeCommandLines(rootPid: number, entries: Proc
 export function createProcessLookup(): ProcessLookup {
   if (process.platform === "linux") {
     return {
+      getCommand: getProcessCommandSync,
       getParentPid: getProcessParentPidSync,
       getStdinTty: getProcessStdinTtySync,
     };
@@ -88,6 +99,7 @@ export function createSnapshotProcessLookup(readEntries: () => ProcessSnapshotEn
     return byPid.get(pid);
   };
   return {
+    getCommand: (pid) => lookup(pid)?.command ?? null,
     getParentPid: (pid) => {
       const entry = lookup(pid);
       if (!entry || !Number.isInteger(entry.parentPid) || entry.parentPid <= 0) return null;
@@ -95,6 +107,20 @@ export function createSnapshotProcessLookup(readEntries: () => ProcessSnapshotEn
     },
     getStdinTty: (pid) => lookup(pid)?.tty ?? null,
   };
+}
+
+export function getProcessCommandSync(pid: number): null | string {
+  if (!Number.isInteger(pid) || pid <= 1) return null;
+
+  if (process.platform === "linux") {
+    try {
+      const comm = readFileSync(`/proc/${pid}/comm`, "utf-8").trim();
+      if (comm) return comm;
+    } catch {}
+  }
+
+  const trimmed = runPsSync(["-ww", "-o", "command=", "-p", String(pid)]).stdout.trim();
+  return trimmed || null;
 }
 
 export function getProcessParentPidSync(pid: number): null | number {

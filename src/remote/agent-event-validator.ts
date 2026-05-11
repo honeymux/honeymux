@@ -1,4 +1,7 @@
 import type { AgentEvent } from "../agents/types.ts";
+import type { ProcessLookup } from "../util/process-introspection.ts";
+
+import { resolveAgentSessionPid } from "../agents/socket-server.ts";
 
 export interface RemotePaneBinding {
   localPaneId: string;
@@ -7,6 +10,7 @@ export interface RemotePaneBinding {
 }
 
 interface ValidateRemoteAgentEventDeps {
+  processLookup?: ProcessLookup;
   resolvePaneBinding(tty: string): Promise<RemotePaneBinding | undefined>;
   validateProcessBinding(pid: number, tty: string, panePid: number): Promise<boolean>;
 }
@@ -21,5 +25,10 @@ export async function validateRemoteAgentEvent(
   const binding = await deps.resolvePaneBinding(event.tty);
   if (!binding) return false;
 
-  return deps.validateProcessBinding(event.pid, event.tty, binding.panePid);
+  if (!(await deps.validateProcessBinding(event.pid, event.tty, binding.panePid))) return false;
+
+  if (deps.processLookup) {
+    event.pid = resolveAgentSessionPid(event.pid, event.agentType, binding.panePid, deps.processLookup);
+  }
+  return true;
 }

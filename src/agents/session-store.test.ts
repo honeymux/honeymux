@@ -85,6 +85,38 @@ describe("AgentSessionStore", () => {
     store.destroy();
   });
 
+  it("emits session-died when liveness detects a dead pid", () => {
+    const store = new AgentSessionStore();
+    // 999999 is essentially never a live pid; pid_max on Linux is
+    // typically 4194304 but the kernel reserves the low range. If by
+    // some chance it IS live, the test would fail loudly — pick another.
+    store.handleEvent(makeEvent({ pid: 999999, sessionId: "doomed" }));
+
+    const died: string[] = [];
+    store.on("session-died", (id: string) => died.push(id));
+
+    store.runLivenessCheckOnce();
+
+    expect(died).toEqual(["doomed"]);
+    expect(store.getSession("doomed")?.status).toBe("ended");
+    store.destroy();
+  });
+
+  it("does not emit session-died for a still-alive pid", () => {
+    const store = new AgentSessionStore();
+    // process.pid is definitely alive — it's the test process itself.
+    store.handleEvent(makeEvent({ pid: process.pid, sessionId: "alive" }));
+
+    const died: string[] = [];
+    store.on("session-died", (id: string) => died.push(id));
+
+    store.runLivenessCheckOnce();
+
+    expect(died).toEqual([]);
+    expect(store.getSession("alive")?.status).toBe("alive");
+    store.destroy();
+  });
+
   it("marks session ended on SessionEnd", () => {
     const store = new AgentSessionStore();
     store.handleEvent(makeEvent());
