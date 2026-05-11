@@ -85,25 +85,19 @@ describe("isPidBoundToPane", () => {
     ]);
 
     expect(
-      isPidBoundToPane(
-        900,
-        "/dev/pts/7",
-        100,
-        () => "/dev/pts/7",
-        (pid) => parents.get(pid) ?? null,
-      ),
+      isPidBoundToPane(900, "/dev/pts/7", 100, {
+        getParentPid: (pid) => parents.get(pid) ?? null,
+        getStdinTty: () => "/dev/pts/7",
+      }),
     ).toBe(true);
   });
 
   it("rejects a pid on the wrong tty", () => {
     expect(
-      isPidBoundToPane(
-        900,
-        "/dev/pts/7",
-        100,
-        () => "/dev/pts/8",
-        () => 100,
-      ),
+      isPidBoundToPane(900, "/dev/pts/7", 100, {
+        getParentPid: () => 100,
+        getStdinTty: () => "/dev/pts/8",
+      }),
     ).toBe(false);
   });
 
@@ -114,13 +108,10 @@ describe("isPidBoundToPane", () => {
     ]);
 
     expect(
-      isPidBoundToPane(
-        900,
-        "/dev/pts/7",
-        100,
-        () => "/dev/pts/7",
-        (pid) => parents.get(pid) ?? null,
-      ),
+      isPidBoundToPane(900, "/dev/pts/7", 100, {
+        getParentPid: (pid) => parents.get(pid) ?? null,
+        getStdinTty: () => "/dev/pts/7",
+      }),
     ).toBe(false);
   });
 });
@@ -133,7 +124,12 @@ describe("isPidDescendedFromPane", () => {
       [900, 500],
     ]);
 
-    expect(isPidDescendedFromPane(900, 100, (pid) => parents.get(pid) ?? null)).toBe(true);
+    expect(
+      isPidDescendedFromPane(900, 100, {
+        getParentPid: (pid) => parents.get(pid) ?? null,
+        getStdinTty: () => null,
+      }),
+    ).toBe(true);
   });
 
   it("rejects a pid outside the pane process tree", () => {
@@ -142,7 +138,12 @@ describe("isPidDescendedFromPane", () => {
       [900, 700],
     ]);
 
-    expect(isPidDescendedFromPane(900, 100, (pid) => parents.get(pid) ?? null)).toBe(false);
+    expect(
+      isPidDescendedFromPane(900, 100, {
+        getParentPid: (pid) => parents.get(pid) ?? null,
+        getStdinTty: () => null,
+      }),
+    ).toBe(false);
   });
 });
 

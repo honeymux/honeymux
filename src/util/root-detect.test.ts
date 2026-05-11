@@ -1,12 +1,42 @@
 import { describe, expect, it } from "bun:test";
 
 import {
+  createDarwinRootDetector,
   parseProcStatTpgid,
   parseProcStatusIsRootUid,
   parsePsPidTpgidUidOutput,
   parsePsTpgidOutput,
   parsePsUidOutput,
 } from "./root-detect.ts";
+
+describe("createDarwinRootDetector", () => {
+  it("flags a pane whose fg pgrp leader has uid 0", () => {
+    const detector = createDarwinRootDetector([
+      { pid: 1234, tpgid: 5678, uid: 501 }, // pane shell, not the leader
+      { pid: 5678, tpgid: 5678, uid: 0 }, // foreground leader, running as root
+    ]);
+    expect(detector.isActivePaneRoot(1234)).toBe(true);
+  });
+
+  it("returns false when the fg pgrp leader has a non-zero uid", () => {
+    const detector = createDarwinRootDetector([
+      { pid: 1234, tpgid: 5678, uid: 501 },
+      { pid: 5678, tpgid: 5678, uid: 501 },
+    ]);
+    expect(detector.isActivePaneRoot(1234)).toBe(false);
+  });
+
+  it("returns false when the pane pid is not in the snapshot", () => {
+    const detector = createDarwinRootDetector([{ pid: 5678, tpgid: 5678, uid: 0 }]);
+    expect(detector.isActivePaneRoot(9999)).toBe(false);
+  });
+
+  it("returns false when the fg pgrp leader is not in the snapshot", () => {
+    // Leader (pid 5678) is missing — e.g. exited between snapshot and lookup.
+    const detector = createDarwinRootDetector([{ pid: 1234, tpgid: 5678, uid: 501 }]);
+    expect(detector.isActivePaneRoot(1234)).toBe(false);
+  });
+});
 
 describe("parseProcStatTpgid", () => {
   it("extracts tpgid from a simple stat line", () => {

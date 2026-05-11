@@ -2,6 +2,7 @@ import { describe, expect, it } from "bun:test";
 
 import {
   collectProcessSubtreeCommandLines,
+  createSnapshotProcessLookup,
   normalizeTtyPath,
   parseProcStatParentPid,
   parsePsParentPidOutput,
@@ -90,6 +91,44 @@ describe("collectProcessSubtreeCommandLines", () => {
 
   it("returns an empty list for an invalid root pid", () => {
     expect(collectProcessSubtreeCommandLines(0, [])).toEqual([]);
+  });
+});
+
+describe("createSnapshotProcessLookup", () => {
+  const entries = [
+    { command: "/bin/zsh", parentPid: 1, pid: 100, tty: "/dev/ttys001" },
+    { command: "node /opt/claude/bin/cli.js", parentPid: 100, pid: 200, tty: "/dev/ttys001" },
+    { command: "python hook.py", parentPid: 200, pid: 300, tty: null },
+  ];
+
+  it("serves parent pid and stdin tty from a single snapshot", () => {
+    let reads = 0;
+    const lookup = createSnapshotProcessLookup(() => {
+      reads += 1;
+      return entries;
+    });
+    expect(lookup.getParentPid(300)).toBe(200);
+    expect(lookup.getParentPid(200)).toBe(100);
+    expect(lookup.getStdinTty(200)).toBe("/dev/ttys001");
+    expect(lookup.getStdinTty(300)).toBeNull();
+    expect(reads).toBe(1);
+  });
+
+  it("returns null for unknown or invalid pids", () => {
+    const lookup = createSnapshotProcessLookup(() => entries);
+    expect(lookup.getParentPid(999)).toBeNull();
+    expect(lookup.getParentPid(1)).toBeNull();
+    expect(lookup.getParentPid(0)).toBeNull();
+    expect(lookup.getStdinTty(999)).toBeNull();
+  });
+
+  it("defers the snapshot until first call", () => {
+    let reads = 0;
+    createSnapshotProcessLookup(() => {
+      reads += 1;
+      return entries;
+    });
+    expect(reads).toBe(0);
   });
 });
 
