@@ -51,8 +51,10 @@ describe("pty write pipeline helpers", () => {
     expect(shouldMarkPermissionPromptAnswered("x")).toBe(false);
   });
 
-  test("routes explicit cancel through the permission response path", () => {
+  test("routes Ctrl-C through respondToPermission, markAnswered, and send-keys", () => {
     const calls: Array<[string, string, "allow" | "deny"]> = [];
+    const answered: string[] = [];
+    const sentKeys: Array<[string, string]> = [];
     const session: AgentSession = {
       agentType: "claude",
       cwd: "/work",
@@ -70,26 +72,34 @@ describe("pty write pipeline helpers", () => {
       status: "unanswered",
     };
 
-    const action = handlePermissionPromptInput({
+    const result = handlePermissionPromptInput({
       data: "\x03",
       paneId: "%1",
       respondToPermission: (sessionId, toolUseId, decision) => {
         calls.push([sessionId, toolUseId, decision]);
       },
+      sendKeyToPane: (paneId, keyName) => {
+        sentKeys.push([paneId, keyName]);
+      },
       store: {
         getSessions: () => [session],
-        markAnswered: () => {
-          throw new Error("unexpected markAnswered");
+        markAnswered: (sessionId) => {
+          answered.push(sessionId);
         },
       },
     });
 
-    expect(action).toBe("deny");
+    expect(result).toEqual({ action: "deny", handled: true });
     expect(calls).toEqual([["sess-1", "tool-1", "deny"]]);
+    // For agents whose provider.respondToPermission is a no-op (codex/gemini),
+    // markAnswered is the only thing that clears the unanswered state.
+    expect(answered).toEqual(["sess-1"]);
+    expect(sentKeys).toEqual([["%1", "C-c"]]);
   });
 
-  test("keeps enter on the local answered-state path", () => {
+  test("routes Enter through markAnswered and send-keys (no respondToPermission)", () => {
     const answered: string[] = [];
+    const sentKeys: Array<[string, string]> = [];
     const session: AgentSession = {
       agentType: "claude",
       cwd: "/work",
@@ -106,11 +116,14 @@ describe("pty write pipeline helpers", () => {
       status: "unanswered",
     };
 
-    const action = handlePermissionPromptInput({
+    const result = handlePermissionPromptInput({
       data: "\r",
       paneId: "%1",
       respondToPermission: () => {
         throw new Error("unexpected respondToPermission");
+      },
+      sendKeyToPane: (paneId, keyName) => {
+        sentKeys.push([paneId, keyName]);
       },
       store: {
         getSessions: () => [session],
@@ -120,7 +133,48 @@ describe("pty write pipeline helpers", () => {
       },
     });
 
-    expect(action).toBe("markAnswered");
+    expect(result).toEqual({ action: "markAnswered", handled: true });
     expect(answered).toEqual(["sess-1"]);
+    expect(sentKeys).toEqual([["%1", "Enter"]]);
+  });
+
+  test("skips send-keys for remote sessions and reports handled=false", () => {
+    const answered: string[] = [];
+    const sentKeys: Array<[string, string]> = [];
+    const session: AgentSession = {
+      agentType: "claude",
+      cwd: "/work",
+      isRemote: true,
+      lastEvent: {
+        agentType: "claude",
+        cwd: "/work",
+        sessionId: "sess-1",
+        status: "unanswered",
+        timestamp: 1,
+      },
+      paneId: "%1",
+      sessionId: "sess-1",
+      startedAt: 1,
+      status: "unanswered",
+    };
+
+    const result = handlePermissionPromptInput({
+      data: "\x1b",
+      paneId: "%1",
+      respondToPermission: () => {},
+      sendKeyToPane: (paneId, keyName) => {
+        sentKeys.push([paneId, keyName]);
+      },
+      store: {
+        getSessions: () => [session],
+        markAnswered: (sessionId) => {
+          answered.push(sessionId);
+        },
+      },
+    });
+
+    expect(result).toEqual({ action: "deny", handled: false });
+    expect(answered).toEqual(["sess-1"]);
+    expect(sentKeys).toEqual([]);
   });
 });

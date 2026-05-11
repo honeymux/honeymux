@@ -23,8 +23,11 @@ interface UseAgentPtyBridgeApi {
 interface UseAgentPtyBridgeOptions {
   clientRef: MutableRefObject<TmuxControlClient | null>;
   /** Optional callback invoked before each PTY write so callers can react
-   *  to keystrokes (e.g. mark a permission prompt as answered). */
-  onAgentInput?: (data: string) => void;
+   *  to keystrokes (e.g. mark a permission prompt as answered). Returning
+   *  `true` suppresses the subsequent local PTY write — used when the
+   *  caller has already routed the keystroke via another transport (e.g.
+   *  tmux `send-keys` through the main control client). */
+  onAgentInput?: (data: string) => boolean | void;
   /** Called when the underlying tmux session ends unexpectedly. */
   onExit?: () => void;
   policyOsc52Passthrough: Osc52Passthrough;
@@ -94,10 +97,15 @@ export function useAgentPtyBridge({
         return;
       }
 
-      // Otherwise, write directly to the local overlay PTY
+      // Otherwise, write directly to the local overlay PTY — unless the
+      // input handler signals it already routed the keystroke (e.g. a
+      // permission-resolution Esc/Enter delivered via send-keys through
+      // the main control client), in which case writing again would
+      // double-deliver.
       const pty = ptyRef.current;
       if (!pty) return;
-      onAgentInputRef.current?.(data);
+      const suppressed = onAgentInputRef.current?.(data) ?? false;
+      if (suppressed) return;
       pty.write(data);
     },
     [remoteManagerRef],

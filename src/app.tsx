@@ -455,15 +455,27 @@ export function App({ sessionName }: AppProps) {
   const agentBridge = useAgentPtyBridge({
     clientRef,
     onAgentInput: (data) => {
-      const action = handlePermissionPromptInput({
+      // Use the bridge's session paneId, not interactiveAgent's. `interactiveAgent`
+      // is filtered to `s.paneId !== activePaneId` and is null in tree-selected
+      // unlatched previews — both cases still route keystrokes through this bridge,
+      // so the permission prompt for `attachedAgent` is the relevant one.
+      const client = clientRef.current;
+      const result = handlePermissionPromptInput({
         data,
-        paneId: interactiveAgent?.paneId ?? null,
+        paneId: attachedAgent?.paneId ?? null,
         respondToPermission: appRuntimeRefs.handlePermissionRespondRef.current,
+        sendKeyToPane: client ? (pane, key) => void client.sendKeyToPane(pane, key).catch(() => {}) : null,
         store: appRuntimeRefs.storeRef.current,
       });
-      if (interactiveAgent && action) {
+      // Collapse the muxotron overlay once a resolution key is processed.
+      // For the perm-latched case this only fires on Enter (markAnswered):
+      // Esc and Ctrl-C are intercepted upstream by the keyboard router so
+      // they never reach the bridge. Review-latched tree selections opt
+      // out — the user explicitly chose to stay attached.
+      if (interactiveAgent && result && !reviewLatched) {
         appRuntimeRefs.handleMuxotronDismissRef.current();
       }
+      return result?.handled ?? false;
     },
     policyOsc52Passthrough: config.policyLocalOsc52Passthrough,
     policyOtherOscPassthrough: config.policyLocalOtherOscPassthrough,

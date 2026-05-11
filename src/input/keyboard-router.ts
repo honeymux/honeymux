@@ -272,11 +272,16 @@ export function routeKeyboardInput(
     }
   }
 
-  // Interactive (sticky auto-target) muxotron: Esc dismisses the zoom
-  // surface instead of leaking to the PTY. This only applies to the
-  // non-tree-selection sticky path — latched tree selections forward Esc
-  // to the agent PTY so interactive prompts can be cancelled.
-  if (interactiveAgent && !callbacks.isReviewLatched?.() && (canonical === "escape" || sequence === "\x1b")) {
+  // Interactive (perm-latched) muxotron: Esc and Ctrl-C dismiss the zoom
+  // surface instead of leaking to the agent's PTY. Any pending permission
+  // prompt is left pending — the user can goto the agent's pane to deal
+  // with it. Latched tree selections opt out so review interactions can
+  // use Esc / Ctrl-C to cancel the agent's native prompt.
+  if (
+    interactiveAgent &&
+    !callbacks.isReviewLatched?.() &&
+    (canonical === "escape" || sequence === "\x1b" || canonical === "ctrl+c" || sequence === "\x03")
+  ) {
     callbacks.onMuxotronDismiss?.();
     return true;
   }
