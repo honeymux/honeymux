@@ -198,6 +198,7 @@ interface SetupTmuxRuntimeAgentRuntimeContext {
   activePaneIdRef: MutableRefObject<null | string>;
   muxotronExpandedRef: MutableRefObject<boolean>;
   registryRef: MutableRefObject<AgentProviderRegistry | null>;
+  setActivePaneId: (paneId: null | string) => void;
   setAgentSessions: Dispatch<SetStateAction<AgentSession[]>>;
   setClaudeDialogPending: Dispatch<SetStateAction<boolean>>;
   setCodexDialogPending: Dispatch<SetStateAction<boolean>>;

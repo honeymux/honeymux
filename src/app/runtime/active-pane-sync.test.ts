@@ -15,7 +15,10 @@ function deferred<T>(): { promise: Promise<T>; reject: (error: unknown) => void;
 describe("active pane sync", () => {
   test("keeps a newer active pane ref when an older sync resolves", async () => {
     const panes = deferred<Array<{ active: boolean; id: string }>>();
-    const activePaneIdRef = { current: "%2" };
+    const activePaneIdRef = { current: "%2" as null | string };
+    const setActivePaneId = (paneId: null | string) => {
+      activePaneIdRef.current = paneId;
+    };
     const sync = syncActivePaneRef({
       activePaneIdRef,
       client: {
@@ -23,6 +26,7 @@ describe("active pane sync", () => {
         listPanesInWindow: mock(() => panes.promise),
       },
       fallbackPaneId: "%2",
+      setActivePaneId,
       windowId: "@1",
     });
 
@@ -43,7 +47,10 @@ describe("active pane sync", () => {
   });
 
   test("updates the ref when no newer focus change occurred", async () => {
-    const activePaneIdRef = { current: "%1" };
+    const activePaneIdRef = { current: "%1" as null | string };
+    const setActivePaneId = (paneId: null | string) => {
+      activePaneIdRef.current = paneId;
+    };
 
     await syncActivePaneRef({
       activePaneIdRef,
@@ -55,6 +62,7 @@ describe("active pane sync", () => {
         ]),
       },
       fallbackPaneId: "%1",
+      setActivePaneId,
       windowId: "@1",
     });
 

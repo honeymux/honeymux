@@ -71,12 +71,12 @@ export function useAgentActions({
   uiActions,
 }: UseAgentActionsOptions): AgentActionsApi {
   const {
-    activePaneIdRef,
     clientRef,
     dropdownInputRef,
     handlePermissionRespondRef,
     registryRef,
     remoteManagerRef,
+    setActivePaneId,
     storeRef,
     treeAgentSelectRef,
   } = refs;
@@ -190,7 +190,7 @@ export function useAgentActions({
               .then(() => true)
               .catch(() => false);
             if (paneSelected) {
-              activePaneIdRef.current = session.paneId;
+              setActivePaneId(session.paneId);
             }
           }
         });
@@ -207,7 +207,7 @@ export function useAgentActions({
                 .then(() => true)
                 .catch(() => false);
               if (paneSelected) {
-                activePaneIdRef.current = session.paneId;
+                setActivePaneId(session.paneId);
               }
             }
           })();
@@ -215,13 +215,13 @@ export function useAgentActions({
       }
     },
     [
-      activePaneIdRef,
       clientRef,
       currentSessionName,
       dropdownInputRef,
       getPaneTabGroup,
       handleSessionSelect,
       handleSwitchPaneTab,
+      setActivePaneId,
       setAgentsDialogOpen,
     ],
   );
