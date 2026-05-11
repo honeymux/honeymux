@@ -41,6 +41,7 @@ export function bootstrapConnectedSession({
       activePaneIdRef,
       muxotronExpandedRef,
       registryRef,
+      setActivePaneId,
       setAgentSessions,
       setHookSnifferEvents,
       storeRef,
@@ -221,6 +222,7 @@ export function bootstrapConnectedSession({
         activePaneIdRef,
         client,
         fallbackPaneId: activeWin?.paneId ?? null,
+        setActivePaneId,
         windowId: activeWin?.id,
       });
 

@@ -74,11 +74,15 @@ function createContext(): {
   const ptyKillMock = mock(() => {});
   const rendererDestroyMock = mock(() => {});
 
+  const activePaneIdRef = { current: null as null | string };
   const ctx = {
     agentRuntime: {
-      activePaneIdRef: { current: null },
+      activePaneIdRef,
       muxotronExpandedRef: { current: false },
       registryRef: { current: null },
+      setActivePaneId: (paneId: null | string) => {
+        activePaneIdRef.current = paneId;
+      },
       setAgentSessions: (_value: unknown) => {},
       setClaudeDialogPending: (_value: unknown) => {},
       setCodexDialogPending: (_value: unknown) => {},

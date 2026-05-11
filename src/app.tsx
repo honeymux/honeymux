@@ -241,7 +241,7 @@ export function App({ sessionName }: AppProps) {
       // list-windows snapshot during initial bootstrap before any live pane
       // sync has populated the ref.
       if (activePaneIdRef.current === null) {
-        activePaneIdRef.current = activeWindow.paneId ?? null;
+        appRuntimeRefs.setActivePaneId(activeWindow.paneId ?? null);
       }
     }
   }
@@ -255,7 +255,7 @@ export function App({ sessionName }: AppProps) {
     if (!client) return;
     const handler = (windowId: string, paneId: string) => {
       if (windowId !== activeWindowIdRef.current) return;
-      activePaneIdRef.current = paneId;
+      appRuntimeRefs.setActivePaneId(paneId);
     };
     client.on("window-pane-changed", handler);
     return () => {

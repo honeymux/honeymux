@@ -14,6 +14,7 @@ interface SyncActivePaneRefOptions {
   activePaneIdRef: MutableRefObject<null | string>;
   client: ActivePaneSyncClient;
   fallbackPaneId?: null | string;
+  setActivePaneId: (paneId: null | string) => void;
   windowId?: null | string;
 }
 
@@ -25,6 +26,7 @@ export async function syncActivePaneRef({
   activePaneIdRef,
   client,
   fallbackPaneId = null,
+  setActivePaneId,
   windowId,
 }: SyncActivePaneRefOptions): Promise<void> {
   const startingPaneId = activePaneIdRef.current;
@@ -32,11 +34,11 @@ export async function syncActivePaneRef({
     const panes = windowId ? await client.listPanesInWindow(windowId) : await client.getAllPaneInfo();
     const nextPaneId = resolveActivePaneId(panes) ?? fallbackPaneId;
     if (activePaneIdRef.current === startingPaneId) {
-      activePaneIdRef.current = nextPaneId;
+      setActivePaneId(nextPaneId);
     }
   } catch {
     if (activePaneIdRef.current === startingPaneId) {
-      activePaneIdRef.current = fallbackPaneId;
+      setActivePaneId(fallbackPaneId);
     }
   }
 }

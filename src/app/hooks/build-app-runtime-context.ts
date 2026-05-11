@@ -45,6 +45,7 @@ export function buildAppRuntimeContext({
       activePaneIdRef: refs.activePaneIdRef,
       muxotronExpandedRef: refs.muxotronExpandedRef,
       registryRef: refs.registryRef,
+      setActivePaneId: refs.setActivePaneId,
       setAgentSessions: agentDialogState.setAgentSessions,
       setClaudeDialogPending: agentDialogState.setClaudeDialogPending,
       setCodexDialogPending: agentDialogState.setCodexDialogPending,

@@ -15,7 +15,7 @@ export function registerSessionEventHandlers(
   ctx: SetupTmuxRuntimeContext,
 ): SessionEventHandlers {
   const {
-    agentRuntime: { activePaneIdRef },
+    agentRuntime: { activePaneIdRef, setActivePaneId },
     input: { validateTabGroups },
     sessionRuntime: { detachingRef, initTargetRef, ptyRef, renderer, switchingRef, tooNarrowRef },
     sessionState: { setActiveIndex, setCurrentSessionName, setSessionKey, setSessions, setWindows },
@@ -116,6 +116,7 @@ export function registerSessionEventHandlers(
         activePaneIdRef,
         client,
         fallbackPaneId: activeWin?.paneId ?? null,
+        setActivePaneId,
         windowId: activeWin?.id,
       });
       // Ask tmux to repaint the PTY client directly — avoids the
@@ -171,6 +172,7 @@ export function registerSessionEventHandlers(
             activePaneIdRef,
             client,
             fallbackPaneId: activeWin?.paneId ?? null,
+            setActivePaneId,
             windowId: activeWin?.id,
           });
         }

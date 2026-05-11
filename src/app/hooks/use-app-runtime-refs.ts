@@ -14,6 +14,8 @@ import type { PromptClickMode, PromptInputStart } from "../../util/prompt-detect
 import type { PtyBridge } from "../../util/pty.ts";
 import type { RuntimeDims } from "../runtime/runtime-context.ts";
 
+import { useObservableRef } from "./use-observable-ref.ts";
+
 export interface AppRuntimeRefs {
   /** Pane ID of the currently focused pane. */
   activePaneIdRef: MutableRefObject<null | string>;
@@ -115,6 +117,10 @@ export interface AppRuntimeRefs {
   /** True while the review session is latched to the selected agent's PTY (keys routed there). */
   reviewLatchedRef: MutableRefObject<boolean>;
   sequenceMapRef: MutableRefObject<Map<string, KeyAction>>;
+  /** Setter for activePaneIdRef. Writes both the ref (for synchronous
+   * readers) and an internal state value (to schedule a re-render so
+   * activePaneId-derived props refresh immediately). */
+  setActivePaneId: (paneId: null | string) => void;
   showHintRef: MutableRefObject<((text: string) => void) | null>;
   sidebarDragEndRef: MutableRefObject<(() => void) | null>;
   sidebarDragMoveRef: MutableRefObject<((x: number) => void) | null>;
@@ -306,7 +312,10 @@ export function useAppRuntimeRefs({ sequenceMap }: UseAppRuntimeRefsOptions): Ap
   const handleNewPaneTabRef = useRef<() => void>(() => {});
   const handlePrevPaneTabRef = useRef<() => void>(() => {});
   const handleNextPaneTabRef = useRef<() => void>(() => {});
-  const activePaneIdRef = useRef<null | string>(null);
+  // activePaneIdRef has many writers (window-pane-changed handler, optimistic
+  // updates after pane navigation, async syncActivePaneRef on bootstrap).
+  // All writes go through setActivePaneId so React renders on every change.
+  const [activePaneIdRef, setActivePaneId] = useObservableRef<null | string>(null);
   const addInfoRef = useRef<((id: string, message: string | string[]) => void) | null>(null);
   const interactiveAgentRef = useRef<AgentSession | null>(null);
   const reviewLatchedRef = useRef(false);
@@ -397,6 +406,7 @@ export function useAppRuntimeRefs({ sequenceMap }: UseAppRuntimeRefsOptions): Ap
     remoteManagerRef,
     reviewLatchedRef,
     sequenceMapRef,
+    setActivePaneId,
     showHintRef,
     sidebarDragEndRef,
     sidebarDragMoveRef,

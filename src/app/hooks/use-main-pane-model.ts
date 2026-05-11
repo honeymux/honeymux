@@ -144,7 +144,7 @@ export function useMainPaneModel({
           .then(() => true)
           .catch(() => false);
         if (paneSelected) {
-          refs.activePaneIdRef.current = paneId;
+          refs.setActivePaneId(paneId);
         }
       };
 
@@ -157,7 +157,7 @@ export function useMainPaneModel({
 
       void selectTargetPane();
     },
-    [refs.activePaneIdRef, refs.clientRef, tmuxSessionState.currentSessionName, uiActions.handleSessionSelect],
+    [refs.clientRef, refs.setActivePaneId, tmuxSessionState.currentSessionName, uiActions.handleSessionSelect],
   );
 
   const bufferZoomBinding = formatBufferZoomBinding(keybindingConfig);
