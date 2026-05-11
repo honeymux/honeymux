@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 
+import type { HookEventValidatorContext } from "../agents/socket-server.ts";
 import type { AgentEvent, AgentType } from "../agents/types.ts";
 
 import { HookSocketServer } from "../agents/socket-server.ts";
@@ -28,7 +29,7 @@ export interface RemoteAgentIngressHandlers {
 }
 
 export interface RemoteAgentIngressOptions {
-  eventValidator?: (event: AgentEvent) => Promise<boolean> | boolean;
+  eventValidator?: (event: AgentEvent, ctx: HookEventValidatorContext) => Promise<boolean> | boolean;
 }
 
 export interface RemotePermissionRoute {

@@ -24,7 +24,6 @@ EVENT_STATUS_MAP = {
     "TaskCompleted": "alive",  # Team task completion update
 }
 
-PERMISSION_POLL_INTERVAL = 2.0
 REMOTE_HOOK_SOCKET_OPTION = "@hmx-agent-socket-path"
 REMOTE_HOOK_SOCKET_RE = r"^/.*?/hmx-remote-hook-[0-9a-f]{16}\.sock$"
 TMUX_PANE_RE = r"^%\d+$"
@@ -126,6 +125,21 @@ def get_tty():
     return normalize_tty(proc.stdout)
 
 
+def collect_process_snapshot():
+    """Snapshot the local process table for server-side ancestor resolution."""
+    try:
+        proc = subprocess.run(
+            ["ps", "-axww", "-o", "pid=,ppid=,tty=,command="],
+            capture_output=True,
+            stdin=subprocess.DEVNULL,
+            text=True,
+            timeout=2,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return ""
+    return proc.stdout if proc.returncode == 0 else ""
+
+
 def get_tmux_pane_id():
     pane_id = os.environ.get("TMUX_PANE", "").strip()
     if not pane_id or re.match(TMUX_PANE_RE, pane_id) is None:
@@ -133,38 +147,52 @@ def get_tmux_pane_id():
     return pane_id
 
 
-def is_original_parent_alive(parent_pid):
-    if parent_pid <= 1:
+def is_pid_alive(pid):
+    if not isinstance(pid, int) or pid <= 1:
         return False
-
-    if os.getppid() != parent_pid:
-        return False
-
     try:
-        os.kill(parent_pid, 0)
+        os.kill(pid, 0)
     except OSError:
         return False
-
     return True
 
 
-def read_permission_response(sock, parent_pid):
-    response = b""
+def read_resolved_pid(sock, fallback):
+    """Read the server's single-line `{"resolvedPid": N}` reply."""
+    buf = b""
+    while b"\n" not in buf:
+        try:
+            chunk = sock.recv(4096)
+        except (socket.error, OSError):
+            return fallback
+        if not chunk:
+            return fallback
+        buf += chunk
+    try:
+        line = buf.split(b"\n", 1)[0]
+        return int(json.loads(line).get("resolvedPid", fallback))
+    except (json.JSONDecodeError, TypeError, ValueError):
+        return fallback
 
+
+def wait_for_permission_response(sock, resolved_pid):
+    """Block on the server's permission decision line, self-polling agent liveness."""
+    sock.settimeout(2.0)
+    buf = b""
     while True:
         try:
             chunk = sock.recv(4096)
         except socket.timeout:
-            if not is_original_parent_alive(parent_pid):
+            if not is_pid_alive(resolved_pid):
                 return None
             continue
-
+        except (socket.error, OSError):
+            return None
         if not chunk:
             return None
-
-        response += chunk
-        if b"\n" in response:
-            return response.strip()
+        buf += chunk
+        if b"\n" in buf:
+            return buf.split(b"\n", 1)[0].strip()
 
 
 def main():
@@ -247,6 +275,8 @@ def main():
     if prompt:
         event["prompt"] = prompt[:200]
 
+    event["processSnapshot"] = collect_process_snapshot()
+
     sock_path = get_socket_path(remote_socket_path)
 
     try:
@@ -255,11 +285,11 @@ def main():
         sock.connect(sock_path)
         sock.sendall((json.dumps(event) + "\n").encode())
 
+        resolved_pid = read_resolved_pid(sock, fallback=parent_pid)
+
         if hook_event == "PermissionRequest":
-            # Block waiting for approval decision
-            sock.settimeout(PERMISSION_POLL_INTERVAL)
             try:
-                response = read_permission_response(sock, parent_pid)
+                response = wait_for_permission_response(sock, resolved_pid)
 
                 if response:
                     raw = json.loads(response)

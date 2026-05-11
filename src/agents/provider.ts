@@ -6,6 +6,15 @@ export abstract class AgentProvider extends EventEmitter {
   abstract readonly animations: AgentAnimationConfig;
   abstract readonly providerType: string;
   abstract readonly supportedAgents: AgentType[];
+
+  /**
+   * Close any pending permission connection for the given session.
+   * Default is a no-op; providers that hold open hook sockets for
+   * blocking permission decisions (e.g. Claude, OpenCode) override this
+   * to hang up the socket so a hook script that's now waiting for a
+   * dead agent can exit cleanly.
+   */
+  cancelPendingPermissionsForSession(_sessionId: string): void {}
   abstract start(): Promise<void> | void;
   abstract stop(): void;
 
@@ -17,6 +26,10 @@ export abstract class AgentProvider extends EventEmitter {
 export class AgentProviderRegistry extends EventEmitter {
   private handlers = new Map<AgentProvider, (event: AgentEvent) => void>();
   private providers = new Set<AgentProvider>();
+
+  cancelPendingPermissionsForSession(sessionId: string): void {
+    for (const p of this.providers) p.cancelPendingPermissionsForSession(sessionId);
+  }
 
   forwardEvent(event: AgentEvent): void {
     this.emit("agent-event", event);

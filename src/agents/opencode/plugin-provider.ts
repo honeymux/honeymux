@@ -23,6 +23,10 @@ export class OpenCodePluginProvider extends AgentProvider {
     this.ttyResolver = new TmuxTtyResolver(client);
   }
 
+  override cancelPendingPermissionsForSession(sessionId: string): void {
+    this.socketServer.cancelPendingPermissionsForSession(sessionId);
+  }
+
   respondToPermission(sessionId: string, toolUseId: string, decision: "allow" | "deny"): void {
     const key = toolUseId || sessionId;
     this.socketServer.respondToPermission(key, decision);

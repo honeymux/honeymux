@@ -9,17 +9,32 @@ import type { AgentEvent, AgentType } from "./types.ts";
 import { listPanePidsByIdSync, listPanePidsByTtySync } from "../tmux/control-client.ts";
 import { appendBoundedLines } from "../util/bounded-line-buffer.ts";
 import { EventEmitter } from "../util/event-emitter.ts";
-import { type ProcessLookup, createProcessLookup } from "../util/process-introspection.ts";
+import {
+  type ProcessLookup,
+  createProcessLookup,
+  createSnapshotProcessLookup,
+  parsePsProcessSnapshotOutput,
+} from "../util/process-introspection.ts";
 import { getPrivateRuntimePath, getPrivateSocketPath } from "../util/runtime-paths.ts";
 import { parseWireAgentEvent } from "./wire-event.ts";
 
 export { parseProcStatParentPid } from "../util/process-introspection.ts";
 
+const AGENT_COMMAND_PATTERNS: Record<AgentType, RegExp> = {
+  claude: /\bclaude\b/i,
+  codex: /\bcodex\b/i,
+  gemini: /\bgemini\b/i,
+  opencode: /\bopencode\b/i,
+};
 const LOCAL_PANE_CACHE_MS = 1000;
 const MAX_HOOK_SOCKET_LINE_BYTES = 256 * 1024;
 
+export interface HookEventValidatorContext {
+  processLookup?: ProcessLookup;
+}
+
 interface HookSocketServerOptions {
-  eventValidator?: (event: AgentEvent) => Promise<boolean> | boolean;
+  eventValidator?: (event: AgentEvent, ctx: HookEventValidatorContext) => Promise<boolean> | boolean;
   persistEvents?: boolean;
   shouldHoldPermissionConnection?: (event: AgentEvent) => boolean;
 }
@@ -43,7 +58,7 @@ interface SocketData {
 }
 
 export class HookSocketServer extends EventEmitter {
-  private eventValidator: (event: AgentEvent) => Promise<boolean> | boolean;
+  private eventValidator: (event: AgentEvent, ctx: HookEventValidatorContext) => Promise<boolean> | boolean;
   private holdPermissionConnections: boolean;
   private pendingConnectionKeysBySessionId = new Map<string, string>();
   private pendingConnections = new Map<string, PendingPermissionConnection>();
@@ -59,6 +74,23 @@ export class HookSocketServer extends EventEmitter {
     this.holdPermissionConnections = holdPermissionConnections;
     this.persistEvents = options.persistEvents ?? true;
     this.shouldHoldPermissionConnection = options.shouldHoldPermissionConnection;
+  }
+
+  /**
+   * Close any pending permission connection for `sessionId`. Called when
+   * the agent process has died (detected by the session store's liveness
+   * check) so the hook script, which is blocked in `recv()` waiting for
+   * a permission decision that will never come, sees a clean EOF and
+   * gives up. Returns true if a pending connection was closed.
+   */
+  cancelPendingPermissionsForSession(sessionId: string): boolean {
+    const pending = this.removePendingConnectionForSession(sessionId);
+    if (!pending) return false;
+    this.clearPendingSocketData(pending.socket);
+    try {
+      pending.socket.end();
+    } catch {}
+    return true;
   }
 
   respondToPermission(id: string, decision: "allow" | "deny"): boolean {
@@ -196,12 +228,15 @@ export class HookSocketServer extends EventEmitter {
     if (!line.trim()) return;
     try {
       const parsed = JSON.parse(line);
+      const ctx: HookEventValidatorContext = {
+        processLookup: extractSnapshotLookup(parsed),
+      };
       const event = parseWireAgentEvent(parsed);
       if (!event) return;
       const shouldHold = this.getShouldHoldPermissionConnection(event);
       let isValid = false;
       try {
-        isValid = await this.eventValidator(event);
+        isValid = await this.eventValidator(event, ctx);
       } catch {}
       if (!isValid) {
         if (event.status === "unanswered" && shouldHold) {
@@ -209,6 +244,13 @@ export class HookSocketServer extends EventEmitter {
         }
         return;
       }
+
+      // Reply with the canonical agent pid so the hook can self-poll
+      // against the long-lived agent.
+      try {
+        socket.write(JSON.stringify({ resolvedPid: event.pid }) + "\n");
+        socket.flush();
+      } catch {}
 
       this.emit("event", event);
       if (this.persistEvents) {
@@ -388,6 +430,54 @@ export function loadPersistedSessions(agentType?: AgentType): AgentEvent[] {
   return events;
 }
 
+/**
+ * Resolve a hook-reported pid to the long-lived agent process.
+ *
+ * Claude Code (and some other agents) dispatch hooks through `/bin/sh -c
+ * <command>` rather than exec'ing them directly. `os.getppid()` in the
+ * hook script then returns the wrapper shell's pid, which exits as soon
+ * as the hook returns — leaving honeymux's pid-based liveness check
+ * (`session-store.ts`) to mark the session ended seconds later.
+ *
+ * Walk up the ancestry from the reported pid (bounded by the pane shell
+ * and a cycle guard) and return the first ancestor whose command matches
+ * the agent binary. That pid lives for the full agent session and works
+ * regardless of whether the hook is exec'd directly or wrapped. Returns
+ * `eventPid` unchanged if no matching ancestor is found — graceful
+ * degradation to the prior (sometimes-broken) behavior rather than
+ * fabricating a stale pid.
+ *
+ * For team setups (a teammate agent forked from a lead) the nearest
+ * matching ancestor is the teammate itself, not the lead — exactly what
+ * the teammate's session wants for liveness.
+ */
+export function resolveAgentSessionPid(
+  eventPid: number,
+  agentType: AgentType,
+  panePid: number,
+  lookup: ProcessLookup,
+): number {
+  const pattern = AGENT_COMMAND_PATTERNS[agentType];
+  if (!pattern) return eventPid;
+
+  const seen = new Set<number>();
+  let current: null | number = eventPid;
+  while (current !== null && current > 1 && current !== panePid && !seen.has(current)) {
+    seen.add(current);
+    const command = lookup.getCommand(current);
+    if (command && pattern.test(command)) return current;
+    current = lookup.getParentPid(current);
+  }
+  return eventPid;
+}
+
+function extractSnapshotLookup(parsed: unknown): ProcessLookup | undefined {
+  if (typeof parsed !== "object" || parsed === null) return undefined;
+  const snapshot = (parsed as Record<string, unknown>)["processSnapshot"];
+  if (typeof snapshot !== "string" || snapshot.length === 0) return undefined;
+  return createSnapshotProcessLookup(() => parsePsProcessSnapshotOutput(snapshot));
+}
+
 function getPanePidsById(): Map<string, number> {
   const now = Date.now();
   if (now - cachedPanePidsAt < LOCAL_PANE_CACHE_MS) return cachedPanePidsById;
@@ -416,23 +506,33 @@ function getSocketPath(): string {
   return getPrivateSocketPath("hmx-claude");
 }
 
-function isValidLocalAgentEvent(event: AgentEvent): boolean {
+/**
+ * Validates a local agent event and canonicalizes `event.pid` to the
+ * long-lived agent process. Side-effecting: on success, mutates
+ * `event.pid` to the nearest ancestor whose command matches the agent
+ * binary (see `resolveAgentSessionPid`), so the wrapper-shell pid from
+ * `sh -c`-dispatched hooks is replaced with the stable agent pid before
+ * the event reaches session storage and liveness checking.
+ */
+function isValidLocalAgentEvent(event: AgentEvent, ctx: HookEventValidatorContext): boolean {
   if (typeof event.pid !== "number" || !Number.isInteger(event.pid)) return false;
-
-  // One lookup per event: shared across the tty check and the ancestor walk,
-  // and on non-Linux platforms collapses what would otherwise be 1+N `ps`
-  // spawns (tty for the hook pid, ppid per ancestor) into a single snapshot.
-  const lookup = createProcessLookup();
+  if (!ctx.processLookup) return false;
+  const lookup = ctx.processLookup;
 
   if (event.paneId) {
     const panePid = getPanePidsById().get(event.paneId);
-    if (panePid) return isPidDescendedFromPane(event.pid, panePid, lookup);
+    if (panePid && isPidDescendedFromPane(event.pid, panePid, lookup)) {
+      event.pid = resolveAgentSessionPid(event.pid, event.agentType, panePid, lookup);
+      return true;
+    }
   }
 
   if (!event.tty || typeof event.tty !== "string") return false;
   const panePid = getPanePidsByTty().get(event.tty);
   if (!panePid) return false;
-  return isPidBoundToPane(event.pid, event.tty, panePid, lookup);
+  if (!isPidBoundToPane(event.pid, event.tty, panePid, lookup)) return false;
+  event.pid = resolveAgentSessionPid(event.pid, event.agentType, panePid, lookup);
+  return true;
 }
 
 function persistSessionEvent(event: AgentEvent): void {

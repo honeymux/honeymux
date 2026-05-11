@@ -93,4 +93,58 @@ describe("validateRemoteAgentEvent", () => {
     ).toBe(true);
     expect(validateProcessBinding).toHaveBeenCalledWith(900, "/dev/pts/7", 123);
   });
+
+  it("substitutes event.pid with the resolved agent ancestor when processLookup is supplied", async () => {
+    // event.pid (900) is a `sh -c` wrapper. The snapshot-backed lookup
+    // reports its parent (500) as the long-lived claude. After binding
+    // succeeds the validator should mutate event.pid to 500.
+    const resolvePaneBinding = mock(async (_tty: string) => ({
+      localPaneId: "%10",
+      panePid: 123,
+      remotePaneId: "%77",
+    }));
+    const validateProcessBinding = mock(async (_pid: number, _tty: string, _panePid: number) => true);
+
+    const parents = new Map<number, number>([
+      [500, 123],
+      [900, 500],
+    ]);
+    const commands = new Map<number, string>([
+      [500, "claude"],
+      [900, "sh -c python hook.py"],
+    ]);
+    const processLookup = {
+      getCommand: (pid: number) => commands.get(pid) ?? null,
+      getParentPid: (pid: number) => parents.get(pid) ?? null,
+      getStdinTty: () => null,
+    };
+
+    const event = makeEvent();
+    expect(
+      await validateRemoteAgentEvent(event, {
+        processLookup,
+        resolvePaneBinding,
+        validateProcessBinding,
+      }),
+    ).toBe(true);
+    expect(event.pid).toBe(500);
+  });
+
+  it("leaves event.pid unchanged when processLookup is omitted", async () => {
+    const resolvePaneBinding = mock(async (_tty: string) => ({
+      localPaneId: "%10",
+      panePid: 123,
+      remotePaneId: "%77",
+    }));
+    const validateProcessBinding = mock(async (_pid: number, _tty: string, _panePid: number) => true);
+
+    const event = makeEvent();
+    expect(
+      await validateRemoteAgentEvent(event, {
+        resolvePaneBinding,
+        validateProcessBinding,
+      }),
+    ).toBe(true);
+    expect(event.pid).toBe(900);
+  });
 });

@@ -128,11 +128,39 @@ def get_tty():
     return normalize_tty(proc.stdout)
 
 
+def collect_process_snapshot():
+    """Snapshot the local process table for server-side ancestor resolution."""
+    try:
+        proc = subprocess.run(
+            ["ps", "-axww", "-o", "pid=,ppid=,tty=,command="],
+            capture_output=True,
+            stdin=subprocess.DEVNULL,
+            text=True,
+            timeout=2,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return ""
+    return proc.stdout if proc.returncode == 0 else ""
+
+
 def get_tmux_pane_id():
     pane_id = os.environ.get("TMUX_PANE", "").strip()
     if not pane_id or re.match(TMUX_PANE_RE, pane_id) is None:
         return None
     return pane_id
+
+
+def discard_resolved_pid_line(sock):
+    """Consume the server's `{"resolvedPid": N}` reply, then discard."""
+    buf = b""
+    while b"\n" not in buf:
+        try:
+            chunk = sock.recv(4096)
+        except (socket.error, OSError):
+            return
+        if not chunk:
+            return
+        buf += chunk
 
 
 def main():
@@ -185,6 +213,8 @@ def main():
     if turn_id:
         event["toolUseId"] = turn_id
 
+    event["processSnapshot"] = collect_process_snapshot()
+
     sock_path = get_socket_path(remote_socket_path)
 
     try:
@@ -192,6 +222,7 @@ def main():
         sock.settimeout(5)
         sock.connect(sock_path)
         sock.sendall((json.dumps(event) + "\n").encode())
+        discard_resolved_pid_line(sock)
         sock.close()
     except (socket.error, OSError):
         pass

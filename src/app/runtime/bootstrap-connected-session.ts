@@ -146,6 +146,14 @@ export function bootstrapConnectedSession({
       });
       store.startLivenessCheck();
 
+      // When the liveness check detects an agent process has died, tell
+      // the providers to hang up any pending permission connection for
+      // that session — otherwise the hook script (blocked in recv) would
+      // wait indefinitely for a decision that will never come.
+      store.on("session-died", (sessionId: string) => {
+        registry.cancelPendingPermissionsForSession(sessionId);
+      });
+
       // One-shot at startup: refresh hook files for agents the user has
       // already consented to, so newer bundled versions replace stale scripts.
       // Agents without local consent are left alone; the normal install flow
