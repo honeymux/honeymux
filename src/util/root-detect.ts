@@ -1,7 +1,49 @@
+import { readFileSync } from "node:fs";
+
+export interface RootDetector {
+  isActivePaneRoot(panePid: number, paneTty?: string): boolean;
+}
+
 interface PsPidTpgidUidRow {
   pid: number;
   tpgid: number;
   uid: number;
+}
+
+/**
+ * Build a Darwin RootDetector from an already-parsed snapshot. Exported
+ * for testing; production code should use `createRootDetector()`.
+ */
+export function createDarwinRootDetector(rows: PsPidTpgidUidRow[]): RootDetector {
+  const byPid = new Map<number, PsPidTpgidUidRow>();
+  for (const row of rows) byPid.set(row.pid, row);
+  return {
+    isActivePaneRoot: (panePid) => {
+      const pane = byPid.get(panePid);
+      if (!pane) return false;
+      const leader = byPid.get(pane.tpgid);
+      return leader?.uid === 0;
+    },
+  };
+}
+
+/**
+ * Build a root-detection context. On macOS this takes one `ps -axww`
+ * snapshot up front and answers every subsequent `isActivePaneRoot` call
+ * from memory; on Linux each call reads `/proc` directly (already cheap).
+ * Construct one detector per polling tick and share it across all panes
+ * to avoid spawning `ps` once per pane on macOS.
+ */
+export function createRootDetector(): RootDetector {
+  if (process.platform === "darwin") {
+    return createDarwinRootDetector(
+      parsePsPidTpgidUidOutput(runPsSync(["-axww", "-o", "pid=", "-o", "tpgid=", "-o", "uid="])),
+    );
+  }
+  if (process.platform === "linux") {
+    return { isActivePaneRoot: isRootLinux };
+  }
+  return { isActivePaneRoot: () => false };
 }
 
 /**
@@ -13,12 +55,13 @@ interface PsPidTpgidUidRow {
  * command share the fg pgrp but are not its leader, so they do not trip this
  * check. Platform-aware: uses /proc on Linux, `ps` on macOS. Returns false on
  * any error (graceful degradation).
+ *
+ * One-shot convenience: when checking many panes at once, prefer
+ * `createRootDetector()` to share a single snapshot.
  */
-export async function isActivePaneRoot(panePid: number, paneTty?: string): Promise<boolean> {
+export function isActivePaneRoot(panePid: number, paneTty?: string): boolean {
   try {
-    if (process.platform === "darwin") return await isRootDarwin(panePid, paneTty);
-    if (process.platform === "linux") return await isRootLinux(panePid);
-    return false;
+    return createRootDetector().isActivePaneRoot(panePid, paneTty);
   } catch {
     return false;
   }
@@ -89,35 +132,24 @@ export function parsePsUidOutput(output: string): null | number {
   return Number.isInteger(uid) && uid >= 0 ? uid : null;
 }
 
-async function isRootDarwin(panePid: number, paneTty?: string): Promise<boolean> {
-  const tty = paneTty?.replace(/^\/dev\//, "").trim();
-  if (!tty) return false;
+function isRootLinux(panePid: number): boolean {
+  try {
+    const stat = readFileSync(`/proc/${panePid}/stat`, "utf-8");
+    const tpgid = parseProcStatTpgid(stat);
+    if (tpgid === null) return false;
 
-  const output = await runPs(["-ww", "-o", "pid=", "-o", "tpgid=", "-o", "uid=", "-t", tty]);
-  const rows = parsePsPidTpgidUidOutput(output);
-  const paneRow = rows.find((row) => row.pid === panePid);
-  if (!paneRow) return false;
-
-  const leaderRow = rows.find((row) => row.pid === paneRow.tpgid);
-  return leaderRow?.uid === 0;
+    const status = readFileSync(`/proc/${tpgid}/status`, "utf-8");
+    return parseProcStatusIsRootUid(status);
+  } catch {
+    return false;
+  }
 }
 
-async function isRootLinux(panePid: number): Promise<boolean> {
-  const stat = await Bun.file(`/proc/${panePid}/stat`).text();
-  const tpgid = parseProcStatTpgid(stat);
-  if (tpgid === null) return false;
-
-  const status = await Bun.file(`/proc/${tpgid}/status`).text();
-  return parseProcStatusIsRootUid(status);
-}
-
-async function runPs(args: string[]): Promise<string> {
-  const proc = Bun.spawn(["ps", ...args], {
+function runPsSync(args: string[]): string {
+  const proc = Bun.spawnSync(["ps", ...args], {
     stderr: "ignore",
     stdin: "ignore",
     stdout: "pipe",
   });
-  const out = await new Response(proc.stdout).text();
-  await proc.exited;
-  return out;
+  return new TextDecoder().decode(proc.stdout);
 }

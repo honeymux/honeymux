@@ -9,7 +9,7 @@ import type { AgentEvent, AgentType } from "./types.ts";
 import { listPanePidsByIdSync, listPanePidsByTtySync } from "../tmux/control-client.ts";
 import { appendBoundedLines } from "../util/bounded-line-buffer.ts";
 import { EventEmitter } from "../util/event-emitter.ts";
-import { getProcessParentPidSync, getProcessStdinTtySync } from "../util/process-introspection.ts";
+import { type ProcessLookup, createProcessLookup } from "../util/process-introspection.ts";
 import { getPrivateRuntimePath, getPrivateSocketPath } from "../util/runtime-paths.ts";
 import { parseWireAgentEvent } from "./wire-event.ts";
 
@@ -312,20 +312,19 @@ export function isPidBoundToPane(
   pid: number,
   tty: string,
   panePid: number,
-  readTty: (pid: number) => null | string = getProcessStdinTty,
-  readParentPid: (pid: number) => null | number = getProcessParentPid,
+  lookup: ProcessLookup = createProcessLookup(),
 ): boolean {
   if (!Number.isInteger(pid) || pid <= 1) return false;
   if (!Number.isInteger(panePid) || panePid <= 1) return false;
-  if (!tty || readTty(pid) !== tty) return false;
+  if (!tty || lookup.getStdinTty(pid) !== tty) return false;
 
-  return isPidDescendedFromPane(pid, panePid, readParentPid);
+  return isPidDescendedFromPane(pid, panePid, lookup);
 }
 
 export function isPidDescendedFromPane(
   pid: number,
   panePid: number,
-  readParentPid: (pid: number) => null | number = getProcessParentPid,
+  lookup: ProcessLookup = createProcessLookup(),
 ): boolean {
   if (!Number.isInteger(pid) || pid <= 1) return false;
   if (!Number.isInteger(panePid) || panePid <= 1) return false;
@@ -335,7 +334,7 @@ export function isPidDescendedFromPane(
   while (currentPid > 1 && !seen.has(currentPid)) {
     if (currentPid === panePid) return true;
     seen.add(currentPid);
-    const parentPid = readParentPid(currentPid);
+    const parentPid = lookup.getParentPid(currentPid);
     if (parentPid === null || parentPid === currentPid) return false;
     currentPid = parentPid;
   }
@@ -409,14 +408,6 @@ function getPanePidsByTty(): Map<string, number> {
   return cachedPanePidsByTty;
 }
 
-function getProcessParentPid(pid: number): null | number {
-  return getProcessParentPidSync(pid);
-}
-
-function getProcessStdinTty(pid: number): null | string {
-  return getProcessStdinTtySync(pid);
-}
-
 function getSessionsDir(): string {
   return getPrivateRuntimePath("sessions");
 }
@@ -428,15 +419,20 @@ function getSocketPath(): string {
 function isValidLocalAgentEvent(event: AgentEvent): boolean {
   if (typeof event.pid !== "number" || !Number.isInteger(event.pid)) return false;
 
+  // One lookup per event: shared across the tty check and the ancestor walk,
+  // and on non-Linux platforms collapses what would otherwise be 1+N `ps`
+  // spawns (tty for the hook pid, ppid per ancestor) into a single snapshot.
+  const lookup = createProcessLookup();
+
   if (event.paneId) {
     const panePid = getPanePidsById().get(event.paneId);
-    if (panePid) return isPidDescendedFromPane(event.pid, panePid);
+    if (panePid) return isPidDescendedFromPane(event.pid, panePid, lookup);
   }
 
   if (!event.tty || typeof event.tty !== "string") return false;
   const panePid = getPanePidsByTty().get(event.tty);
   if (!panePid) return false;
-  return isPidBoundToPane(event.pid, event.tty, panePid);
+  return isPidBoundToPane(event.pid, event.tty, panePid, lookup);
 }
 
 function persistSessionEvent(event: AgentEvent): void {

@@ -1,5 +1,10 @@
 import { readFileSync, readlinkSync } from "node:fs";
 
+export interface ProcessLookup {
+  getParentPid(pid: number): null | number;
+  getStdinTty(pid: number): null | string;
+}
+
 export interface ProcessSnapshotEntry extends ProcessTreeEntry {
   tty: null | string;
 }
@@ -44,6 +49,52 @@ export function collectProcessSubtreeCommandLines(rootPid: number, entries: Proc
   }
 
   return commands;
+}
+
+/**
+ * Build a process lookup that batches per-pid queries.
+ *
+ * On Linux, `/proc/<pid>/stat` and `/proc/<pid>/fd/0` reads are essentially
+ * free, so each call hits the kernel directly. On other platforms a single
+ * `ps -axww` snapshot is taken lazily on first use and reused for every
+ * subsequent lookup, collapsing what would otherwise be one `ps` spawn per
+ * pid (or one per ancestor when walking parent chains) into a single spawn
+ * per lookup lifetime. Construct one lookup per logical work unit (e.g. one
+ * agent event, one root-detection poll) and discard it afterward.
+ */
+export function createProcessLookup(): ProcessLookup {
+  if (process.platform === "linux") {
+    return {
+      getParentPid: getProcessParentPidSync,
+      getStdinTty: getProcessStdinTtySync,
+    };
+  }
+  return createSnapshotProcessLookup(getProcessSnapshotEntriesSync);
+}
+
+/**
+ * Snapshot-backed ProcessLookup. Exported for testing; production code
+ * should call `createProcessLookup()` to get the platform-appropriate
+ * implementation.
+ */
+export function createSnapshotProcessLookup(readEntries: () => ProcessSnapshotEntry[]): ProcessLookup {
+  let byPid: Map<number, ProcessSnapshotEntry> | null = null;
+  const lookup = (pid: number): ProcessSnapshotEntry | undefined => {
+    if (!Number.isInteger(pid) || pid <= 1) return undefined;
+    if (byPid === null) {
+      byPid = new Map();
+      for (const entry of readEntries()) byPid.set(entry.pid, entry);
+    }
+    return byPid.get(pid);
+  };
+  return {
+    getParentPid: (pid) => {
+      const entry = lookup(pid);
+      if (!entry || !Number.isInteger(entry.parentPid) || entry.parentPid <= 0) return null;
+      return entry.parentPid;
+    },
+    getStdinTty: (pid) => lookup(pid)?.tty ?? null,
+  };
 }
 
 export function getProcessParentPidSync(pid: number): null | number {

@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 
 import type { TmuxControlClient } from "../../tmux/control-client.ts";
 
-import { isActivePaneRoot } from "../../util/root-detect.ts";
+import { createRootDetector } from "../../util/root-detect.ts";
 
 export interface RootPaneRect {
   height: number;
@@ -48,12 +48,14 @@ export function useRootDetection({ clientRef, connected, enabled = true, targetS
 
         const minTop = panes.length > 0 ? Math.min(...panes.map((p) => p.top)) : 0;
         const minLeft = panes.length > 0 ? Math.min(...panes.map((p) => p.left)) : 0;
-        const results = await Promise.all(
-          panes.map(async (pane) => {
-            const isRoot = harnessForcesRoot(pane, { minLeft, minTop }) ?? (await isActivePaneRoot(pane.pid, pane.tty));
-            return isRoot ? { height: pane.height, left: pane.left, top: pane.top, width: pane.width } : null;
-          }),
-        );
+        // One snapshot shared across every pane in this tick — on macOS this
+        // collapses what would otherwise be one `ps` spawn per pane into one
+        // global `ps -axww` for the whole poll.
+        const detector = createRootDetector();
+        const results = panes.map((pane) => {
+          const isRoot = harnessForcesRoot(pane, { minLeft, minTop }) ?? detector.isActivePaneRoot(pane.pid, pane.tty);
+          return isRoot ? { height: pane.height, left: pane.left, top: pane.top, width: pane.width } : null;
+        });
         if (cancelled) return;
 
         const rects = results.filter((r): r is RootPaneRect => r !== null);
