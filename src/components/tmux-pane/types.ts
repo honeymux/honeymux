@@ -54,6 +54,8 @@ export interface TmuxPaneAgentProps {
   /** True when muxotronEnabled is expanded to full width in adaptive mode. */
   muxotronExpanded?: boolean;
   muxotronFocusActive?: boolean;
+  /** Toggle the agentLatch (perm-zoom on/off). Wired to handleAgentLatch. */
+  onAgentLatchToggle?: () => void;
   onAgentsDialogClose?: () => void;
   onAgentsDialogSelect?: (session: AgentSession) => void;
   onApprove?: () => void;

@@ -73,6 +73,7 @@ export const TmuxPane = memo(function TmuxPane({
     muxotronEnabled,
     muxotronExpanded,
     muxotronFocusActive,
+    onAgentLatchToggle,
     onApprove,
     onDeny,
     onDismiss,
@@ -205,6 +206,7 @@ export const TmuxPane = memo(function TmuxPane({
         interactiveAgent={interactiveAgent}
         muxotronExpanded={muxotronExpanded}
         muxotronFocusActive={muxotronFocusActive}
+        onAgentLatchToggle={onAgentLatchToggle}
         onApprove={onApprove}
         onDeny={onDeny}
         onDismiss={onDismiss}
@@ -268,6 +270,7 @@ export const TmuxPane = memo(function TmuxPane({
       muxotronEnabled={muxotronEnabled}
       muxotronExpanded={muxotronExpanded}
       muxotronFocusActive={muxotronFocusActive}
+      onAgentLatchToggle={onAgentLatchToggle}
       onApprove={onApprove}
       onCloseWindow={viewModel.handleCloseWindowWithHint}
       onDeny={onDeny}

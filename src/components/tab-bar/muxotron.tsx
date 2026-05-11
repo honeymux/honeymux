@@ -74,6 +74,8 @@ interface MuxotronProps {
   muxotronExpanded?: boolean;
   /** True while the muxotron focus surface is active. */
   muxotronFocusActive?: boolean;
+  /** Toggle the agentLatch (perm-zoom on/off). Wired to handleAgentLatch. */
+  onAgentLatchToggle?: () => void;
   onApprove?: () => void;
   onDeny?: () => void;
   onDismiss?: () => void;
@@ -123,6 +125,7 @@ export function Muxotron({
   maxExpandedWidth,
   muxotronExpanded,
   muxotronFocusActive,
+  onAgentLatchToggle,
   onApprove,
   onDeny,
   onDismiss,
@@ -368,12 +371,12 @@ export function Muxotron({
       : "opencode (~/src/project)";
     const hintButtons = buildMuxotronHintButtons({
       keybindings: getKeybindings(),
-      latched: reviewLatched,
+      latched: selectedSessionProp ? reviewLatched : muxotronFocusActive,
       onApprove,
       onDeny,
       onDismiss,
       onGoto,
-      onLatchToggle: onReviewLatchToggle,
+      onLatchToggle: selectedSessionProp ? onReviewLatchToggle : onAgentLatchToggle,
       onNextAgent,
       onPrevAgent,
       permissionAgentType: firstUnanswered?.agentType,

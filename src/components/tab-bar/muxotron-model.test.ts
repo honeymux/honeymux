@@ -124,6 +124,44 @@ describe("muxotron model helpers", () => {
     expect(buttons[3]?.label).toBe("dismiss");
   });
 
+  test("perm-zoomed strip prepends a release button bound to agentLatch", () => {
+    const onLatchToggle = () => {};
+    const buttons = buildMuxotronHintButtons({
+      keybindings: { ...DEFAULT_KEYBINDINGS, agentLatch: "right_shift" },
+      latched: true,
+      onLatchToggle,
+      selectedSession: null,
+    });
+    expect(buttons).toHaveLength(5);
+    expect(buttons[0]?.label).toBe("right shift / esc: release");
+    expect(buttons[0]?.color).toBe(MUXOTRON_HINT_COLORS.latch);
+    expect(buttons[0]?.onClick).toBe(onLatchToggle);
+    expect(buttons[1]?.label).toBe("approve");
+    expect(buttons[4]?.label).toBe("dismiss");
+  });
+
+  test("perm-zoomed strip release button appears even when approve/deny are hidden", () => {
+    const buttons = buildMuxotronHintButtons({
+      keybindings: { ...DEFAULT_KEYBINDINGS, agentLatch: "right_shift" },
+      latched: true,
+      permissionAgentType: "codex",
+      selectedSession: null,
+    });
+    expect(buttons).toHaveLength(3);
+    expect(buttons[0]?.label).toBe("right shift / esc: release");
+    expect(buttons[1]?.label).toBe("goto");
+    expect(buttons[2]?.label).toBe("dismiss");
+  });
+
+  test("perm strip omits release button when not perm-zoomed", () => {
+    const buttons = buildMuxotronHintButtons({
+      keybindings: { ...DEFAULT_KEYBINDINGS, agentLatch: "right_shift" },
+      selectedSession: null,
+    });
+    expect(buttons).toHaveLength(4);
+    expect(buttons[0]?.label).toBe("approve");
+  });
+
   test("codex permission alert hides approve/deny — only goto/dismiss remain", () => {
     const buttons = buildMuxotronHintButtons({
       keybindings: DEFAULT_KEYBINDINGS,
