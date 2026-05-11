@@ -134,7 +134,7 @@ export function useTmuxPaneViewModel({
   const toolbarOpen = toolbar.toolbarOpen;
   const sidebarOpen = toolbar.sidebarOpen;
   const sidebarWidth = toolbar.sidebarWidth;
-  const tmuxKeyBindingHints = toolbar.tmuxKeyBindingHints ?? true;
+  const tmuxKeyBindingHints = toolbar.tmuxKeyBindingHints ?? false;
   const terminalMetrics = useMemo(() => {
     const metrics = computeTerminalMetrics({ height, uiMode, width });
     let cols = metrics.cols;

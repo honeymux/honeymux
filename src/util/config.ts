@@ -138,7 +138,7 @@ export function defaultConfig(): HoneymuxConfig {
       base0F: "#333333",
     },
     themeMode: "built-in",
-    tmuxKeyBindingHints: true,
+    tmuxKeyBindingHints: false,
     tmuxPrefixKeyAlias: null,
     uiMode: "adaptive",
     zoomAgentsViewStickyKey: true,
