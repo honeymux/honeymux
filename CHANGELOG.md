@@ -2,6 +2,26 @@
 
 ## Unreleased
 
+## v0.107.0 - 2026-05-12
+
+- Auto-refresh remote hook scripts on connect (thanks @tfriedel)
+- Avoid writing Warp version number into keybindings file overrides dict
+- Change default tmuxKeyBindingHints setting to false
+- Fix buffer zoom entry in Warp terminal
+- Fix delay seen in mux-o-tron render updates on pane/window switch
+- Fix issue preventing Codex permission prompts from resolving when auto-review enabled
+- Highlight all agent tree columns in the sidebar for the currently focused agent
+- Make permission-resolution keystrokes more reliable across agent types
+- Optimize process detection approach on macOS
+- Prevent root row from being selected when sidebar first gains focus
+- Program libghostty-vt with outer terminal color palette (thanks @tfriedel)
+- Resolve agent pids for hook calls server-side
+- Restore terminal cursor after buffer zoom view exit via Main Menu
+- Show latch release key in button strip when responding to permission requests
+- Update Codex config write for hooks feature name change
+- Update Codex config write to auto-trust hmx hooks
+- Use correct terminal bg color for outer emulators that don't repsond to OSC 11 (e.g. Warp)
+
 ## v0.106.0 - 2026-05-07
 
 - Auto-resize the session dropdown badge to accomodate longer names without string truncation
