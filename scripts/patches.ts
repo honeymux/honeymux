@@ -613,7 +613,15 @@ async function applyCompiled(pkg: string, config: PackageConfig): Promise<boolea
     }
 
     console.log(`  Building ${pkg}...`);
-    await execSh(buildCmd, { cwd: pkgSrcDir });
+    // Zig fetches dependency packages into a cache under ROOT (e.g.
+    // `<ROOT>/.zig-cache/p/<hash>/`). Some dependency build.zig scripts (notably
+    // ghostty-opentui's) invoke `git -C <pkgcache>` and panic if the discovered tag
+    // doesn't match their own version — but `git -C` walks up the tree and
+    // finds the Honeymux repo's tag (e.g. v0.107.0). Cap the upward search
+    // before it can reach `<ROOT>/.git`.
+    const existingCeiling = process.env["GIT_CEILING_DIRECTORIES"];
+    const gitCeiling = existingCeiling ? `${ROOT}:${existingCeiling}` : ROOT;
+    await execSh(buildCmd, { cwd: pkgSrcDir, env: { GIT_CEILING_DIRECTORIES: gitCeiling } });
 
     const nmPkgDir = join(ROOT, "node_modules", pkg);
 
