@@ -185,7 +185,12 @@ function decodeTextCodePoints(text: string): string {
   return text
     .split(":")
     .filter((field) => field.length > 0)
-    .map((field) => String.fromCodePoint(parseInt(field, 10)))
+    .map((field) => {
+      const cp = parseInt(field, 10);
+      // String.fromCodePoint throws RangeError outside [0, 0x10FFFF]; reject
+      // 0 too so NULs from malformed input don't reach downstream consumers.
+      return cp > 0 && cp <= 0x10ffff ? String.fromCodePoint(cp) : "";
+    })
     .join("");
 }
 
