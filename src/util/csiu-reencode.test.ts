@@ -91,6 +91,13 @@ describe("reEncodeCsiU", () => {
     expect(reEncodeCsiU(keyWithAssociatedTextAndPhysicalKey("λ", "l", 2))).toBe("λ");
   });
 
+  test("associated text drops out-of-range and NUL codepoints without throwing", () => {
+    // 9999999 > 0x10FFFF would throw RangeError; 0 is NUL. Both should be skipped.
+    expect(reEncodeCsiU("\x1b[0;;9999999u")).toBe("");
+    expect(reEncodeCsiU("\x1b[0;;97:9999999:98u")).toBe("ab");
+    expect(reEncodeCsiU("\x1b[0;;0:98u")).toBe("b");
+  });
+
   test("Kitty F13 PUA code stays in CSI u form", () => {
     expect(reEncodeCsiU("\x1b[57376;1:1u")).toBe("\x1b[57376u");
   });
