@@ -89,6 +89,7 @@ export class SshTransport implements ControlModeTransport {
 
   constructor(
     private config: RemoteServerConfig,
+    private mirrorServerName: string,
     private hookForward?: SshHookForwardConfig,
   ) {
     if (hookForward?.rejected) this._hookForwardingFailed = true;
@@ -142,7 +143,7 @@ export class SshTransport implements ControlModeTransport {
     this.resolvedRemoteForwardPort = null;
     this.exitEmitted = false;
 
-    const argv = ["ssh", ...this.buildSshArgs(true), "tmux", "-L", "honeymux", ...tmuxArgs];
+    const argv = ["ssh", ...this.buildSshArgs(true), "tmux", "-L", this.mirrorServerName, ...tmuxArgs];
     const proc = Bun.spawn(argv, {
       env: cleanEnv(),
       stderr: "pipe",

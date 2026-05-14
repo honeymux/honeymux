@@ -8,6 +8,7 @@ function createClient(hookForward?: { authToken: string; localTcpPort: number })
       host: "example-host",
       name: "dev-box",
     },
+    "honeymux-test",
     "mirror-alpha",
     hookForward,
   );

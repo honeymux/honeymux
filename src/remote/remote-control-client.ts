@@ -67,6 +67,7 @@ export class RemoteControlClient extends EventEmitter {
 
   constructor(
     private config: RemoteServerConfig,
+    private mirrorServerName: string,
     private mirrorSession: string,
     private hookForward?: RemoteHookForwardConfig,
   ) {
@@ -156,6 +157,7 @@ export class RemoteControlClient extends EventEmitter {
     // when constructed with rejected:true.
     const transport = new SshTransport(
       this.config,
+      this.mirrorServerName,
       this.hookForward ? { ...this.hookForward, rejected: this.hookForwardingFailed } : undefined,
     );
     this.activeTransport = transport;
@@ -250,7 +252,7 @@ export class RemoteControlClient extends EventEmitter {
   private async probeRemoteSession(): Promise<boolean> {
     const sshArgs = buildSshConnectionArgs(this.config, { includeKeepalive: false });
     appendSshDestination(sshArgs, this.config.host);
-    const argv = ["ssh", ...sshArgs, "tmux", "-L", "honeymux", "has-session", "-t", this.mirrorSession];
+    const argv = ["ssh", ...sshArgs, "tmux", "-L", this.mirrorServerName, "has-session", "-t", this.mirrorSession];
     const proc = Bun.spawn(argv, { stderr: "ignore", stdout: "ignore" });
     return (await proc.exited) === 0;
   }
