@@ -22,6 +22,7 @@ import { log } from "../util/log.ts";
 import { getTmuxServer } from "../util/tmux-server.ts";
 import { type RemotePaneBinding, validateRemoteAgentEvent } from "./agent-event-validator.ts";
 import { ForwardedRemoteAgentIngressFactory } from "./agent-transport.ts";
+import { resolveMirrorTmuxServerName } from "./mirror-server-name.ts";
 import { RemoteMirror } from "./mirror/remote-mirror.ts";
 import { RoutingCache } from "./mirror/routing-cache.ts";
 import { type MirrorSnapshot } from "./mirror/snapshot.ts";
@@ -413,6 +414,8 @@ export class RemoteServerManager extends EventEmitter {
     this.proxyServer.on("proxy-input", this.handleProxyInput);
     this.wireLocalEvents();
 
+    const mirrorServerName = await resolveMirrorTmuxServerName(this.localClient);
+
     for (const config of this.configs) {
       const hostError = validateSshDestination(config.host);
       const mirrorSession = `__hmx-mirror-${getTmuxServer()}`;
@@ -452,6 +455,7 @@ export class RemoteServerManager extends EventEmitter {
 
       const client = new RemoteControlClient(
         config,
+        mirrorServerName,
         mirrorSession,
         ingress ? { authToken: ingress.authToken, localTcpPort: ingress.localTcpPort } : undefined,
       );

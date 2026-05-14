@@ -15,6 +15,7 @@ function makeTransport(hookPort?: number, _unused?: string): SshTransport {
       host: "example-host",
       name: "dev-box",
     },
+    "honeymux-test",
     hookForward,
   );
 }
@@ -127,7 +128,10 @@ describe("SshTransport stderr parsing", () => {
   });
 
   test("persists hookForwardingRejected across reconnects via constructor flag", () => {
-    const transport = new SshTransport({ host: "example", name: "dev" }, { localTcpPort: 45678, rejected: true });
+    const transport = new SshTransport({ host: "example", name: "dev" }, "honeymux-test", {
+      localTcpPort: 45678,
+      rejected: true,
+    });
 
     expect(transport.hookForwardingRejected).toBe(true);
     const args = (transport as unknown as { buildSshArgs: (includeHookForward: boolean) => string[] }).buildSshArgs(
