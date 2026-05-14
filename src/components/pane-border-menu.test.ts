@@ -12,7 +12,6 @@ describe("buildPaneBorderMainMenuItems", () => {
       buildPaneBorderMainMenuItems({
         hasReadyRemoteServers: false,
         hasRemoteServers: true,
-        isRemotePane: false,
         paneTabsEnabled: true,
       }),
     ).toEqual([
@@ -26,7 +25,6 @@ describe("buildPaneBorderMainMenuItems", () => {
       buildPaneBorderMainMenuItems({
         hasReadyRemoteServers: false,
         hasRemoteServers: true,
-        isRemotePane: false,
         paneTabsEnabled: true,
       }),
     ).toEqual([
@@ -40,7 +38,6 @@ describe("buildPaneBorderMainMenuItems", () => {
       buildPaneBorderMainMenuItems({
         hasReadyRemoteServers: true,
         hasRemoteServers: true,
-        isRemotePane: false,
         paneTabsEnabled: true,
       }),
     ).toEqual([

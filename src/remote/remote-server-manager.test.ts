@@ -189,7 +189,7 @@ describe("RemoteServerManager remote hook ingress", () => {
   });
 
   it("spawns the local proxy process with the pane id and proxy token", async () => {
-    const respawnPane = mock(async () => {});
+    const respawnPane = mock(async (_paneId: string, _argv?: string[]) => {});
     const localClient = {
       respawnPane,
       runCommandArgs: mock(async () => {}),
@@ -347,7 +347,7 @@ describe("RemoteServerManager remote hook ingress", () => {
   });
 
   it("forces a mirror sync during conversion when the pane mapping is missing", async () => {
-    const respawnPane = mock(async () => {});
+    const respawnPane = mock(async (_paneId: string, _argv?: string[]) => {});
     const localClient = {
       respawnPane,
       runCommandArgs: mock(async () => {}),
@@ -473,11 +473,11 @@ describe("RemoteServerManager remote hook ingress", () => {
     expect(sendCommand).not.toHaveBeenCalled();
   });
 
-  it("kills mapped local proxy panes when the remote tmux session exits", () => {
-    const killPaneById = mock(async () => {});
+  it("reverts mapped local proxy panes to local shells when the remote tmux session exits", () => {
+    const respawnPane = mock(async (_paneId: string, _argv?: string[]) => {});
     const runCommandArgs = mock(async () => {});
     const localClient = {
-      killPaneById,
+      respawnPane,
       runCommandArgs,
     } as any;
     const manager = new RemoteServerManager(localClient, [
@@ -498,8 +498,11 @@ describe("RemoteServerManager remote hook ingress", () => {
 
     (manager as any).handleRemoteTmuxExit("dev-a");
 
-    expect(killPaneById).toHaveBeenCalledTimes(1);
-    expect(killPaneById).toHaveBeenCalledWith("%10");
+    expect(respawnPane).toHaveBeenCalledTimes(1);
+    expect(respawnPane.mock.calls[0]?.[0]).toBe("%10");
+    // Explicit shell-command argv: without one, tmux re-runs the bun proxy.
+    const shellArgv = respawnPane.mock.calls[0]?.[1] as string[] | undefined;
+    expect(shellArgv?.[shellArgv.length - 1]).toBe("-l");
     expect(Boolean((manager as any).routing.lookup("%10"))).toBe(false);
     expect(Boolean((manager as any).routing.lookup("%11"))).toBe(true);
     // 3 option clears (@hmx-remote-host, @hmx-remote-pane, @hmx-remote-token)
@@ -507,11 +510,11 @@ describe("RemoteServerManager remote hook ingress", () => {
     expect(runCommandArgs).toHaveBeenCalledTimes(4);
   });
 
-  it("cleanupDeadLocalProxiesForServer kills local proxy panes whose remote peer is missing from the snapshot", () => {
-    const killPaneById = mock(async () => {});
+  it("cleanupDeadLocalProxiesForServer reverts local proxy panes whose remote peer is missing from the snapshot", () => {
+    const respawnPane = mock(async (_paneId: string, _argv?: string[]) => {});
     const runCommandArgs = mock(async () => {});
     const localClient = {
-      killPaneById,
+      respawnPane,
       runCommandArgs,
     } as any;
     const manager = new RemoteServerManager(localClient, [{ host: "dev-box", name: "dev-box" }]);
@@ -540,8 +543,8 @@ describe("RemoteServerManager remote hook ingress", () => {
     };
     (manager as any).cleanupDeadLocalProxiesForServer("dev-box", remoteSnapshot);
 
-    expect(killPaneById).toHaveBeenCalledTimes(1);
-    expect(killPaneById).toHaveBeenCalledWith("%10");
+    expect(respawnPane).toHaveBeenCalledTimes(1);
+    expect(respawnPane.mock.calls[0]?.[0]).toBe("%10");
     expect(Boolean((manager as any).routing.lookup("%10"))).toBe(false);
     expect((manager as any).routing.lookup("%11")).toEqual({
       localPaneId: "%11",
@@ -555,11 +558,11 @@ describe("RemoteServerManager remote hook ingress", () => {
     // pending registration (set between routing.register and the next
     // snapshot that observes the local @hmx-remote-* tags), the
     // pre-mutation remote snapshot the reconciler walks here can lag the
-    // actual remote state by a cycle. Killing the proxy on that stale
-    // signal tears down a pane the user is in the middle of converting.
-    const killPaneById = mock(async () => {});
+    // actual remote state by a cycle. Reverting the proxy on that stale
+    // signal would tear down a pane the user is in the middle of converting.
+    const respawnPane = mock(async (_paneId: string, _argv?: string[]) => {});
     const runCommandArgs = mock(async () => {});
-    const localClient = { killPaneById, runCommandArgs } as any;
+    const localClient = { respawnPane, runCommandArgs } as any;
     const manager = new RemoteServerManager(localClient, [{ host: "dev-box", name: "dev-box" }]);
 
     // convertPane just called routing.register — pending holds %10 → %77.
@@ -578,7 +581,7 @@ describe("RemoteServerManager remote hook ingress", () => {
     };
     (manager as any).cleanupDeadLocalProxiesForServer("dev-box", remoteSnapshot);
 
-    expect(killPaneById).not.toHaveBeenCalled();
+    expect(respawnPane).not.toHaveBeenCalled();
     expect((manager as any).routing.lookup("%10")).toEqual({
       localPaneId: "%10",
       remotePaneId: "%77",
@@ -586,9 +589,9 @@ describe("RemoteServerManager remote hook ingress", () => {
     });
   });
 
-  it("cleanupDeadLocalProxiesForServer treats an empty snapshot as unavailable and kills nothing", () => {
-    const killPaneById = mock(async () => {});
-    const localClient = { killPaneById, runCommandArgs: mock(async () => {}) } as any;
+  it("cleanupDeadLocalProxiesForServer treats an empty snapshot as unavailable and reverts nothing", () => {
+    const respawnPane = mock(async (_paneId: string, _argv?: string[]) => {});
+    const localClient = { respawnPane, runCommandArgs: mock(async () => {}) } as any;
     const manager = new RemoteServerManager(localClient, [{ host: "dev-box", name: "dev-box" }]);
 
     (manager as any).routing.register({
@@ -602,11 +605,11 @@ describe("RemoteServerManager remote hook ingress", () => {
       windows: [],
     });
 
-    expect(killPaneById).not.toHaveBeenCalled();
+    expect(respawnPane).not.toHaveBeenCalled();
   });
 
   it("token-reuse recovery re-registers the stored token without respawning the pane", async () => {
-    const respawnPane = mock(async () => {});
+    const respawnPane = mock(async (_paneId: string, _argv?: string[]) => {});
     const runCommand = mock(async () => " %10\tdev-box\tstoredtoken123\n");
     const runCommandArgs = mock(async () => {});
     const setPaneBorderFormat = mock(async () => {});
@@ -648,7 +651,7 @@ describe("RemoteServerManager remote hook ingress", () => {
   });
 
   it("legacy recovery mints a fresh token and respawns when no stored token is present", async () => {
-    const respawnPane = mock(async () => {});
+    const respawnPane = mock(async (_paneId: string, _argv?: string[]) => {});
     const runCommand = mock(async () => " %10\tdev-box\t\n %11\t\t\n %12\tother-box\tothertoken\n");
     const runCommandArgs = mock(async () => {});
     const setPaneBorderFormat = mock(async () => {});
@@ -762,7 +765,7 @@ describe("RemoteServerManager remote hook ingress", () => {
   });
 
   it("clears orphaned remote metadata when the mirror has no mapping for the local pane", async () => {
-    const respawnPane = mock(async () => {});
+    const respawnPane = mock(async (_paneId: string, _argv?: string[]) => {});
     const runCommand = mock(async () => " %10\tdev-box\tsometoken\n");
     const runCommandArgs = mock(async () => {});
     const setPaneBorderFormat = mock(async () => {});
@@ -796,7 +799,7 @@ describe("RemoteServerManager remote hook ingress", () => {
   });
 
   it("skips panes this instance has already claimed via pendingRegistrations", async () => {
-    const respawnPane = mock(async () => {});
+    const respawnPane = mock(async (_paneId: string, _argv?: string[]) => {});
     const runCommand = mock(async () => " %10\tdev-box\tsometoken\n");
     const localClient = {
       respawnPane,
@@ -849,7 +852,7 @@ describe("RemoteServerManager remote hook ingress", () => {
   });
 
   it("persists the proxy token in @hmx-remote-token when converting a pane", async () => {
-    const respawnPane = mock(async () => {});
+    const respawnPane = mock(async (_paneId: string, _argv?: string[]) => {});
     const runCommandArgs = mock(async () => {});
     const localClient = {
       respawnPane,

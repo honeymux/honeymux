@@ -29,7 +29,12 @@ interface UsePaneTabsIntegrationOptions {
   enabled: boolean;
   refs: Pick<
     AppRuntimeRefs,
-    "activePaneIdRef" | "clientRef" | "handleNewPaneTabRef" | "handleNextPaneTabRef" | "handlePrevPaneTabRef"
+    | "activePaneIdRef"
+    | "clientRef"
+    | "handleNewPaneTabRef"
+    | "handleNextPaneTabRef"
+    | "handlePrevPaneTabRef"
+    | "remoteManagerRef"
   >;
   runtimeKey: number;
   setConfigPaneTabsEnabled: (value: boolean) => void;
@@ -56,7 +61,14 @@ export function usePaneTabsIntegration({
   runtimeKey,
   setConfigPaneTabsEnabled,
 }: UsePaneTabsIntegrationOptions): PaneTabsIntegrationApi {
-  const { activePaneIdRef, clientRef, handleNewPaneTabRef, handleNextPaneTabRef, handlePrevPaneTabRef } = refs;
+  const {
+    activePaneIdRef,
+    clientRef,
+    handleNewPaneTabRef,
+    handleNextPaneTabRef,
+    handlePrevPaneTabRef,
+    remoteManagerRef,
+  } = refs;
   const paneTabsApi = usePaneTabs({
     activePaneIdRef,
     activeWindowIdRef,
@@ -72,9 +84,16 @@ export function usePaneTabsIntegration({
   handleNextPaneTabRef.current = paneTabsApi.handleNextPaneTab;
 
   const [paneBorderMenu, setPaneBorderMenu] = useState<PaneBorderMenuState | null>(null);
-  const openPaneBorderMenu = useCallback((paneId: string, screenX: number, screenY: number) => {
-    setPaneBorderMenu({ paneId, screenX, screenY });
-  }, []);
+  const openPaneBorderMenu = useCallback(
+    (paneId: string, screenX: number, screenY: number) => {
+      // Remote-backed panes have their pane-border-format overridden to show the
+      // remote server name and intentionally hide the ≡ glyph; suppress the menu
+      // entirely so mouse clicks and keyboard activation are both inert.
+      if (remoteManagerRef.current?.isRemotePane(paneId)) return;
+      setPaneBorderMenu({ paneId, screenX, screenY });
+    },
+    [remoteManagerRef],
+  );
   const closePaneBorderMenu = useCallback(() => {
     setPaneBorderMenu(null);
   }, []);

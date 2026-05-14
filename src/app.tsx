@@ -947,15 +947,7 @@ export function App({ sessionName }: AppProps) {
             }
           })();
         }}
-        onRevertToLocal={(paneId) => {
-          remoteManagerRef.current?.revertPane(paneId).catch((err) => {
-            log("remote", `revertPane error: ${err.message}`);
-          });
-        }}
         paneTabsEnabled={paneTabsEnabled}
-        remotePaneServer={
-          paneBorderMenu ? (remoteManagerRef.current?.isRemotePane(paneBorderMenu.paneId)?.serverName ?? null) : null
-        }
         remoteServers={paneBorderRemoteServers}
       />
       <PaneTabOverflowDropdown dropdownInputRef={dropdownInputRef} paneTabsApi={paneTabsApi} width={width} />
