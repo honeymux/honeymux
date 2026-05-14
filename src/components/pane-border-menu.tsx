@@ -16,7 +16,6 @@ export interface PaneBorderMenuState {
 interface BuildPaneBorderMainMenuItemsOptions {
   hasReadyRemoteServers: boolean;
   hasRemoteServers: boolean;
-  isRemotePane: boolean;
   paneTabsEnabled: boolean;
 }
 
@@ -24,12 +23,10 @@ interface MainMenuProps {
   dropdownInputRef?: React.MutableRefObject<((data: string) => boolean) | null>;
   hasReadyRemoteServers: boolean;
   hasRemoteServers: boolean;
-  isRemotePane: boolean;
   menu: PaneBorderMenuState;
   onAddPaneTab: () => void;
   onClose: () => void;
   onConvertToRemote: () => void;
-  onRevertToLocal: () => void;
   paneTabsEnabled: boolean;
 }
 
@@ -37,7 +34,7 @@ type MenuMode = "main" | "server-select";
 
 interface PaneBorderMainMenuItem {
   disabled: boolean;
-  key: "convert-to-remote" | "new-tab" | "revert-to-local";
+  key: "convert-to-remote" | "new-tab";
   label: string;
 }
 
@@ -47,9 +44,7 @@ interface PaneBorderMenuProps {
   onAddPaneTab: (paneId: string) => void;
   onClose: () => void;
   onConvertToRemote: (paneId: string, serverName: string) => void;
-  onRevertToLocal: (paneId: string) => void;
   paneTabsEnabled: boolean;
-  remotePaneServer: null | string; // non-null if this pane is already remote
   remoteServers: PaneBorderRemoteServer[];
 }
 
@@ -83,9 +78,7 @@ export function PaneBorderMenu({
   onAddPaneTab,
   onClose,
   onConvertToRemote,
-  onRevertToLocal,
   paneTabsEnabled,
-  remotePaneServer,
   remoteServers,
 }: PaneBorderMenuProps) {
   const [mode, setMode] = useState<MenuMode>("main");
@@ -118,7 +111,6 @@ export function PaneBorderMenu({
       dropdownInputRef={dropdownInputRef}
       hasReadyRemoteServers={hasReadyRemoteServers}
       hasRemoteServers={remoteServers.length > 0}
-      isRemotePane={remotePaneServer !== null}
       menu={menu}
       onAddPaneTab={() => {
         onAddPaneTab(menu.paneId);
@@ -126,10 +118,6 @@ export function PaneBorderMenu({
       }}
       onClose={onClose}
       onConvertToRemote={() => setMode("server-select")}
-      onRevertToLocal={() => {
-        onRevertToLocal(menu.paneId);
-        onClose();
-      }}
       paneTabsEnabled={paneTabsEnabled}
     />
   );
@@ -138,34 +126,21 @@ export function PaneBorderMenu({
 export function buildPaneBorderMainMenuItems({
   hasReadyRemoteServers,
   hasRemoteServers,
-  isRemotePane,
   paneTabsEnabled,
 }: BuildPaneBorderMainMenuItemsOptions): PaneBorderMainMenuItem[] {
-  const items: PaneBorderMainMenuItem[] = [];
-
-  items.push({
-    disabled: !paneTabsEnabled || isRemotePane,
-    key: "new-tab",
-    label: "New tab",
-  });
-
-  if (isRemotePane) {
-    items.push({
-      disabled: false,
-      key: "revert-to-local",
-      label: "Revert to local",
-    });
-    return items;
-  }
-
-  items.push({
-    disabled: !hasReadyRemoteServers,
-    key: "convert-to-remote",
-    label:
-      hasRemoteServers && !hasReadyRemoteServers ? "Convert to remote (please wait) " : "Convert to remote  \u25b8",
-  });
-
-  return items;
+  return [
+    {
+      disabled: !paneTabsEnabled,
+      key: "new-tab",
+      label: "New tab",
+    },
+    {
+      disabled: !hasReadyRemoteServers,
+      key: "convert-to-remote",
+      label:
+        hasRemoteServers && !hasReadyRemoteServers ? "Convert to remote (please wait) " : "Convert to remote  \u25b8",
+    },
+  ];
 }
 
 export function buildPaneBorderServerMenuItems(servers: PaneBorderRemoteServer[]): PaneBorderServerMenuItem[] {
@@ -189,18 +164,15 @@ function MainMenu({
   dropdownInputRef,
   hasReadyRemoteServers,
   hasRemoteServers,
-  isRemotePane,
   menu,
   onAddPaneTab,
   onClose,
   onConvertToRemote,
-  onRevertToLocal,
   paneTabsEnabled,
 }: MainMenuProps) {
   const items = buildPaneBorderMainMenuItems({
     hasReadyRemoteServers,
     hasRemoteServers,
-    isRemotePane,
     paneTabsEnabled,
   });
 
@@ -224,12 +196,9 @@ function MainMenu({
         case "new-tab":
           onAddPaneTab();
           return;
-        case "revert-to-local":
-          onRevertToLocal();
-          return;
       }
     },
-    [items, onAddPaneTab, onConvertToRemote, onRevertToLocal],
+    [items, onAddPaneTab, onConvertToRemote],
   );
 
   const { focusedIndex } = useDropdownKeyboard({

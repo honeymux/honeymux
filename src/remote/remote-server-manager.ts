@@ -153,7 +153,8 @@ export class RemoteServerManager extends EventEmitter {
     // Install the routing binding and proxy expectation before the remote
     // shell is respawned so any early prompt/output can be queued for the
     // local proxy. The routing-cache hold survives one reconcile after
-    // release; the disposer fires below in the catch and on revertPane.
+    // release; the disposer fires below in the catch and when the remote
+    // pane dies (revertLocalPaneOnRemoteExit).
     const releaseRouting = this.routing.register({ localPaneId, remotePaneId, serverName });
     this.pendingRegistrations.set(localPaneId, releaseRouting);
     this.proxyServer.expectProxy(localPaneId, proxyToken);
@@ -368,33 +369,6 @@ export class RemoteServerManager extends EventEmitter {
     }
 
     log("remote", `failed to write remote permission response for ${state.serverName} key=${key}`);
-  }
-
-  /**
-   * Revert a remote pane back to local.
-   * Kills the proxy and respawns a local shell.
-   */
-  async revertPane(localPaneId: string): Promise<void> {
-    const mapping = this.routing.lookup(localPaneId);
-    if (!mapping) return;
-
-    this.proxyServer.forgetProxy(localPaneId);
-
-    // Respawn local pane with a shell
-    await this.localClient.respawnPane(localPaneId);
-
-    // Clear metadata
-    await this.clearLocalPaneOption(localPaneId, "@hmx-remote-host");
-    await this.clearLocalPaneOption(localPaneId, "@hmx-remote-pane");
-    await this.clearLocalPaneOption(localPaneId, "@hmx-remote-token");
-
-    // Reset border to default
-    await this.resetPaneBorder(localPaneId);
-
-    this.pendingRegistrations.get(localPaneId)?.();
-    this.pendingRegistrations.delete(localPaneId);
-    this.routing.delete(localPaneId);
-    this.emit("pane-reverted", localPaneId);
   }
 
   /**
@@ -621,16 +595,18 @@ export class RemoteServerManager extends EventEmitter {
   }
 
   /**
-   * After a reconcile pass: kill any local proxy pane whose paired remote
-   * pane no longer exists in the remote snapshot.
+   * After a reconcile pass: revert any local proxy pane whose paired
+   * remote pane no longer exists in the remote snapshot back to a fresh
+   * local shell.
    *
    * The reconciler handles mirror-layout cleanup (killing orphan remote
    * panes). This handler covers the local-proxy lifecycle: when the user
-   * exits the remote shell, we want the local pane to close too. The
-   * remote snapshot is the authoritative live-pane set; any paneMapping
-   * pointing at a remote id not present in the snapshot is stale.
+   * exits the remote shell, we want the local pane to drop the proxy
+   * and respawn locally. The remote snapshot is the authoritative
+   * live-pane set; any mapping pointing at a remote id not present in
+   * the snapshot is stale.
    *
-   * An empty snapshot is treated as "query unavailable" — we don't kill
+   * An empty snapshot is treated as "query unavailable" — we don't revert
    * anything, since assuming all remote panes are dead during a transient
    * snapshot failure would be much worse than waiting a beat.
    */
@@ -651,7 +627,7 @@ export class RemoteServerManager extends EventEmitter {
       // guard only protects truly in-flight conversions.
       if (this.routing.isPending(mapping.localPaneId)) continue;
       if (!livePaneIds.has(mapping.remotePaneId)) {
-        this.killLocalProxyPane(mapping.localPaneId);
+        this.revertLocalPaneOnRemoteExit(mapping.localPaneId);
       }
     }
   }
@@ -829,7 +805,7 @@ export class RemoteServerManager extends EventEmitter {
 
   private handleRemoteTmuxExit(serverName: string): void {
     for (const mapping of [...this.routing.forServer(serverName)]) {
-      this.killLocalProxyPane(mapping.localPaneId);
+      this.revertLocalPaneOnRemoteExit(mapping.localPaneId);
     }
   }
 
@@ -859,23 +835,6 @@ export class RemoteServerManager extends EventEmitter {
     } catch {
       return false;
     }
-  }
-
-  /** Clean up a local proxy pane whose remote pane died. */
-  private killLocalProxyPane(localPaneId: string): void {
-    this.endRemoteSessionsForLocalPane(localPaneId);
-    this.pendingRegistrations.get(localPaneId)?.();
-    this.pendingRegistrations.delete(localPaneId);
-    this.routing.delete(localPaneId);
-    this.proxyServer.forgetProxy(localPaneId);
-    this.clearLocalPaneOption(localPaneId, "@hmx-remote-host").catch(() => {});
-    this.clearLocalPaneOption(localPaneId, "@hmx-remote-pane").catch(() => {});
-    this.clearLocalPaneOption(localPaneId, "@hmx-remote-token").catch(() => {});
-    this.resetPaneBorder(localPaneId).catch(() => {});
-    // kill-pane — if it's the last pane, tmux destroys the session
-    // and sends %exit, which triggers Honeymux's normal shutdown
-    this.localClient.killPaneById(localPaneId).catch(() => {});
-    this.emit("pane-reverted", localPaneId);
   }
 
   private async normalizeRemoteAgentEvent(serverName: string, event: AgentEvent): Promise<AgentEvent> {
@@ -979,6 +938,37 @@ export class RemoteServerManager extends EventEmitter {
     await this.localClient
       .runCommandArgs(["set-option", "-pu", "-t", localPaneId, "pane-border-format"])
       .catch(() => {});
+  }
+
+  /**
+   * Revert a local proxy pane back to a fresh local login shell after its
+   * paired remote pane has died (user logged out / exited, or the remote
+   * tmux session ended). The pane is preserved — only its contents are
+   * replaced — so the user lands back in local without losing their layout.
+   *
+   * Clearing @hmx-remote-* and the pane-border-format is queued before the
+   * respawn so the layout-change tmux emits during the respawn is observed
+   * by downstream features (e.g. pane tabs bootstrap) with the remote
+   * metadata already gone.
+   */
+  private revertLocalPaneOnRemoteExit(localPaneId: string): void {
+    this.endRemoteSessionsForLocalPane(localPaneId);
+    this.pendingRegistrations.get(localPaneId)?.();
+    this.pendingRegistrations.delete(localPaneId);
+    this.routing.delete(localPaneId);
+    this.proxyServer.forgetProxy(localPaneId);
+    this.clearLocalPaneOption(localPaneId, "@hmx-remote-host").catch(() => {});
+    this.clearLocalPaneOption(localPaneId, "@hmx-remote-pane").catch(() => {});
+    this.clearLocalPaneOption(localPaneId, "@hmx-remote-token").catch(() => {});
+    this.resetPaneBorder(localPaneId).catch(() => {});
+    // An explicit shell-command is REQUIRED here. `respawn-pane` without one
+    // re-runs whatever was last spawned in the pane — which is the bun proxy
+    // installed by convertPane. The user would see the proxy come right back.
+    // Use $SHELL as a login shell to match what tmux would launch for a
+    // fresh pane.
+    const shell = process.env["SHELL"] || "/bin/sh";
+    this.localClient.respawnPane(localPaneId, [shell, "-l"]).catch(() => {});
+    this.emit("pane-reverted", localPaneId);
   }
 
   /** Format server name + ssh pid for log messages. */
