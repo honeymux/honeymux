@@ -36,7 +36,17 @@ import { validateSshDestination } from "./ssh.ts";
 const REMOTE_PANE_CACHE_MS = 1_000;
 const REMOTE_PID_BINDING_CACHE_MS = 1_000;
 const LOCAL_PANE_METADATA_CACHE_MS = 1_000;
+const REMOTE_LIVENESS_INTERVAL_MS = 5_000;
 const REMOTE_HOOK_SOCKET_TMUX_OPTION = "@hmx-agent-socket-path";
+const REMOTE_LIVENESS_SCRIPT = [
+  'for pid in "$@"; do',
+  '  case "$pid" in (""|*[!0-9]*) continue;; esac',
+  '  [ "$pid" -gt 1 ] || continue',
+  '  if kill -0 "$pid" 2>/dev/null; then',
+  '    echo "$pid"',
+  "  fi",
+  "done",
+].join("\n");
 const REMOTE_PID_BINDING_SCRIPT = [
   'pid="$1"',
   'pane_pid="$2"',
@@ -99,6 +109,8 @@ export class RemoteServerManager extends EventEmitter {
   /** Pending registration disposers held during convertPane's mid-mutation window. */
   private pendingRegistrations = new Map<string, () => void>();
   private proxyServer: RemoteProxyServer;
+  private remoteLivenessInFlight = false;
+  private remoteLivenessTimer: ReturnType<typeof setInterval> | null = null;
   private remotePaneIdentityCache = new Map<string, CachedRemotePaneIdentityMap>();
   private remotePermissionStates = new Map<string, RemotePermissionState>();
   private remotePidBindingCache = new Map<string, CachedRemotePaneBindingValidation>();
@@ -405,6 +417,60 @@ export class RemoteServerManager extends EventEmitter {
     return true;
   }
 
+  /**
+   * Probe each tracked remote agent's pid on its server in a single batched
+   * `kill -0` round trip and emit `agent-event` with status `ended` for any
+   * session whose pid is gone. Mirrors the local pid-based liveness check
+   * (see {@link AgentSessionStore.runLivenessCheckOnce}); without this,
+   * forced agent exits on the remote (Ctrl+C, kill, crash) leave the
+   * session in the sidebar until the entire remote shell exits.
+   *
+   * Public so tests can drive a single pass without the interval timer.
+   */
+  async runRemoteLivenessCheckOnce(): Promise<void> {
+    for (const [serverName, sessions] of this.remoteSessions) {
+      if (sessions.size === 0) continue;
+      const client = this.clients.get(serverName);
+      if (!client || !client.isConnected) continue;
+
+      const sessionsByPid = new Map<number, AgentEvent[]>();
+      for (const event of sessions.values()) {
+        const pid = event.pid;
+        if (typeof pid !== "number" || !Number.isInteger(pid) || pid <= 1) continue;
+        const bucket = sessionsByPid.get(pid);
+        if (bucket) bucket.push(event);
+        else sessionsByPid.set(pid, [event]);
+      }
+      if (sessionsByPid.size === 0) continue;
+
+      const pids = [...sessionsByPid.keys()];
+      let result: { exitCode: number; stdout: string };
+      try {
+        result = await client.runRemoteShellCommand(["sh", "-lc", REMOTE_LIVENESS_SCRIPT, "sh", ...pids.map(String)]);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        log("remote", `remote liveness probe failed for ${this.serverTag(serverName)}: ${message}`);
+        continue;
+      }
+      if (result.exitCode !== 0) continue;
+
+      const alivePids = new Set<number>();
+      for (const line of result.stdout.split("\n")) {
+        const n = Number(line.trim());
+        if (Number.isInteger(n)) alivePids.add(n);
+      }
+
+      for (const [pid, events] of sessionsByPid) {
+        if (alivePids.has(pid)) continue;
+        for (const event of events) {
+          this.clearPermissionState(serverName, event.sessionId);
+          sessions.delete(event.sessionId);
+          this.emit("agent-event", toEndedEvent(event));
+        }
+      }
+    }
+  }
+
   /** Start all configured server connections in background. */
   async startAll(): Promise<void> {
     if (this.started) return;
@@ -413,6 +479,7 @@ export class RemoteServerManager extends EventEmitter {
     this.proxyServer.start();
     this.proxyServer.on("proxy-input", this.handleProxyInput);
     this.wireLocalEvents();
+    this.startRemoteLivenessCheck();
 
     const mirrorServerName = await resolveMirrorTmuxServerName(this.localClient);
 
@@ -565,6 +632,11 @@ export class RemoteServerManager extends EventEmitter {
   /** Stop all connections and clean up. */
   async stopAll(): Promise<void> {
     this.started = false;
+
+    if (this.remoteLivenessTimer) {
+      clearInterval(this.remoteLivenessTimer);
+      this.remoteLivenessTimer = null;
+    }
 
     // Best-effort: clear the per-server hook auth token from remote tmux's
     // memory so it doesn't outlive our connection. Bounded so a hung client
@@ -983,6 +1055,16 @@ export class RemoteServerManager extends EventEmitter {
 
   private async setLocalPaneOption(paneId: string, key: string, value: string): Promise<void> {
     await this.localClient.runCommandArgs(["set-option", "-p", "-t", paneId, key, value]);
+  }
+
+  private startRemoteLivenessCheck(): void {
+    this.remoteLivenessTimer = setInterval(() => {
+      if (this.remoteLivenessInFlight) return;
+      this.remoteLivenessInFlight = true;
+      this.runRemoteLivenessCheckOnce().finally(() => {
+        this.remoteLivenessInFlight = false;
+      });
+    }, REMOTE_LIVENESS_INTERVAL_MS);
   }
 
   private async syncPaneMappingsFromMirror(serverName: string): Promise<void> {

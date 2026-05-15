@@ -105,6 +105,64 @@ describe("RemoteServerManager remote hook ingress", () => {
     expect(respondToPermission).toHaveBeenCalledWith({ agentType: "claude", key: "sess-1" }, "allow");
   });
 
+  it("ends remote sessions whose pid is no longer alive on the remote", async () => {
+    const localClient = {
+      getFullTree: async () => ({ panes: [], sessions: [], windows: [] }),
+    } as any;
+
+    const manager = new RemoteServerManager(localClient, [{ host: "dev-box", name: "dev-box" }]);
+    (manager as any).servers.set("dev-box", {
+      config: { host: "dev-box", name: "dev-box" },
+      mirrorSession: "mirror-alpha",
+      status: "connected",
+    });
+
+    const runRemoteShellCommand = mock(async () => ({
+      exitCode: 0,
+      stderr: "",
+      stdout: "4242\n",
+    }));
+    (manager as any).clients.set("dev-box", {
+      isConnected: true,
+      runRemoteShellCommand,
+    });
+
+    const events: AgentEvent[] = [];
+    manager.on("agent-event", (event: AgentEvent) => events.push(event));
+
+    await (manager as any).processRemoteAgentEvent("dev-box", {
+      agentType: "claude",
+      cwd: "/remote/project",
+      hookEvent: "SessionStart",
+      pid: 4242,
+      sessionId: "sess-alive",
+      status: "alive",
+      timestamp: 1,
+    });
+    await (manager as any).processRemoteAgentEvent("dev-box", {
+      agentType: "claude",
+      cwd: "/remote/project",
+      hookEvent: "SessionStart",
+      pid: 4243,
+      sessionId: "sess-dead",
+      status: "alive",
+      timestamp: 2,
+    });
+    expect(events).toHaveLength(2);
+
+    await manager.runRemoteLivenessCheckOnce();
+
+    expect(runRemoteShellCommand).toHaveBeenCalledTimes(1);
+    const callArgv = (runRemoteShellCommand.mock.calls[0] as unknown[])[0] as string[];
+    expect(callArgv.slice(0, 4)).toEqual(["sh", "-lc", expect.any(String) as any, "sh"]);
+    expect(callArgv.slice(4).sort()).toEqual(["4242", "4243"]);
+
+    expect(events).toHaveLength(3);
+    expect(events[2]!).toMatchObject({ sessionId: "sess-dead", status: "ended" });
+    expect((manager as any).remoteSessions.get("dev-box")?.has("sess-dead")).toBe(false);
+    expect((manager as any).remoteSessions.get("dev-box")?.has("sess-alive")).toBe(true);
+  });
+
   it("ends tracked remote sessions when a server disconnects", async () => {
     const localClient = {
       getFullTree: async () => ({ panes: [], sessions: [], windows: [] }),
