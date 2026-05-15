@@ -147,6 +147,60 @@ export function registerSessionEventHandlers(
     }
   });
 
+  // When a non-control client (the PTY client) is moved to a different
+  // session — typically because the user ran `tmux switch-client` inside a
+  // pane — only the PTY is moved. The control client stays attached, so
+  // %session-changed never fires and hmx's UI ends up out of sync with the
+  // pane content. Adopt the switch by also moving the control client when
+  // the target session is one hmx already manages; otherwise revert the
+  // PTY client to keep the session set closed.
+  client.on("client-session-changed", async (clientName: string, _sessionId: string, name: string) => {
+    if (attachedSession === null) return;
+    if (name === attachedSession) return;
+    if (switchingRef.current.has(name)) return;
+    // hmx-internal sessions (overlay zoom, remote mirror) are never valid
+    // targets for the user-facing PTY client. If tmux reports a client
+    // landing on one, it's our own bridge PTY attaching — leave the control
+    // client where it is.
+    if (name.startsWith("__hmx-")) return;
+    // Only adopt switches initiated by non-control-mode clients (i.e. the
+    // user's PTY). hmx itself spawns auxiliary control-mode clients on other
+    // sessions (see use-agent-pane-activity), and chasing those would
+    // perpetually rotate the control client across every session that hosts
+    // a live agent.
+    let controlMode: boolean | undefined;
+    try {
+      const clients = await client.listClients();
+      controlMode = clients.find((c) => c.name === clientName)?.controlMode;
+    } catch {
+      return;
+    }
+    if (controlMode !== false) return;
+
+    let known: boolean;
+    try {
+      const sessions = await client.listSessions();
+      known = sessions.some((s) => s.name === name);
+    } catch {
+      return;
+    }
+
+    if (known) {
+      switchingRef.current.add(name);
+      try {
+        await client.switchSession(name);
+      } catch {
+        switchingRef.current.delete(name);
+      }
+    } else {
+      try {
+        await client.switchPtyClient(attachedSession);
+      } catch {
+        // ignore — best-effort revert
+      }
+    }
+  });
+
   client.on("session-changed", async (sessionId: string, name: string) => {
     if (attachedSession === null) {
       attachedSession = name; // initial attach

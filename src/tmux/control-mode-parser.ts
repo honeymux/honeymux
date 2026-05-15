@@ -4,6 +4,7 @@ export interface ControlModePendingCommand {
 }
 
 interface ControlModeNotificationHandlers {
+  onClientSessionChanged?: (clientName: string, sessionId: string, sessionName: string) => void;
   onExit?: () => void;
   onLayoutChange?: (windowId: string, layoutString: string) => void;
   onPaneOutput?: (paneId: string, data: string) => void;
@@ -226,6 +227,22 @@ export class ControlModeParser {
       const spaceIdx = rest.indexOf(" ");
       if (spaceIdx !== -1) {
         this.options.notifications?.onWindowRenamed?.(rest.substring(0, spaceIdx), rest.substring(spaceIdx + 1));
+      }
+      return;
+    }
+
+    if (line.startsWith("%client-session-changed ")) {
+      const rest = line.substring(24);
+      const firstSpace = rest.indexOf(" ");
+      if (firstSpace !== -1) {
+        const secondSpace = rest.indexOf(" ", firstSpace + 1);
+        if (secondSpace !== -1) {
+          this.options.notifications?.onClientSessionChanged?.(
+            rest.substring(0, firstSpace),
+            rest.substring(firstSpace + 1, secondSpace),
+            rest.substring(secondSpace + 1),
+          );
+        }
       }
       return;
     }
