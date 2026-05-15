@@ -6,6 +6,11 @@ import type { SetupTmuxRuntimeContext } from "./runtime-context.ts";
 import { registerSessionEventHandlers } from "./register-session-event-handlers.ts";
 
 class FakeTmuxClient {
+  listClientsQueue: Array<Array<{ controlMode: boolean; name: string }>> = [];
+  listClients = mock(async () => {
+    if (this.listClientsQueue.length === 0) return [];
+    return this.listClientsQueue.shift()!;
+  });
   listPanesInWindowQueue: Array<Array<{ active: boolean; height: number; id: string; width: number }>> = [];
   listPanesInWindow = mock(async (_windowId: string) => {
     if (this.listPanesInWindowQueue.length === 0) return [];
@@ -22,6 +27,8 @@ class FakeTmuxClient {
     return this.listWindowsQueue.shift()!;
   });
   refreshPtyClient = mock(async () => {});
+  switchPtyClient = mock(async (_sessionName: string) => {});
+  switchSession = mock(async (_sessionName: string) => {});
   private handlers = new Map<string, Array<(...args: any[]) => Promise<void> | void>>();
   async emit(event: string, ...args: any[]): Promise<void> {
     const callbacks = this.handlers.get(event) ?? [];
@@ -304,6 +311,123 @@ describe("registerSessionEventHandlers", () => {
     ]);
     expect(ctx.agentRuntime.activePaneIdRef.current).toBe("%9");
     expect(rendererDestroyMock).not.toHaveBeenCalled();
+  });
+
+  test("adopts external PTY-client switch to a known session", async () => {
+    const client = new FakeTmuxClient();
+    const { ctx } = createContext();
+    registerSessionEventHandlers(client as any, ctx);
+
+    await client.emit("session-changed", "$1", "alpha");
+    client.listClientsQueue.push([{ controlMode: false, name: "/dev/pts/3" }]);
+    client.listSessionsQueue.push([
+      { attached: false, color: "#ff8b16", id: "$1", name: "alpha" },
+      { attached: false, color: "#1c38ff", id: "$2", name: "beta" },
+    ]);
+
+    await client.emit("client-session-changed", "/dev/pts/3", "$2", "beta");
+
+    expect(ctx.sessionRuntime.switchingRef.current.has("beta")).toBe(true);
+    expect(client.switchSession).toHaveBeenCalledWith("beta");
+    expect(client.switchPtyClient).not.toHaveBeenCalled();
+  });
+
+  test("reverts external PTY-client switch to an unknown session", async () => {
+    const client = new FakeTmuxClient();
+    const { ctx } = createContext();
+    registerSessionEventHandlers(client as any, ctx);
+
+    await client.emit("session-changed", "$1", "alpha");
+    client.listClientsQueue.push([{ controlMode: false, name: "/dev/pts/3" }]);
+    client.listSessionsQueue.push([{ attached: true, color: "#ff8b16", id: "$1", name: "alpha" }]);
+
+    await client.emit("client-session-changed", "/dev/pts/3", "$9", "external-foo");
+
+    expect(client.switchPtyClient).toHaveBeenCalledWith("alpha");
+    expect(client.switchSession).not.toHaveBeenCalled();
+    expect(ctx.sessionRuntime.switchingRef.current.size).toBe(0);
+  });
+
+  test("ignores client-session-changed when target equals attached session", async () => {
+    const client = new FakeTmuxClient();
+    const { ctx } = createContext();
+    registerSessionEventHandlers(client as any, ctx);
+
+    await client.emit("session-changed", "$1", "alpha");
+    await client.emit("client-session-changed", "/dev/pts/3", "$1", "alpha");
+
+    expect(client.switchSession).not.toHaveBeenCalled();
+    expect(client.switchPtyClient).not.toHaveBeenCalled();
+  });
+
+  test("ignores client-session-changed when target is an in-flight intentional switch", async () => {
+    const client = new FakeTmuxClient();
+    const { ctx } = createContext();
+    registerSessionEventHandlers(client as any, ctx);
+
+    await client.emit("session-changed", "$1", "alpha");
+    ctx.sessionRuntime.switchingRef.current.add("beta");
+
+    await client.emit("client-session-changed", "/dev/pts/3", "$2", "beta");
+
+    expect(client.switchSession).not.toHaveBeenCalled();
+    expect(client.switchPtyClient).not.toHaveBeenCalled();
+  });
+
+  test("ignores client-session-changed before initial attach", async () => {
+    const client = new FakeTmuxClient();
+    const { ctx } = createContext();
+    registerSessionEventHandlers(client as any, ctx);
+
+    await client.emit("client-session-changed", "/dev/pts/3", "$1", "alpha");
+
+    expect(client.switchSession).not.toHaveBeenCalled();
+    expect(client.switchPtyClient).not.toHaveBeenCalled();
+  });
+
+  test("ignores client-session-changed for hmx-internal overlay sessions", async () => {
+    const client = new FakeTmuxClient();
+    const { ctx } = createContext();
+    registerSessionEventHandlers(client as any, ctx);
+
+    await client.emit("session-changed", "$1", "alpha");
+    // Our own agent-pty-bridge PTY attaching to its overlay session would
+    // emit %client-session-changed with a `__hmx-zoom-*` target. The control
+    // client must stay put — adopting that switch creates a feedback loop
+    // that flips activePaneId, unlatches the agent, kills the overlay, and
+    // immediately re-creates it.
+    await client.emit("client-session-changed", "/dev/pts/3", "$7", "__hmx-zoom-1700000000000");
+
+    expect(client.switchSession).not.toHaveBeenCalled();
+    expect(client.switchPtyClient).not.toHaveBeenCalled();
+    expect(ctx.sessionRuntime.switchingRef.current.size).toBe(0);
+  });
+
+  test("ignores client-session-changed from control-mode clients (hmx aux observers)", async () => {
+    const client = new FakeTmuxClient();
+    const { ctx } = createContext();
+    registerSessionEventHandlers(client as any, ctx);
+
+    await client.emit("session-changed", "$1", "alpha");
+    // use-agent-pane-activity opens auxiliary control-mode clients on
+    // non-primary sessions to forward %output back into the activity
+    // tracker. Each one's `tmux -C attach-session` emits
+    // %client-session-changed for the target session. The control client
+    // must NOT chase those — doing so rotates the user's session through
+    // every aux target in a never-ending loop.
+    client.listClientsQueue.push([
+      { controlMode: false, name: "/dev/pts/3" },
+      { controlMode: true, name: "aux-beta" },
+    ]);
+
+    const sessionsBefore = client.listSessions.mock.calls.length;
+    await client.emit("client-session-changed", "aux-beta", "$2", "beta");
+
+    // Handler must bail before reaching the listSessions / switch* path.
+    expect(client.listSessions.mock.calls.length).toBe(sessionsBefore);
+    expect(client.switchSession).not.toHaveBeenCalled();
+    expect(client.switchPtyClient).not.toHaveBeenCalled();
+    expect(ctx.sessionRuntime.switchingRef.current.size).toBe(0);
   });
 
   test("ignores rename events for unattached background sessions", async () => {

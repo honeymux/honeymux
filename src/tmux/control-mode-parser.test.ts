@@ -19,12 +19,14 @@ function createParserHarness() {
     (_name: string, _sessionId: string, _windowId: string, _windowIndex: string, _paneId: string, _value: string) => {},
   );
   const onPaneOutput = mock((_paneId: string, _data: string) => {});
+  const onClientSessionChanged = mock((_clientName: string, _sessionId: string, _sessionName: string) => {});
   let closed = false;
 
   const parser = new ControlModeParser({
     getPendingQueue: () => pendingQueue,
     isClosed: () => closed,
     notifications: {
+      onClientSessionChanged,
       onExit: () => {
         closed = true;
         onExit();
@@ -38,7 +40,17 @@ function createParserHarness() {
     onReady,
   });
 
-  return { onExit, onPaneOutput, onPaneOutputBytes, onReady, onSubscriptionChanged, onWindowAdd, parser, pendingQueue };
+  return {
+    onClientSessionChanged,
+    onExit,
+    onPaneOutput,
+    onPaneOutputBytes,
+    onReady,
+    onSubscriptionChanged,
+    onWindowAdd,
+    parser,
+    pendingQueue,
+  };
 }
 
 describe("ControlModeParser", () => {
@@ -99,6 +111,30 @@ describe("ControlModeParser", () => {
 
     expect(onWindowAdd).toHaveBeenCalledWith("@9");
     expect(resolved).toBe("%\t@1\t0\tbash\t1");
+  });
+
+  test("parses client-session-changed notifications", () => {
+    const { onClientSessionChanged, parser } = createParserHarness();
+
+    parser.parseLine("%client-session-changed /dev/pts/3 $7 smartswitch");
+
+    expect(onClientSessionChanged).toHaveBeenCalledWith("/dev/pts/3", "$7", "smartswitch");
+  });
+
+  test("client-session-changed preserves spaces in session name", () => {
+    const { onClientSessionChanged, parser } = createParserHarness();
+
+    parser.parseLine("%client-session-changed /dev/pts/3 $7 my session name");
+
+    expect(onClientSessionChanged).toHaveBeenCalledWith("/dev/pts/3", "$7", "my session name");
+  });
+
+  test("client-session-changed with malformed payload is ignored", () => {
+    const { onClientSessionChanged, parser } = createParserHarness();
+
+    parser.parseLine("%client-session-changed /dev/pts/3");
+
+    expect(onClientSessionChanged).not.toHaveBeenCalled();
   });
 
   test("parses subscription-changed notifications", () => {

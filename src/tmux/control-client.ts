@@ -1065,6 +1065,8 @@ export class TmuxControlClient extends EventEmitter {
       getPendingQueue: () => this.pendingQueue,
       isClosed: () => this.closed,
       notifications: {
+        onClientSessionChanged: (clientName, sessionId, sessionName) =>
+          this.emit("client-session-changed", clientName, sessionId, sessionName),
         onExit: () => {
           this.cleanExit = true;
           this.closed = true;
