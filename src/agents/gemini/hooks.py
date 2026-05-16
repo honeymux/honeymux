@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """Gemini CLI lifecycle hook for honeymux.
 
-Reads event JSON from stdin, maps to agent status, sends to Unix socket.
+Reads event JSON from stdin, maps to agent status, sends to honeymux's hook
+socket (local Unix socket or, for remote sessions, a loopback TCP endpoint
+forwarded over SSH).
 """
 
 import json
@@ -14,7 +16,8 @@ import sys
 import time
 
 REMOTE_HOOK_SOCKET_OPTION = "@hmx-agent-socket-path"
-REMOTE_HOOK_SOCKET_RE = r"^/.*?/hmx-remote-hook-[0-9a-f]{16}\.sock$"
+REMOTE_HOOK_TCP_HOSTS = ("127.0.0.1", "localhost")
+TMUX_PANE_RE = r"^%\d+$"
 
 
 def get_runtime_dir():
@@ -28,12 +31,9 @@ def get_runtime_path(name):
     return os.path.join(get_runtime_dir(), name)
 
 
-def get_socket_path():
-    override = get_tmux_remote_socket_path()
-    if override:
-        return override
-
-    return get_runtime_path("hmx-gemini.sock")
+def get_local_unix_target():
+    """Local agent ingress: Unix socket at the user's runtime dir."""
+    return ("unix", get_runtime_path("hmx-gemini.sock"), None)
 
 
 def get_state_home():
@@ -52,7 +52,18 @@ def ensure_private_dir(path):
     return path
 
 
-def get_tmux_remote_socket_path():
+def get_target():
+    """Return the (transport, address, token) tuple to send events to.
+
+    Prefers a remote tcp://host:port#token target from @hmx-agent-socket-path,
+    falling back to the local Unix socket. The token, when present, must be
+    embedded in the event payload as `_authToken`.
+    """
+    remote = get_remote_hook_target()
+    return remote if remote else get_local_unix_target()
+
+
+def get_remote_hook_target():
     if not os.environ.get("TMUX"):
         return None
 
@@ -70,25 +81,28 @@ def get_tmux_remote_socket_path():
     if proc.returncode != 0:
         return None
 
-    path = proc.stdout.strip()
-    if not path or not os.path.isabs(path):
+    value = proc.stdout.strip()
+    if not value or not value.startswith("tcp://"):
         return None
-    if not re_match_remote_hook_socket(path):
+    return parse_remote_tcp_target(value)
+
+
+def parse_remote_tcp_target(value):
+    body = value[len("tcp://"):]
+    if "#" not in body:
         return None
-    return path
-
-
-def re_match_remote_hook_socket(path):
-    return re.match(REMOTE_HOOK_SOCKET_RE, path) is not None
-
-
-def normalize_tty(tty_name):
-    tty = tty_name.strip()
-    if not tty or tty in ("-", "?", "??"):
+    addr, token = body.split("#", 1)
+    if not token or ":" not in addr:
         return None
-    if tty.startswith("/dev/"):
-        return tty
-    return f"/dev/{tty}"
+    host, port_str = addr.rsplit(":", 1)
+    if host not in REMOTE_HOOK_TCP_HOSTS:
+        return None
+    if not port_str.isdigit():
+        return None
+    port = int(port_str)
+    if port < 1 or port > 65535:
+        return None
+    return ("tcp", (host, port), token)
 
 
 def collect_process_snapshot():
@@ -119,22 +133,11 @@ def discard_resolved_pid_line(sock):
         buf += chunk
 
 
-def get_tty():
-    """Get the TTY of the parent Gemini process."""
-    ppid = os.getppid()
-    try:
-        proc = subprocess.run(
-            ["ps", "-ww", "-o", "tty=", "-p", str(ppid)],
-            capture_output=True,
-            stdin=subprocess.DEVNULL,
-            text=True,
-            timeout=1,
-        )
-    except (OSError, subprocess.SubprocessError):
+def get_tmux_pane_id():
+    pane_id = os.environ.get("TMUX_PANE", "").strip()
+    if not pane_id or re.match(TMUX_PANE_RE, pane_id) is None:
         return None
-    if proc.returncode != 0:
-        return None
-    return normalize_tty(proc.stdout)
+    return pane_id
 
 
 def running_in_honeymux():
@@ -154,11 +157,16 @@ EVENT_MAP = {
 
 def send_event(event):
     event["processSnapshot"] = collect_process_snapshot()
-    sock_path = get_socket_path()
+    transport, address, token = get_target()
+    if token:
+        event["_authToken"] = token
     try:
-        sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        if transport == "unix":
+            sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        else:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.settimeout(5)
-        sock.connect(sock_path)
+        sock.connect(address)
         sock.sendall((json.dumps(event) + "\n").encode())
         discard_resolved_pid_line(sock)
         sock.close()
@@ -184,6 +192,8 @@ def main():
     session_id = data.get("session_id", "")
     cwd = data.get("cwd", os.getcwd())
 
+    pane_id = get_tmux_pane_id()
+
     def base_event(status, he=hook_event):
         ev = {
             "sessionId": session_id,
@@ -191,11 +201,12 @@ def main():
             "status": status,
             "cwd": cwd,
             "pid": os.getppid(),
-            "tty": get_tty(),
             "timestamp": time.time(),
             "hookEvent": he,
             "remoteHost": platform.node(),
         }
+        if pane_id:
+            ev["paneId"] = pane_id
         # Forward transcript path when available
         transcript_path = data.get("transcript_path")
         if transcript_path:

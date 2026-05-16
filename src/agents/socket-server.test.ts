@@ -218,6 +218,26 @@ describe("resolveAgentSessionPid", () => {
     expect(resolveAgentSessionPid(912389, "claude", 100, lookup)).toBe(912389);
   });
 
+  it("does not false-match a wrapper sh that carries the hook script path in its argv", () => {
+    // The hook script's default install path (`~/.claude/hooks/honeymux.py`)
+    // contains the substring "claude". In direct-exec mode the walker
+    // starts at the agent itself and the hook script (a child of the
+    // agent) is never visited, so this never matters. With a `sh -c`
+    // wrapper, the walker starts at the wrapper and the wrapper's argv
+    // *does* carry the script path as its `-c` argument — so `.claude/`
+    // lands in the matcher's view. Matching on argv-token basenames
+    // skips that false match and lets the walk climb to claude.
+    const lookup = fakeLookup([
+      { command: "claude", parentPid: 100, pid: 911803 },
+      {
+        command: "/bin/sh -c /usr/bin/python3 /home/user/.claude/hooks/honeymux.py",
+        parentPid: 911803,
+        pid: 912389,
+      },
+    ]);
+    expect(resolveAgentSessionPid(912389, "claude", 100, lookup)).toBe(911803);
+  });
+
   it("tolerates ppid cycles defensively", () => {
     // Synthetic cycle — should not loop forever, returns original on failure.
     const lookup = fakeLookup([{ command: "sh", parentPid: 912389, pid: 912389 }]);
@@ -674,5 +694,119 @@ describe("HookSocketServer", () => {
     );
 
     expect(observed.hasLookup).toBe(false);
+  });
+
+  it("rejects construction in tcp mode without an authToken", () => {
+    expect(() => new HookSocketServer({ port: 0, type: "tcp" }, true, { persistEvents: false })).toThrow(
+      /tcp listen mode requires an authToken/,
+    );
+  });
+
+  it("accepts events that carry a matching authToken (and strips it before emit)", async () => {
+    const server = new HookSocketServer({ hostname: "127.0.0.1", port: 0, type: "tcp" }, true, {
+      authToken: "secret-token",
+      eventValidator: () => true,
+      persistEvents: false,
+    });
+
+    const observed: AgentEvent[] = [];
+    server.on("event", (event: AgentEvent) => observed.push(event));
+
+    const socket = {
+      data: { buffer: "", pendingWork: Promise.resolve() },
+      end() {},
+      flush() {},
+      write(data: string) {
+        return data.length;
+      },
+    };
+
+    await (server as any).processLine(
+      socket,
+      JSON.stringify({
+        _authToken: "secret-token",
+        agentType: "claude",
+        cwd: "/srv",
+        hookEvent: "BeforeAgent",
+        pid: 900,
+        sessionId: "sess-1",
+        status: "alive",
+        timestamp: 1,
+      }),
+    );
+
+    expect(observed).toHaveLength(1);
+    expect(observed[0]).not.toHaveProperty("_authToken");
+  });
+
+  it("drops events whose authToken does not match the configured secret", async () => {
+    const server = new HookSocketServer({ hostname: "127.0.0.1", port: 0, type: "tcp" }, true, {
+      authToken: "secret-token",
+      eventValidator: () => true,
+      persistEvents: false,
+    });
+
+    const observed: AgentEvent[] = [];
+    server.on("event", (event: AgentEvent) => observed.push(event));
+
+    const socket = {
+      data: { buffer: "", pendingWork: Promise.resolve() },
+      end() {},
+      flush() {},
+      write(data: string) {
+        return data.length;
+      },
+    };
+
+    await (server as any).processLine(
+      socket,
+      JSON.stringify({
+        _authToken: "wrong-token",
+        agentType: "claude",
+        cwd: "/srv",
+        hookEvent: "BeforeAgent",
+        pid: 900,
+        sessionId: "sess-1",
+        status: "alive",
+        timestamp: 1,
+      }),
+    );
+
+    expect(observed).toHaveLength(0);
+  });
+
+  it("drops events with no authToken field when one is required", async () => {
+    const server = new HookSocketServer({ hostname: "127.0.0.1", port: 0, type: "tcp" }, true, {
+      authToken: "secret-token",
+      eventValidator: () => true,
+      persistEvents: false,
+    });
+
+    const observed: AgentEvent[] = [];
+    server.on("event", (event: AgentEvent) => observed.push(event));
+
+    const socket = {
+      data: { buffer: "", pendingWork: Promise.resolve() },
+      end() {},
+      flush() {},
+      write(data: string) {
+        return data.length;
+      },
+    };
+
+    await (server as any).processLine(
+      socket,
+      JSON.stringify({
+        agentType: "claude",
+        cwd: "/srv",
+        hookEvent: "BeforeAgent",
+        pid: 900,
+        sessionId: "sess-1",
+        status: "alive",
+        timestamp: 1,
+      }),
+    );
+
+    expect(observed).toHaveLength(0);
   });
 });

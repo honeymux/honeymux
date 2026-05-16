@@ -33,7 +33,20 @@ export interface HookEventValidatorContext {
   processLookup?: ProcessLookup;
 }
 
+export type HookSocketListenAddress =
+  | { hostname?: string; port?: number; type: "tcp" }
+  | { path: string; type: "unix" };
+
 interface HookSocketServerOptions {
+  /**
+   * Shared secret. When set, every inbound event must carry a matching
+   * `_authToken` field at the top level of its JSON payload, or it is
+   * silently dropped. The token is stripped before the event is parsed
+   * so downstream consumers never see it. Required for `tcp` listen mode
+   * — TCP loopback would otherwise be reachable by any process on the
+   * remote host.
+   */
+  authToken?: string;
   eventValidator?: (event: AgentEvent, ctx: HookEventValidatorContext) => Promise<boolean> | boolean;
   persistEvents?: boolean;
   shouldHoldPermissionConnection?: (event: AgentEvent) => boolean;
@@ -58,19 +71,36 @@ interface SocketData {
 }
 
 export class HookSocketServer extends EventEmitter {
+  /**
+   * TCP port the server is bound to. Defined only after `start()` in tcp
+   * mode (and when `port` was not specified, sshd picks the actual port).
+   */
+  get listenPort(): number | undefined {
+    if (this.listenAddress.type !== "tcp") return undefined;
+    return this.server?.port;
+  }
+  private authToken?: string;
   private eventValidator: (event: AgentEvent, ctx: HookEventValidatorContext) => Promise<boolean> | boolean;
   private holdPermissionConnections: boolean;
+  private listenAddress: HookSocketListenAddress;
   private pendingConnectionKeysBySessionId = new Map<string, string>();
   private pendingConnections = new Map<string, PendingPermissionConnection>();
   private persistEvents: boolean;
-  private server: ReturnType<typeof Bun.listen> | null = null;
+  private server: { port?: number; stop(force?: boolean): void } | null = null;
   private shouldHoldPermissionConnection?: (event: AgentEvent) => boolean;
-  private socketPath: string;
 
-  constructor(socketPath?: string, holdPermissionConnections = true, options: HookSocketServerOptions = {}) {
+  constructor(
+    address?: HookSocketListenAddress | string,
+    holdPermissionConnections = true,
+    options: HookSocketServerOptions = {},
+  ) {
     super();
     this.eventValidator = options.eventValidator ?? isValidLocalAgentEvent;
-    this.socketPath = socketPath ?? getSocketPath();
+    this.listenAddress = resolveListenAddress(address);
+    if (this.listenAddress.type === "tcp" && !options.authToken) {
+      throw new Error("HookSocketServer: tcp listen mode requires an authToken");
+    }
+    this.authToken = options.authToken;
     this.holdPermissionConnections = holdPermissionConnections;
     this.persistEvents = options.persistEvents ?? true;
     this.shouldHoldPermissionConnection = options.shouldHoldPermissionConnection;
@@ -116,51 +146,57 @@ export class HookSocketServer extends EventEmitter {
   }
 
   start(): void {
-    // Remove stale socket
-    try {
-      unlinkSync(this.socketPath);
-    } catch {
-      // doesn't exist
-    }
-
-    this.server = Bun.listen<SocketData>({
-      socket: {
-        close: (socket) => this.handleSocketClose(socket),
-        data: (socket, data) => {
-          if (socket.data.ignoreFurtherInput) return;
-          const result = appendBoundedLines(
-            socket.data.buffer,
-            new TextDecoder().decode(data),
-            MAX_HOOK_SOCKET_LINE_BYTES,
-          );
-          if (result.overflowed) {
-            socket.data.buffer = "";
-            socket.end();
-            return;
-          }
-          socket.data.buffer = result.remainder;
-          if (result.lines.length === 0) return;
-          socket.data.pendingWork = socket.data.pendingWork
-            .then(async () => {
-              for (const line of result.lines) {
-                if (socket.data.ignoreFurtherInput) break;
-                await this.processLine(socket, line);
-              }
-            })
-            .catch(() => {});
-        },
-        error: (_socket, _error) => {
-          // connection error — ignore
-        },
-        open: (socket) => {
-          socket.data = { buffer: "", pendingWork: Promise.resolve() };
-        },
+    const handlers = {
+      close: (socket: Socket<SocketData>) => this.handleSocketClose(socket),
+      data: (socket: Socket<SocketData>, data: Buffer) => {
+        if (socket.data.ignoreFurtherInput) return;
+        const result = appendBoundedLines(
+          socket.data.buffer,
+          new TextDecoder().decode(data),
+          MAX_HOOK_SOCKET_LINE_BYTES,
+        );
+        if (result.overflowed) {
+          socket.data.buffer = "";
+          socket.end();
+          return;
+        }
+        socket.data.buffer = result.remainder;
+        if (result.lines.length === 0) return;
+        socket.data.pendingWork = socket.data.pendingWork
+          .then(async () => {
+            for (const line of result.lines) {
+              if (socket.data.ignoreFurtherInput) break;
+              await this.processLine(socket, line);
+            }
+          })
+          .catch(() => {});
       },
-      unix: this.socketPath,
-    });
-    try {
-      chmodSync(this.socketPath, 0o700);
-    } catch {}
+      error: (_socket: Socket<SocketData>, _error: unknown) => {
+        // connection error — ignore
+      },
+      open: (socket: Socket<SocketData>) => {
+        socket.data = { buffer: "", pendingWork: Promise.resolve() };
+      },
+    };
+
+    if (this.listenAddress.type === "unix") {
+      const path = this.listenAddress.path;
+      try {
+        unlinkSync(path);
+      } catch {
+        // doesn't exist
+      }
+      this.server = Bun.listen<SocketData>({ socket: handlers, unix: path });
+      try {
+        chmodSync(path, 0o700);
+      } catch {}
+    } else {
+      this.server = Bun.listen<SocketData>({
+        hostname: this.listenAddress.hostname ?? "127.0.0.1",
+        port: this.listenAddress.port ?? 0,
+        socket: handlers,
+      });
+    }
   }
 
   stop(): void {
@@ -177,10 +213,12 @@ export class HookSocketServer extends EventEmitter {
     this.server?.stop(true);
     this.server = null;
 
-    try {
-      unlinkSync(this.socketPath);
-    } catch {
-      // already removed
+    if (this.listenAddress.type === "unix") {
+      try {
+        unlinkSync(this.listenAddress.path);
+      } catch {
+        // already removed
+      }
     }
   }
 
@@ -228,6 +266,14 @@ export class HookSocketServer extends EventEmitter {
     if (!line.trim()) return;
     try {
       const parsed = JSON.parse(line);
+      // Auth-token validation. Required for tcp listen mode, optional otherwise.
+      // The token is stripped after validation so downstream parsers never see it.
+      if (this.authToken) {
+        if (typeof parsed !== "object" || parsed === null) return;
+        const provided = (parsed as Record<string, unknown>)["_authToken"];
+        if (typeof provided !== "string" || provided !== this.authToken) return;
+        delete (parsed as Record<string, unknown>)["_authToken"];
+      }
       const ctx: HookEventValidatorContext = {
         processLookup: extractSnapshotLookup(parsed),
       };
@@ -465,10 +511,26 @@ export function resolveAgentSessionPid(
   while (current !== null && current > 1 && current !== panePid && !seen.has(current)) {
     seen.add(current);
     const command = lookup.getCommand(current);
-    if (command && pattern.test(command)) return current;
+    if (command && commandIsAgentBinary(command, pattern)) return current;
     current = lookup.getParentPid(current);
   }
   return eventPid;
+}
+
+/**
+ * True if any space-separated token in `command` has a basename that matches
+ * `pattern`. Matching basenames rather than the full command line means
+ * argv path segments like `.claude/hooks/...` don't false-match — only
+ * actual binary names (`claude`, `node /path/to/claude`, ...) do.
+ */
+function commandIsAgentBinary(command: string, pattern: RegExp): boolean {
+  for (const token of command.split(/\s+/)) {
+    if (!token) continue;
+    const slash = token.lastIndexOf("/");
+    const basename = slash >= 0 ? token.slice(slash + 1) : token;
+    if (pattern.test(basename)) return true;
+  }
+  return false;
 }
 
 function extractSnapshotLookup(parsed: unknown): ProcessLookup | undefined {
@@ -549,6 +611,12 @@ function persistSessionEvent(event: AgentEvent): void {
       writeFileSync(file, JSON.stringify(event), { mode: 0o600 });
     }
   } catch {}
+}
+
+function resolveListenAddress(address: HookSocketListenAddress | string | undefined): HookSocketListenAddress {
+  if (address === undefined) return { path: getSocketPath(), type: "unix" };
+  if (typeof address === "string") return { path: address, type: "unix" };
+  return address;
 }
 
 function sessionFilePath(dir: string, sessionId: string): string {

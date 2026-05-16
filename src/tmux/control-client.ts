@@ -1,7 +1,7 @@
+import type { ControlModeTransport } from "./transports/transport.ts";
 import type { TmuxKeyBindings, TmuxKeyName, TmuxPaneTtyMapping, TmuxSession, TmuxWindow } from "./types.ts";
 
 import { terminalFgRgb } from "../themes/theme.ts";
-import { trackChildPid, untrackChildPid } from "../util/child-pids.ts";
 import { getTerminalCursorStyle } from "../util/cursor.ts";
 import { EventEmitter } from "../util/event-emitter.ts";
 import { cleanEnv } from "../util/pty.ts";
@@ -33,6 +33,7 @@ import {
 } from "./control-client-parsers.ts";
 import { ControlModeParser } from "./control-mode-parser.ts";
 import { quoteTmuxArg } from "./escape.ts";
+import { PtyTransport } from "./transports/pty-transport.ts";
 
 interface PendingCommand {
   reject: (err: Error) => void;
@@ -75,13 +76,16 @@ export class TmuxControlClient extends EventEmitter {
   private lastClientSize: ControlClientSize | null = null;
   private parser: ControlModeParser | null = null;
   private pendingQueue: PendingCommand[] = [];
-  private proc: {
-    kill(): void;
-    stdin: { end(): void; flush(): void; write(data: Uint8Array | string): number };
-    stdout: ReadableStream<Uint8Array>;
-  } | null = null;
   private ready: Promise<void> | null = null;
   private readyResolve: (() => void) | null = null;
+  private started = false;
+  private transport: ControlModeTransport;
+  private transportUnsubs: Array<() => void> = [];
+
+  constructor(transport?: ControlModeTransport) {
+    super();
+    this.transport = transport ?? new PtyTransport();
+  }
 
   /**
    * Apply a layout string to the current window.
@@ -102,7 +106,25 @@ export class TmuxControlClient extends EventEmitter {
    * watchers that forward `pane-output` back to the agent pane-activity map.
    */
   async attachExisting(sessionName: string, size: ControlClientSize = MIN_CONTROL_CLIENT_SIZE): Promise<void> {
-    await this.spawnControlModeProcess(["-C", "attach-session", "-t", sessionName]);
+    await this.attachWithArgs(["-C", "attach-session", "-t", sessionName], sessionName, size);
+  }
+
+  /**
+   * Open a control-mode connection with caller-supplied tmux argv and bind the
+   * client to the resolved session name, without applying any local bootstrap.
+   *
+   * Use this when the caller owns the bootstrap policy — typically the remote
+   * mirror path, which applies a minimal set of options (status off, border
+   * style, refresh size) that intentionally diverges from local-client
+   * defaults like mouse, theme colors, and cwd-aware split bindings. Per-client
+   * size is the only post-spawn action.
+   */
+  async attachWithArgs(
+    tmuxArgs: string[],
+    sessionName: string,
+    size: ControlClientSize = MIN_CONTROL_CLIENT_SIZE,
+  ): Promise<void> {
+    await this.spawnControlModeProcess(tmuxArgs);
     this.attachedSessionName = sessionName;
     const clamped = clampControlClientSize(size);
     await setControlClientSize((command) => this.sendCommand(command), clamped);
@@ -170,16 +192,20 @@ export class TmuxControlClient extends EventEmitter {
   destroy(): void {
     if (this.closed) return;
     this.closed = true;
-    try {
-      this.proc?.stdin.end();
-      this.proc?.kill();
-    } catch {
-      // ignore
-    }
+    // Drain pending commands BEFORE stopping the transport. transport.stop()
+    // may synchronously trigger our exit handler, which would otherwise
+    // empty the queue first and reject with "Connection closed" instead of
+    // the intended "Client destroyed".
     for (const pending of this.pendingQueue) {
       pending.reject(new TmuxClientClosedError("Client destroyed"));
     }
     this.pendingQueue = [];
+    this.unsubscribeTransport();
+    try {
+      this.transport.stop();
+    } catch {
+      // ignore
+    }
   }
 
   /**
@@ -740,7 +766,7 @@ export class TmuxControlClient extends EventEmitter {
   async runCommandChain(cmds: string[]): Promise<void> {
     if (cmds.length === 0) return;
     if (this.closed) throw new Error("Client closed");
-    if (!this.proc) throw new Error("Client not connected");
+    if (!this.started) throw new Error("Client not connected");
     const promises = cmds.map(
       () =>
         new Promise<string>((resolve, reject) => {
@@ -1042,10 +1068,16 @@ export class TmuxControlClient extends EventEmitter {
         onExit: () => {
           this.cleanExit = true;
           this.closed = true;
+          // tmux-exit signals a clean protocol-level exit (e.g. last session
+          // ended, kill-server). Consumers that need to distinguish this
+          // from an SSH pipe death listen for tmux-exit; the plain exit
+          // event still fires below for callers that don't care which.
+          this.emit("tmux-exit");
           this.emit("exit");
         },
         onLayoutChange: (windowId, layoutString) => this.emit("layout-change", windowId, layoutString),
         onPaneOutput: (paneId, data) => this.emit("pane-output", paneId, data),
+        onPaneOutputBytes: (paneId, data) => this.emit("pane-output-bytes", paneId, data),
         onPaneTitleChanged: (paneId, newTitle) => this.emit("pane-title-changed", paneId, newTitle),
         onSessionChanged: (fromSession, toSession) => {
           this.attachedSessionName = toSession;
@@ -1072,9 +1104,27 @@ export class TmuxControlClient extends EventEmitter {
     });
   }
 
+  private handleTransportExit(): void {
+    // Flush any unterminated final line before draining the queue.
+    this.parser?.parseTail();
+
+    // Only reject as "Connection closed" if destroy() hasn't already
+    // drained the queue with "Client destroyed". `closed` set by destroy
+    // is the signal that this exit is a consequence of an intentional stop.
+    if (!this.closed) {
+      for (const pending of this.pendingQueue) {
+        pending.reject(new TmuxClientClosedError("Connection closed"));
+      }
+      this.pendingQueue = [];
+      this.closed = true;
+      this.emit("exit");
+    }
+    this.unsubscribeTransport();
+  }
+
   private sendCommand(cmd: string): Promise<string> {
     if (this.closed) return Promise.reject(new TmuxClientClosedError("Client closed"));
-    if (!this.proc) return Promise.reject(new Error("Client not connected"));
+    if (!this.started) return Promise.reject(new Error("Client not connected"));
     return new Promise((resolve, reject) => {
       this.pendingQueue.push({ reject, resolve });
       this.writeCommand(cmd);
@@ -1082,42 +1132,59 @@ export class TmuxControlClient extends EventEmitter {
   }
 
   /**
-   * Shared setup for spawning a `tmux -C` control-mode process and wiring up
-   * the parser + ready promise. Used by both {@link connect} and
-   * {@link attachExisting}. Returns once tmux has sent its initial %begin/%end
-   * handshake (or throws if the process exits before the handshake arrives).
+   * Shared setup for connecting via the transport, wiring up the parser +
+   * ready promise. Used by both {@link connect} and {@link attachExisting}.
+   * Returns once tmux has sent its initial %begin/%end handshake (or throws
+   * if the process exits before the handshake arrives).
    */
   private async spawnControlModeProcess(tmuxArgs: string[]): Promise<void> {
+    if (this.started) throw new Error("Client already started");
+
     this.ready = new Promise((resolve) => {
       this.readyResolve = resolve;
     });
 
-    const proc = Bun.spawn(tmuxCmd(...tmuxArgs), {
-      env: cleanEnv(),
-      stderr: "pipe",
-      stdin: "pipe",
-      stdout: "pipe",
-    });
-    trackChildPid(proc.pid);
-    void proc.exited.then(
-      () => untrackChildPid(proc.pid),
-      () => untrackChildPid(proc.pid),
+    this.parser = this.createParser();
+    // Register the handshake exit listener and transport subscriptions
+    // BEFORE calling transport.start(). A transport that exits inside
+    // start() (or during the awaited microtask) would otherwise fire
+    // onExit before the listener exists, leaving the handshake promise
+    // hung forever.
+    const handshake = this.waitForHandshake(tmuxArgs);
+    this.transportUnsubs.push(
+      this.transport.onData((chunk) => this.parser?.parseChunk(chunk)),
+      this.transport.onExit(() => this.handleTransportExit()),
     );
 
-    this.proc = {
-      kill: () => proc.kill(),
-      stdin: proc.stdin as unknown as {
-        end(): void;
-        flush(): void;
-        write(data: Uint8Array | string): number;
-      },
-      stdout: proc.stdout as ReadableStream<Uint8Array>,
-    };
-    this.parser = this.createParser();
+    try {
+      await this.transport.start(tmuxArgs);
+    } catch (err) {
+      this.unsubscribeTransport();
+      throw err;
+    }
+    this.started = true;
 
-    void this.startParsing();
+    try {
+      await handshake;
+    } catch (err) {
+      this.unsubscribeTransport();
+      throw err;
+    }
+  }
 
-    await new Promise<void>((resolve, reject) => {
+  private unsubscribeTransport(): void {
+    for (const unsub of this.transportUnsubs) {
+      try {
+        unsub();
+      } catch {
+        // ignore
+      }
+    }
+    this.transportUnsubs = [];
+  }
+
+  private waitForHandshake(tmuxArgs: string[]): Promise<void> {
+    return new Promise<void>((resolve, reject) => {
       let settled = false;
       const settle = (fn: () => void): void => {
         if (settled) return;
@@ -1133,26 +1200,9 @@ export class TmuxControlClient extends EventEmitter {
     });
   }
 
-  private async startParsing(): Promise<void> {
-    if (!this.proc || !this.parser) return;
-    await this.parser.consumeStream(this.proc.stdout);
-
-    // Reject any pending command promises — no more responses will arrive.
-    for (const pending of this.pendingQueue) {
-      pending.reject(new TmuxClientClosedError("Connection closed"));
-    }
-    this.pendingQueue = [];
-
-    if (!this.closed) {
-      this.closed = true;
-      this.emit("exit");
-    }
-  }
-
   private writeCommand(cmd: string): void {
-    if (this.closed || !this.proc) return;
-    this.proc.stdin.write(cmd + "\n");
-    this.proc.stdin.flush();
+    if (this.closed || !this.started) return;
+    this.transport.write(cmd + "\n");
   }
 }
 

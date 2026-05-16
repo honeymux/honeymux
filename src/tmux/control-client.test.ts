@@ -9,6 +9,28 @@ import {
 import { quoteTmuxArg } from "./escape.ts";
 
 describe("TmuxControlClient connection guards", () => {
+  test("emits tmux-exit (and exit) when the parser delivers an onExit notification", () => {
+    const client = new TmuxControlClient();
+    // Construct the parser via the same path connect() uses — even without
+    // a transport, createParser is wired with the EventEmitter handlers.
+    const parser = (client as unknown as { createParser: () => { parseLine: (line: string) => void } }).createParser();
+
+    let tmuxExit = 0;
+    let exit = 0;
+    client.on("tmux-exit", () => {
+      tmuxExit += 1;
+    });
+    client.on("exit", () => {
+      exit += 1;
+    });
+
+    parser.parseLine("%exit");
+
+    expect(tmuxExit).toBe(1);
+    expect(exit).toBe(1);
+    expect(client.cleanExit).toBe(true);
+  });
+
   test("rejects mouse flag queries before connect instead of queueing forever", async () => {
     const client = new TmuxControlClient();
 

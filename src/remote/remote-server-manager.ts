@@ -22,7 +22,9 @@ import { log } from "../util/log.ts";
 import { getTmuxServer } from "../util/tmux-server.ts";
 import { type RemotePaneBinding, validateRemoteAgentEvent } from "./agent-event-validator.ts";
 import { ForwardedRemoteAgentIngressFactory } from "./agent-transport.ts";
-import { MirrorLayoutManager } from "./mirror-layout.ts";
+import { RemoteMirror } from "./mirror/remote-mirror.ts";
+import { RoutingCache } from "./mirror/routing-cache.ts";
+import { type MirrorSnapshot } from "./mirror/snapshot.ts";
 import { extractBracketedPastePayload, pasteTextIntoRemotePane } from "./paste.ts";
 import { buildRemoteProxyProcessArgv } from "./proxy-command.ts";
 import { RemoteProxyServer } from "./proxy-server.ts";
@@ -30,22 +32,17 @@ import { RemoteControlClient } from "./remote-control-client.ts";
 import { RemoteInstallHost } from "./remote-install-host.ts";
 import { validateSshDestination } from "./ssh.ts";
 
-const REMOTE_TTY_CACHE_MS = 1_000;
+const REMOTE_PANE_CACHE_MS = 1_000;
 const REMOTE_PID_BINDING_CACHE_MS = 1_000;
 const LOCAL_PANE_METADATA_CACHE_MS = 1_000;
 const REMOTE_HOOK_SOCKET_TMUX_OPTION = "@hmx-agent-socket-path";
 const REMOTE_PID_BINDING_SCRIPT = [
   'pid="$1"',
-  'tty="$2"',
-  'pane_pid="$3"',
+  'pane_pid="$2"',
   'case "$pid" in (""|*[!0-9]*) exit 1;; esac',
   'case "$pane_pid" in (""|*[!0-9]*) exit 1;; esac',
   '[ "$pid" -gt 1 ] || exit 1',
   '[ "$pane_pid" -gt 1 ] || exit 1',
-  'tty_name="$(ps -ww -o tty= -p "$pid" 2>/dev/null | tr -d "[:space:]")" || exit 1',
-  'case "$tty_name" in (""|"?"|"??"|"-") exit 1;; esac',
-  'case "$tty_name" in (/dev/*) tty_path="$tty_name";; (*) tty_path="/dev/$tty_name";; esac',
-  '[ "$tty_path" = "$tty" ] || exit 1',
   'current="$pid"',
   'seen=" "',
   'while [ "$current" -gt 1 ]; do',
@@ -72,7 +69,8 @@ interface CachedRemotePaneBindingValidation {
 
 interface CachedRemotePaneIdentityMap {
   at: number;
-  mappings: Map<string, { panePid: number; remotePaneId: string }>;
+  /** Remote pane id → remote pane pid (as reported by remote tmux). */
+  mappings: Map<string, number>;
 }
 
 interface RemotePermissionState {
@@ -96,13 +94,16 @@ export class RemoteServerManager extends EventEmitter {
   private agentIngresses = new Map<string, RemoteAgentIngress>();
   private clients = new Map<string, RemoteControlClient>();
   private localPaneMetadataCache: CachedLocalPaneMeta = { at: 0, mappings: new Map() };
-  private mirrors = new Map<string, MirrorLayoutManager>();
-  private paneMappings = new Map<string, RemotePaneMapping>();
+  private mirrors = new Map<string, RemoteMirror>();
+  /** Pending registration disposers held during convertPane's mid-mutation window. */
+  private pendingRegistrations = new Map<string, () => void>();
   private proxyServer: RemoteProxyServer;
   private remotePaneIdentityCache = new Map<string, CachedRemotePaneIdentityMap>();
   private remotePermissionStates = new Map<string, RemotePermissionState>();
   private remotePidBindingCache = new Map<string, CachedRemotePaneBindingValidation>();
   private remoteSessions = new Map<string, Map<string, AgentEvent>>();
+  /** Single derived view of all local→remote pane bindings, snapshot-driven. */
+  private routing = new RoutingCache();
   private servers = new Map<string, RemoteServerState>();
   private started = false;
 
@@ -129,15 +130,16 @@ export class RemoteServerManager extends EventEmitter {
       throw new Error(err);
     }
 
-    let remotePaneId = mirror.getRemotePaneId(localPaneId);
+    let remotePaneId = mirror.remotePaneFor(localPaneId);
     if (!remotePaneId) {
       log(
         "remote",
         `convertPane: missing mirror mapping for ${localPaneId} on ${this.serverTag(serverName)}, forcing sync`,
       );
-      await mirror.fullSync();
+      mirror.request();
+      await mirror.whenIdle();
       this.emitMirrorStateChange();
-      remotePaneId = mirror.getRemotePaneId(localPaneId);
+      remotePaneId = mirror.remotePaneFor(localPaneId);
     }
 
     if (!remotePaneId) {
@@ -148,18 +150,17 @@ export class RemoteServerManager extends EventEmitter {
 
     const proxyToken = randomBytes(32).toString("hex");
 
-    // Install the mapping and proxy expectation before the remote shell is
-    // respawned so any early prompt/output can be queued for the local proxy.
-    this.paneMappings.set(localPaneId, {
-      localPaneId,
-      remotePaneId,
-      serverName,
-    });
+    // Install the routing binding and proxy expectation before the remote
+    // shell is respawned so any early prompt/output can be queued for the
+    // local proxy. The routing-cache hold survives one reconcile after
+    // release; the disposer fires below in the catch and on revertPane.
+    const releaseRouting = this.routing.register({ localPaneId, remotePaneId, serverName });
+    this.pendingRegistrations.set(localPaneId, releaseRouting);
     this.proxyServer.expectProxy(localPaneId, proxyToken);
 
     try {
       // Respawn the remote pane with a shell
-      await client.sendCommand(`respawn-pane -k -t ${remotePaneId}`);
+      await client.sendCommand(`respawn-pane -k -t ${quoteTmuxArg("remotePaneId", remotePaneId)}`);
 
       // The remote pane's content was just reset by `respawn-pane`. Drop
       // the mirror's cached layout assertion for the enclosing window so
@@ -190,7 +191,9 @@ export class RemoteServerManager extends EventEmitter {
       await this.localClient.respawnPane(localPaneId, buildRemoteProxyProcessArgv(localPaneId, proxyToken));
     } catch (error) {
       this.proxyServer.forgetProxy(localPaneId);
-      this.paneMappings.delete(localPaneId);
+      releaseRouting();
+      this.routing.delete(localPaneId);
+      this.pendingRegistrations.delete(localPaneId);
       await this.clearLocalPaneOption(localPaneId, "@hmx-remote-host").catch(() => {});
       await this.clearLocalPaneOption(localPaneId, "@hmx-remote-pane").catch(() => {});
       await this.clearLocalPaneOption(localPaneId, "@hmx-remote-token").catch(() => {});
@@ -233,17 +236,17 @@ export class RemoteServerManager extends EventEmitter {
 
   /** Check if a pane is remote. */
   isRemotePane(paneId: string): RemotePaneMapping | undefined {
-    return this.paneMappings.get(paneId);
+    return this.routing.lookup(paneId);
   }
 
   /**
-   * Rebuild paneMappings for a server after Honeymux restart.
+   * Re-register proxy tokens for a server after Honeymux restart.
    *
    * Panes converted in a previous run have `@hmx-remote-host`,
    * `@hmx-remote-pane`, and `@hmx-remote-token` set in tmux state (which
-   * survives restart), but Honeymux's in-memory paneMappings and the
-   * proxy-server token table do not, so keystrokes and remote output
-   * stop flowing until we rebuild them.
+   * survives restart), but Honeymux's RoutingCache and the proxy-server
+   * token table do not, so keystrokes and remote output stop flowing
+   * until we rebuild them.
    *
    * Preferred path (token-reuse): when `@hmx-remote-token` is present, we
    * re-register the same token with the proxy server and let the
@@ -259,8 +262,8 @@ export class RemoteServerManager extends EventEmitter {
    *
    * Panes whose mirror mapping no longer resolves are treated as orphaned:
    * all remote-pane metadata is cleared and the border is reset so they no
-   * longer look remote. Expected to run after {@link
-   * MirrorLayoutManager.fullSync} completes.
+   * longer look remote. Expected to run after the mirror's first reconcile
+   * pass completes so `mirror.remotePaneFor()` is populated.
    */
   async recoverPaneMappings(serverName: string): Promise<void> {
     const mirror = this.mirrors.get(serverName);
@@ -287,12 +290,14 @@ export class RemoteServerManager extends EventEmitter {
       const cleaned = line.replace(/^ /, "").replace(/\r$/, "");
       const [paneId, host, token = ""] = cleaned.split("\t");
       if (!paneId || host !== serverName) continue;
-      if (this.paneMappings.has(paneId)) continue;
+      // Skip panes this Honeymux instance has already claimed. Starts
+      // empty each launch; populated by convertPane and below.
+      if (this.pendingRegistrations.has(paneId)) continue;
       candidates.push({ localPaneId: paneId, storedToken: token });
     }
 
     for (const { localPaneId, storedToken } of candidates) {
-      const remotePaneId = mirror.getRemotePaneId(localPaneId);
+      const remotePaneId = mirror.remotePaneFor(localPaneId);
       if (!remotePaneId) {
         log("remote", `recover: no mirror mapping for ${localPaneId}, clearing metadata`);
         await this.clearLocalPaneOption(localPaneId, "@hmx-remote-host").catch(() => {});
@@ -302,11 +307,8 @@ export class RemoteServerManager extends EventEmitter {
         continue;
       }
 
-      this.paneMappings.set(localPaneId, {
-        localPaneId,
-        remotePaneId,
-        serverName,
-      });
+      const releaseRouting = this.routing.register({ localPaneId, remotePaneId, serverName });
+      this.pendingRegistrations.set(localPaneId, releaseRouting);
 
       if (storedToken) {
         // Token-reuse path: no respawn, preserves the pane's visible content.
@@ -317,7 +319,9 @@ export class RemoteServerManager extends EventEmitter {
           this.emit("pane-converted", localPaneId, serverName);
         } catch (err) {
           this.proxyServer.forgetProxy(localPaneId);
-          this.paneMappings.delete(localPaneId);
+          releaseRouting();
+          this.routing.delete(localPaneId);
+          this.pendingRegistrations.delete(localPaneId);
           log("remote", `recover failed for ${localPaneId}: ${err instanceof Error ? err.message : String(err)}`);
         }
         continue;
@@ -337,7 +341,9 @@ export class RemoteServerManager extends EventEmitter {
         this.emit("pane-converted", localPaneId, serverName);
       } catch (err) {
         this.proxyServer.forgetProxy(localPaneId);
-        this.paneMappings.delete(localPaneId);
+        releaseRouting();
+        this.routing.delete(localPaneId);
+        this.pendingRegistrations.delete(localPaneId);
         log("remote", `recover failed for ${localPaneId}: ${err instanceof Error ? err.message : String(err)}`);
       }
     }
@@ -345,7 +351,7 @@ export class RemoteServerManager extends EventEmitter {
 
   respondToPermission(sessionId: string, toolUseId: string, decision: "allow" | "deny", paneId?: string): void {
     const key = toolUseId || sessionId;
-    const serverNameHint = paneId ? this.paneMappings.get(paneId)?.serverName : undefined;
+    const serverNameHint = paneId ? this.routing.lookup(paneId)?.serverName : undefined;
     const stateEntry = this.findPermissionState(sessionId, key, serverNameHint);
     if (!stateEntry) return;
 
@@ -369,7 +375,7 @@ export class RemoteServerManager extends EventEmitter {
    * Kills the proxy and respawns a local shell.
    */
   async revertPane(localPaneId: string): Promise<void> {
-    const mapping = this.paneMappings.get(localPaneId);
+    const mapping = this.routing.lookup(localPaneId);
     if (!mapping) return;
 
     this.proxyServer.forgetProxy(localPaneId);
@@ -385,7 +391,9 @@ export class RemoteServerManager extends EventEmitter {
     // Reset border to default
     await this.resetPaneBorder(localPaneId);
 
-    this.paneMappings.delete(localPaneId);
+    this.pendingRegistrations.get(localPaneId)?.();
+    this.pendingRegistrations.delete(localPaneId);
+    this.routing.delete(localPaneId);
     this.emit("pane-reverted", localPaneId);
   }
 
@@ -402,7 +410,7 @@ export class RemoteServerManager extends EventEmitter {
    * `send-keys` cannot reliably carry long binary payloads.
    */
   routeInput(paneId: string, data: string): boolean {
-    const mapping = this.paneMappings.get(paneId);
+    const mapping = this.routing.lookup(paneId);
     if (!mapping) return false;
 
     const client = this.clients.get(mapping.serverName);
@@ -471,18 +479,32 @@ export class RemoteServerManager extends EventEmitter {
       const client = new RemoteControlClient(
         config,
         mirrorSession,
-        ingress ? { localSocketPath: ingress.localSocketPath } : undefined,
+        ingress ? { authToken: ingress.authToken, localTcpPort: ingress.localTcpPort } : undefined,
       );
       this.clients.set(config.name, client);
 
-      const mirror = new MirrorLayoutManager(this.localClient, client);
-      mirror.isRemotePaneActive = (remotePaneId: string) => {
-        return this.findLocalPaneForRemote(config.name, remotePaneId) !== undefined;
-      };
-      mirror.onIntegrityWarning = (message: string) => {
-        log("remote", `mirror integrity issue for ${this.serverTag(config.name)}: ${message}`);
-        this.emit("warning", `Remote mirror integrity (${config.name}): ${message}`);
-      };
+      const mirror = new RemoteMirror({
+        activeRemotePaneIds: () => this.getActiveRemotePaneIdsForServer(config.name),
+        onReconciled: ({ local, remote }) => {
+          // Refresh the per-server routing cache from the latest local
+          // snapshot. Tags (@hmx-remote-host + @hmx-remote-pane) are the
+          // authoritative binding source; pending registrations
+          // installed by convertPane / recoverPaneMappings survive the
+          // rebuild until their disposers fire.
+          this.routing.rebuildForServer(config.name, local);
+          // Kill local proxy panes whose paired remote pane has vanished
+          // from the remote snapshot.
+          this.cleanupDeadLocalProxiesForServer(config.name, remote);
+          this.emitMirrorStateChange();
+        },
+        onWarning: (warning) => {
+          log("remote", `mirror integrity (${this.serverTag(config.name)}): ${warning.message}`);
+          this.emit("warning", `Remote mirror integrity (${config.name}): ${warning.message}`);
+        },
+        runLocal: (cmd) => this.localClient.runCommand(cmd),
+        runRemote: (cmd) => client.sendCommand(cmd),
+        serverName: config.name,
+      });
       this.mirrors.set(config.name, mirror);
 
       // Route remote %output to the correct proxy
@@ -493,16 +515,12 @@ export class RemoteServerManager extends EventEmitter {
         }
       });
 
-      // When a remote pane dies, clean up the local proxy pane.
-      // window-close: pane was the last in its window (common for mirror panes)
-      // layout-change: pane died in a multi-pane window
-      // exit: entire remote session died (last pane exited)
-      client.on("window-close", (windowId: string) => {
-        this.handleRemotePaneDeath(config.name, mirror, windowId);
-      });
-      client.on("layout-change", (_windowId: string) => {
-        this.checkForDeadRemotePanes(config.name).catch(() => {});
-      });
+      // Single reconcile request per remote-driven event. The queue inside
+      // RemoteMirror coalesces bursts (a typical session-window-changed
+      // can fan to many layout-change/window-add/window-close emits).
+      client.on("window-close", () => mirror.request());
+      client.on("window-add", () => mirror.request());
+      client.on("layout-change", () => mirror.request());
       client.on("tmux-exit", () => {
         this.handleRemoteTmuxExit(config.name);
       });
@@ -513,6 +531,18 @@ export class RemoteServerManager extends EventEmitter {
       // reconnects. A protocol %exit means the remote tmux session itself ended,
       // so the mapped local proxy panes must be torn down.
 
+      // sshd announces the allocated remote forward port on stderr; the control-mode
+      // `connected` event and the stderr line race. If `connected` fires first, the
+      // `configureRemoteHookSocketOption` call there will see remoteHookTcpPort
+      // === undefined and bail. This handler re-runs it once the port resolves so the
+      // tmux user-option always ends up populated.
+      client.on("hook-port-resolved", () => {
+        this.configureRemoteHookSocketOption(config.name).catch((err) => {
+          log("remote", `remote hook option setup failed for ${this.serverTag(config.name)}: ${err.message}`);
+          this.emit("warning", `Remote hook option setup failed for ${config.name}: ${err.message}`);
+        });
+      });
+
       // Track status changes
       client.on("status-change", (status: RemoteConnectionStatus, error?: string, _sshPid?: number) => {
         const s = this.servers.get(config.name);
@@ -522,7 +552,10 @@ export class RemoteServerManager extends EventEmitter {
         }
         this.emit("server-status-change", config.name, status, error);
 
-        // On reconnection, re-sync the mirror and check for dead panes
+        // On reconnection, re-sync the mirror and recover proxy tokens.
+        // The reconcile queue handles mirror structure; recoverPaneMappings
+        // handles local proxy-token re-registration for panes that
+        // survived a Honeymux restart.
         if (status === "connected") {
           this.configureRemoteHookSocketOption(config.name).catch((err) => {
             log("remote", `remote hook option setup failed for ${this.serverTag(config.name)}: ${err.message}`);
@@ -531,13 +564,10 @@ export class RemoteServerManager extends EventEmitter {
           this.refreshRemoteHooksIfConsented(config.name).catch(() => {
             // best-effort — refresh* helpers swallow per-agent errors internally
           });
+          mirror.request();
           mirror
-            .fullSync()
+            .whenIdle()
             .then(() => this.recoverPaneMappings(config.name))
-            .then(() => this.checkForDeadRemotePanes(config.name))
-            .then(() => {
-              this.emitMirrorStateChange();
-            })
             .catch((err) => {
               log("remote", `mirror sync failed for ${this.serverTag(config.name)}: ${err.message}`);
               this.emit("warning", `Mirror sync failed for ${config.name}: ${err.message}`);
@@ -557,6 +587,19 @@ export class RemoteServerManager extends EventEmitter {
   /** Stop all connections and clean up. */
   async stopAll(): Promise<void> {
     this.started = false;
+
+    // Best-effort: clear the per-server hook auth token from remote tmux's
+    // memory so it doesn't outlive our connection. Bounded so a hung client
+    // can't stall shutdown.
+    const cleanups: Promise<unknown>[] = [];
+    for (const client of this.clients.values()) {
+      if (!client.isConnected) continue;
+      cleanups.push(client.sendCommand(`set-option -gqu ${REMOTE_HOOK_SOCKET_TMUX_OPTION}`).catch(() => {}));
+    }
+    if (cleanups.length > 0) {
+      await Promise.race([Promise.allSettled(cleanups), new Promise<void>((resolve) => setTimeout(resolve, 250))]);
+    }
+
     for (const ingress of this.agentIngresses.values()) {
       ingress.close();
     }
@@ -568,7 +611,8 @@ export class RemoteServerManager extends EventEmitter {
     this.clients.clear();
     this.mirrors.clear();
     this.servers.clear();
-    this.paneMappings.clear();
+    this.routing.clear();
+    this.pendingRegistrations.clear();
     this.remotePaneIdentityCache.clear();
     this.remotePidBindingCache.clear();
     this.localPaneMetadataCache = { at: 0, mappings: new Map() };
@@ -577,38 +621,37 @@ export class RemoteServerManager extends EventEmitter {
   }
 
   /**
-   * For layout-change events: query live remote panes and clean up any
-   * mapped panes that no longer exist.
+   * After a reconcile pass: kill any local proxy pane whose paired remote
+   * pane no longer exists in the remote snapshot.
+   *
+   * The reconciler handles mirror-layout cleanup (killing orphan remote
+   * panes). This handler covers the local-proxy lifecycle: when the user
+   * exits the remote shell, we want the local pane to close too. The
+   * remote snapshot is the authoritative live-pane set; any paneMapping
+   * pointing at a remote id not present in the snapshot is stale.
+   *
+   * An empty snapshot is treated as "query unavailable" — we don't kill
+   * anything, since assuming all remote panes are dead during a transient
+   * snapshot failure would be much worse than waiting a beat.
    */
-  private async checkForDeadRemotePanes(serverName: string): Promise<void> {
-    const client = this.clients.get(serverName);
-    if (!client || !client.isConnected) return;
-
-    let output: string;
-    try {
-      output = await client.sendCommand("list-panes -a -F ' #{pane_id}\t#{pane_dead}'");
-    } catch {
-      // Connection failed during query — don't assume panes are dead
-      return;
+  private cleanupDeadLocalProxiesForServer(serverName: string, remoteSnapshot: MirrorSnapshot): void {
+    const livePaneIds = new Set<string>();
+    for (const panes of remoteSnapshot.panesByWindow.values()) {
+      for (const pane of panes) livePaneIds.add(pane.id);
     }
+    if (livePaneIds.size === 0) return;
 
-    const remotePaneStates = new Map<string, boolean>();
-    for (const line of output.split("\n")) {
-      if (!line.trim()) continue;
-      const cleaned = line.replace(/^ /, "").replace(/\r$/, "");
-      const [paneId, paneDead = "0"] = cleaned.split("\t");
-      if (!paneId) continue;
-      remotePaneStates.set(paneId, paneDead === "1");
-    }
-
-    // If we got no panes at all, the query likely failed — don't kill anything.
-    if (remotePaneStates.size === 0) return;
-
-    for (const [localPaneId, mapping] of [...this.paneMappings]) {
-      if (mapping.serverName !== serverName) continue;
-      const paneDead = remotePaneStates.get(mapping.remotePaneId);
-      if (paneDead === undefined || paneDead) {
-        this.killLocalProxyPane(localPaneId);
+    for (const mapping of [...this.routing.forServer(serverName)]) {
+      // Skip bindings still held in the routing-cache pending overlay:
+      // convertPane / recoverPaneMappings install the binding before the
+      // snapshot has observed the corresponding @hmx-remote-* tags, and the
+      // pre-mutation remote snapshot we're walking here can lag the actual
+      // remote state by one reconcile cycle. The pending overlay
+      // auto-retires once the local snapshot picks up the tags, so this
+      // guard only protects truly in-flight conversions.
+      if (this.routing.isPending(mapping.localPaneId)) continue;
+      if (!livePaneIds.has(mapping.remotePaneId)) {
+        this.killLocalProxyPane(mapping.localPaneId);
       }
     }
   }
@@ -651,11 +694,18 @@ export class RemoteServerManager extends EventEmitter {
 
   private async configureRemoteHookSocketOption(serverName: string): Promise<void> {
     const client = this.clients.get(serverName);
-    const remoteHookSocketPath = client?.remoteHookSocketPath;
-    if (!client || !remoteHookSocketPath) return;
+    if (!client) return;
+    // Skip when the SSH server rejected our `-R` request — there's no
+    // forward to point hooks at, and re-asserting the option would mislead
+    // the remote hook scripts into connecting to a port that doesn't exist.
+    if (client.hookForwardingRejected) return;
+    const port = client.remoteHookTcpPort;
+    const token = client.hookAuthToken;
+    if (port === undefined || !token) return;
 
+    const value = `tcp://127.0.0.1:${port}#${token}`;
     await client.sendCommand(
-      `set-option -gq ${REMOTE_HOOK_SOCKET_TMUX_OPTION} ${quoteTmuxArg("remote hook socket path", remoteHookSocketPath)}`,
+      `set-option -gq ${REMOTE_HOOK_SOCKET_TMUX_OPTION} ${quoteTmuxArg("remote hook socket path", value)}`,
     );
   }
 
@@ -688,12 +738,7 @@ export class RemoteServerManager extends EventEmitter {
 
   /** Find which local pane maps to a given remote pane on a server. */
   private findLocalPaneForRemote(serverName: string, remotePaneId: string): string | undefined {
-    for (const [localPaneId, mapping] of this.paneMappings) {
-      if (mapping.serverName === serverName && mapping.remotePaneId === remotePaneId) {
-        return localPaneId;
-      }
-    }
-    return undefined;
+    return this.routing.findLocalForRemote(serverName, remotePaneId);
   }
 
   private findPermissionState(
@@ -709,6 +754,14 @@ export class RemoteServerManager extends EventEmitter {
       }
     }
     return undefined;
+  }
+
+  /**
+   * The set of remote pane ids currently hosting an active local proxy
+   * process for this server, fed into the reconciler's active-pane guard.
+   */
+  private getActiveRemotePaneIdsForServer(serverName: string): ReadonlySet<string> {
+    return this.routing.activeRemotePaneIds(serverName);
   }
 
   private async getLocalPaneMetadata(paneId: string): Promise<{ sessionName: string; windowId: string } | undefined> {
@@ -735,50 +788,23 @@ export class RemoteServerManager extends EventEmitter {
     return this.localPaneMetadataCache.mappings.get(paneId);
   }
 
-  private async getRemotePaneBindingForTty(serverName: string, tty: string): Promise<RemotePaneBinding | undefined> {
-    const identity = await this.getRemotePaneIdentityForTty(serverName, tty);
-    if (!identity) return undefined;
+  /**
+   * Resolve the binding for a remote pane id (as captured by the hook via
+   * `$TMUX_PANE` on the remote). Returns the local pane id the user sees,
+   * plus the remote pane pid for ancestry validation.
+   */
+  private async getRemotePaneBindingForPaneId(
+    serverName: string,
+    remotePaneId: string,
+  ): Promise<RemotePaneBinding | undefined> {
+    await this.refreshRemotePaneIdentityCache(serverName);
+    const panePid = this.remotePaneIdentityCache.get(serverName)?.mappings.get(remotePaneId);
+    if (panePid === undefined) return undefined;
 
-    const localPaneId = this.findLocalPaneForRemote(serverName, identity.remotePaneId);
+    const localPaneId = this.findLocalPaneForRemote(serverName, remotePaneId);
     if (!localPaneId) return undefined;
 
-    return {
-      localPaneId,
-      panePid: identity.panePid,
-      remotePaneId: identity.remotePaneId,
-    };
-  }
-
-  private async getRemotePaneIdentityForTty(
-    serverName: string,
-    tty: string,
-  ): Promise<{ panePid: number; remotePaneId: string } | undefined> {
-    const cached = this.remotePaneIdentityCache.get(serverName);
-    const now = Date.now();
-    if (cached && now - cached.at < REMOTE_TTY_CACHE_MS) {
-      return cached.mappings.get(tty);
-    }
-
-    const client = this.clients.get(serverName);
-    if (!client || !client.isConnected) return undefined;
-
-    try {
-      const output = await client.sendCommand("list-panes -a -F '#{pane_tty}\t#{pane_id}\t#{pane_pid}'");
-      const mappings = new Map<string, { panePid: number; remotePaneId: string }>();
-      for (const line of output.split("\n")) {
-        if (!line.trim()) continue;
-        const parts = line.split("\t");
-        const paneTty = parts[0];
-        const paneId = parts[1];
-        const panePid = parseInt(parts[2] ?? "", 10);
-        if (!paneTty || !paneId || !Number.isInteger(panePid) || panePid <= 1) continue;
-        mappings.set(paneTty, { panePid, remotePaneId: paneId });
-      }
-      this.remotePaneIdentityCache.set(serverName, { at: now, mappings });
-      return mappings.get(tty);
-    } catch {
-      return undefined;
-    }
+    return { localPaneId, panePid, remotePaneId };
   }
 
   /**
@@ -789,7 +815,7 @@ export class RemoteServerManager extends EventEmitter {
    * locally) and is whatever local tmux let through to the focused pane.
    */
   private handleProxyInput = (paneId: string, data: Uint8Array): void => {
-    const mapping = this.paneMappings.get(paneId);
+    const mapping = this.routing.lookup(paneId);
     if (!mapping) return;
     const client = this.clients.get(mapping.serverName);
     if (!client || !client.isConnected) return;
@@ -801,29 +827,14 @@ export class RemoteServerManager extends EventEmitter {
       .catch(() => {});
   };
 
-  /**
-   * Handle a remote window closing. Since each mirror window maps to a local
-   * window, any pane mapped to that remote window is now dead.
-   */
-  private handleRemotePaneDeath(serverName: string, _mirror: MirrorLayoutManager, _remoteWindowId: string): void {
-    // A remote window closed — use the query-based check to find dead panes
-    this.checkForDeadRemotePanes(serverName).catch(() => {});
-  }
-
   private handleRemoteTmuxExit(serverName: string): void {
-    for (const [localPaneId, mapping] of [...this.paneMappings]) {
-      if (mapping.serverName !== serverName) continue;
-      this.killLocalProxyPane(localPaneId);
+    for (const mapping of [...this.routing.forServer(serverName)]) {
+      this.killLocalProxyPane(mapping.localPaneId);
     }
   }
 
-  private async isRemotePidBoundToPane(
-    serverName: string,
-    pid: number,
-    tty: string,
-    panePid: number,
-  ): Promise<boolean> {
-    const cacheKey = `${serverName}\u0000${pid}\u0000${tty}\u0000${panePid}`;
+  private async isRemotePidBoundToPane(serverName: string, pid: number, panePid: number): Promise<boolean> {
+    const cacheKey = `${serverName}\u0000${pid}\u0000${panePid}`;
     const cached = this.remotePidBindingCache.get(cacheKey);
     const now = Date.now();
     if (cached && now - cached.at < REMOTE_PID_BINDING_CACHE_MS) {
@@ -840,7 +851,6 @@ export class RemoteServerManager extends EventEmitter {
         REMOTE_PID_BINDING_SCRIPT,
         "sh",
         String(pid),
-        tty,
         String(panePid),
       ]);
       const valid = result.exitCode === 0;
@@ -854,7 +864,9 @@ export class RemoteServerManager extends EventEmitter {
   /** Clean up a local proxy pane whose remote pane died. */
   private killLocalProxyPane(localPaneId: string): void {
     this.endRemoteSessionsForLocalPane(localPaneId);
-    this.paneMappings.delete(localPaneId);
+    this.pendingRegistrations.get(localPaneId)?.();
+    this.pendingRegistrations.delete(localPaneId);
+    this.routing.delete(localPaneId);
     this.proxyServer.forgetProxy(localPaneId);
     this.clearLocalPaneOption(localPaneId, "@hmx-remote-host").catch(() => {});
     this.clearLocalPaneOption(localPaneId, "@hmx-remote-pane").catch(() => {});
@@ -878,13 +890,13 @@ export class RemoteServerManager extends EventEmitter {
       windowId: undefined,
     };
 
-    if (!event.tty) return normalized;
+    if (!event.paneId) return normalized;
 
-    const binding = await this.getRemotePaneBindingForTty(serverName, event.tty);
-    if (!binding) return normalized;
+    const localPaneId = this.findLocalPaneForRemote(serverName, event.paneId);
+    if (!localPaneId) return normalized;
 
-    normalized.paneId = binding.localPaneId;
-    const localPaneMeta = await this.getLocalPaneMetadata(binding.localPaneId);
+    normalized.paneId = localPaneId;
+    const localPaneMeta = await this.getLocalPaneMetadata(localPaneId);
     if (localPaneMeta) {
       normalized.sessionName = localPaneMeta.sessionName;
       normalized.windowId = localPaneMeta.windowId;
@@ -938,6 +950,31 @@ export class RemoteServerManager extends EventEmitter {
     ]);
   }
 
+  private async refreshRemotePaneIdentityCache(serverName: string): Promise<void> {
+    const cached = this.remotePaneIdentityCache.get(serverName);
+    const now = Date.now();
+    if (cached && now - cached.at < REMOTE_PANE_CACHE_MS) return;
+
+    const client = this.clients.get(serverName);
+    if (!client || !client.isConnected) return;
+
+    try {
+      const output = await client.sendCommand("list-panes -a -F '#{pane_id}\t#{pane_pid}'");
+      const mappings = new Map<string, number>();
+      for (const line of output.split("\n")) {
+        if (!line.trim()) continue;
+        const parts = line.split("\t");
+        const paneId = parts[0];
+        const panePid = parseInt(parts[1] ?? "", 10);
+        if (!paneId || !Number.isInteger(panePid) || panePid <= 1) continue;
+        mappings.set(paneId, panePid);
+      }
+      this.remotePaneIdentityCache.set(serverName, { at: now, mappings });
+    } catch {
+      // Best-effort: leave any stale cache in place.
+    }
+  }
+
   private async resetPaneBorder(localPaneId: string): Promise<void> {
     await this.localClient
       .runCommandArgs(["set-option", "-pu", "-t", localPaneId, "pane-border-format"])
@@ -959,15 +996,15 @@ export class RemoteServerManager extends EventEmitter {
     if (!mirror) return;
 
     const updates: Array<{ localPaneId: string; remotePaneId: string }> = [];
-    for (const [localPaneId, mapping] of this.paneMappings) {
-      if (mapping.serverName !== serverName) continue;
-      const remotePaneId = mirror.getRemotePaneId(localPaneId);
+    for (const mapping of [...this.routing.forServer(serverName)]) {
+      const remotePaneId = mirror.remotePaneFor(mapping.localPaneId);
       if (!remotePaneId || remotePaneId === mapping.remotePaneId) continue;
-      this.paneMappings.set(localPaneId, {
-        ...mapping,
-        remotePaneId,
-      });
-      updates.push({ localPaneId, remotePaneId });
+      // updateIfBound does NOT create a pending hold — this is an
+      // index-fix-up for an existing binding whose lifecycle is owned
+      // elsewhere (convertPane / recoverPaneMappings). Using register()
+      // here would leak undisposed pending entries.
+      this.routing.updateIfBound({ ...mapping, remotePaneId });
+      updates.push({ localPaneId: mapping.localPaneId, remotePaneId });
     }
 
     await Promise.all(
@@ -1006,76 +1043,48 @@ export class RemoteServerManager extends EventEmitter {
   ): Promise<boolean> {
     const valid = await validateRemoteAgentEvent(event, {
       processLookup: ctx.processLookup,
-      resolvePaneBinding: (tty) => this.getRemotePaneBindingForTty(serverName, tty),
-      validateProcessBinding: (pid, tty, panePid) => this.isRemotePidBoundToPane(serverName, pid, tty, panePid),
+      resolvePaneBindingByPaneId: (paneId) => this.getRemotePaneBindingForPaneId(serverName, paneId),
+      validateProcessBinding: (pid, panePid) => this.isRemotePidBoundToPane(serverName, pid, panePid),
     });
     if (!valid) {
       log(
         "remote",
-        `rejected remote hook event for ${this.serverTag(serverName)} session=${event.sessionId} pid=${event.pid ?? "<none>"} tty=${event.tty ?? "<none>"}`,
+        `rejected remote hook event for ${this.serverTag(serverName)} session=${event.sessionId} pid=${event.pid ?? "<none>"} paneId=${event.paneId ?? "<none>"}`,
       );
     }
     return valid;
   }
 
-  /** Wire local control client events to mirror managers. */
+  /**
+   * Wire local control client events to the per-server reconcile queue.
+   *
+   * Each event just enqueues a reconcile request — the queue coalesces
+   * bursts (a session-window-changed typically fans to several
+   * layout-change emissions) and runs reconcile once. The downstream
+   * routing cache remaps to the latest snapshot via `syncPaneMappingsFromMirror`
+   * after the queue idles.
+   */
   private wireLocalEvents(): void {
-    this.localClient.on("session-window-changed", () => {
-      for (const [serverName, mirror] of this.mirrors) {
-        const client = this.clients.get(serverName);
-        if (!client?.isConnected) continue;
-        // Detached/new sessions do not reliably emit window-add to the
-        // currently attached control client, so a session switch needs a full
-        // mirror rescan to make newly created panes convertible.
-        mirror
-          .fullSync()
-          .then(() => this.syncPaneMappingsFromMirror(serverName))
-          .then(() => {
-            this.emitMirrorStateChange();
-          })
-          .catch((err) => {
-            this.emit("warning", `Mirror session sync failed: ${err.message}`);
-          });
+    const requestAll = (): void => {
+      for (const mirror of this.mirrors.values()) {
+        mirror.request();
       }
-    });
-
-    this.localClient.on("layout-change", (windowId: string, layoutStr: string) => {
-      for (const [serverName, mirror] of this.mirrors) {
+      // syncPaneMappingsFromMirror runs opportunistically once the
+      // queue settles; the onReconciled callback fires emitMirrorStateChange
+      // already, so we don't need to chain a second emit here.
+      for (const serverName of this.mirrors.keys()) {
+        const mirror = this.mirrors.get(serverName);
+        if (!mirror) continue;
         mirror
-          .onLayoutChange(windowId, layoutStr)
+          .whenIdle()
           .then(() => this.syncPaneMappingsFromMirror(serverName))
-          .then(() => {
-            this.emitMirrorStateChange();
-          })
-          .catch((err) => {
-            this.emit("warning", `Mirror layout sync failed: ${err.message}`);
-          });
-      }
-    });
-
-    this.localClient.on("window-add", (windowId: string) => {
-      for (const [serverName, mirror] of this.mirrors) {
-        mirror
-          .onWindowAdd(windowId)
-          .then(() => this.syncPaneMappingsFromMirror(serverName))
-          .then(() => {
-            this.emitMirrorStateChange();
-          })
           .catch(() => {});
       }
-    });
-
-    this.localClient.on("window-close", (windowId: string) => {
-      for (const [serverName, mirror] of this.mirrors) {
-        mirror
-          .onWindowClose(windowId)
-          .then(() => this.syncPaneMappingsFromMirror(serverName))
-          .then(() => {
-            this.emitMirrorStateChange();
-          })
-          .catch(() => {});
-      }
-    });
+    };
+    this.localClient.on("session-window-changed", requestAll);
+    this.localClient.on("layout-change", requestAll);
+    this.localClient.on("window-add", requestAll);
+    this.localClient.on("window-close", requestAll);
   }
 }
 

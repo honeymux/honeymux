@@ -75,6 +75,11 @@ export class ControlModeParser {
     this.discardingOversizedLine = false;
   }
 
+  parseChunk(chunk: Uint8Array): void {
+    if (chunk.byteLength === 0) return;
+    this.consumeChunk(chunk);
+  }
+
   parseLine(line: string): void {
     if (Buffer.byteLength(line) > MAX_CONTROL_LINE_BYTES) {
       this.handleOversizedLine();
@@ -87,6 +92,15 @@ export class ControlModeParser {
     }
 
     this.parseDecodedLine(line, Buffer.byteLength(line));
+  }
+
+  /** Flush any line buffered without a terminating newline. */
+  parseTail(): void {
+    if (!this.discardingOversizedLine && this.lineBuffer.byteLength > 0) {
+      this.parseRawLine(this.lineBuffer);
+    }
+    this.lineBuffer = Buffer.alloc(0);
+    this.discardingOversizedLine = false;
   }
 
   private consumeChunk(chunk: Uint8Array): void {
