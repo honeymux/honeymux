@@ -23,8 +23,9 @@ function makeStubIngress(): {
   const respondToPermission = mock((_route: RemotePermissionRoute, _decision: "allow" | "deny") => true);
   return {
     ingress: {
+      authToken: "test-token-abc",
       close: mock(() => {}),
-      localSocketPath: "/tmp/hmx-remote-hook.sock",
+      localTcpPort: 51234,
       respondToPermission,
       start: mock(() => {}),
     },
@@ -416,21 +417,42 @@ describe("RemoteServerManager remote hook ingress", () => {
     expect(forgetProxy).not.toHaveBeenCalled();
   });
 
-  it("stores the remote hook socket path in tmux state instead of process environment", async () => {
+  it("stores the remote hook tcp endpoint and auth token in tmux state", async () => {
     const sendCommand = mock(async () => "");
     const localClient = {} as any;
     const manager = new RemoteServerManager(localClient, [{ host: "dev-box", name: "dev-box" }]);
 
     (manager as any).clients.set("dev-box", {
-      remoteHookSocketPath: "/home/dev/.local/state/honeymux/runtime/hmx-remote-hook-0123456789abcdef.sock",
+      hookForwardingRejected: false,
+      remoteHookTcpPort: 46157,
       sendCommand,
     });
+    const { ingress } = makeStubIngress();
+    (manager as any).agentIngresses.set("dev-box", ingress);
 
     await (manager as any).configureRemoteHookSocketOption("dev-box");
 
     expect(sendCommand).toHaveBeenCalledWith(
-      "set-option -gq @hmx-agent-socket-path '/home/dev/.local/state/honeymux/runtime/hmx-remote-hook-0123456789abcdef.sock'",
+      "set-option -gq @hmx-agent-socket-path 'tcp://127.0.0.1:46157#test-token-abc'",
     );
+  });
+
+  it("does not configure the remote hook option when forwarding has been rejected", async () => {
+    const sendCommand = mock(async () => "");
+    const localClient = {} as any;
+    const manager = new RemoteServerManager(localClient, [{ host: "dev-box", name: "dev-box" }]);
+
+    (manager as any).clients.set("dev-box", {
+      hookForwardingRejected: true,
+      remoteHookTcpPort: 46157,
+      sendCommand,
+    });
+    const { ingress } = makeStubIngress();
+    (manager as any).agentIngresses.set("dev-box", ingress);
+
+    await (manager as any).configureRemoteHookSocketOption("dev-box");
+
+    expect(sendCommand).not.toHaveBeenCalled();
   });
 
   it("kills mapped local proxy panes when the remote tmux session exits", () => {

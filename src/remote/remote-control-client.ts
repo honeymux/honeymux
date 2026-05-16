@@ -1,5 +1,3 @@
-import { createHash } from "node:crypto";
-
 import type { RemoteConnectionStatus, RemoteServerConfig } from "./types.ts";
 
 import { MIN_CONTROL_CLIENT_SIZE } from "../tmux/control-client-bootstrap.ts";
@@ -16,20 +14,24 @@ interface PendingCommand {
   resolve: (output: string) => void;
 }
 
+/** Wires SSH `-R` to forward a remote loopback TCP port back to the local agent ingress. */
 interface RemoteHookForwardConfig {
-  localSocketPath: string;
+  /** Local 127.0.0.1 TCP port the agent ingress is listening on. */
+  localTcpPort: number;
 }
 
-const REMOTE_HOOK_SOCKET_PATH_SCRIPT = [
-  "state_home=${XDG_STATE_HOME:-$HOME/.local/state}",
-  'runtime="$state_home/honeymux/runtime"',
-  'mkdir -p "$runtime"',
-  'chmod 700 "$runtime" 2>/dev/null || true',
-  'rm -f "$runtime/$1"',
-  `printf '%s/%s\\n' "$runtime" "$1"`,
-].join("\n");
+const HOOK_FORWARD_LOOPBACK_HOST = "127.0.0.1";
 const MAX_SSH_STDERR_CHARS = 8 * 1024;
 const MAX_SSH_WARNING_CHARS = 512;
+// OpenSSH stderr after a `-R` request: `Allocated port <N> for remote forward to <host>:<port>`.
+const REMOTE_FORWARD_ALLOCATED_RE = /^Allocated port (\d{1,5}) for remote forward to /m;
+// OpenSSH errors when a remote forward is rejected. Stream-local message is kept for completeness
+// even though the new TCP path no longer emits it; allows graceful degradation if the SSH server
+// refuses TCP `-R` too (rare).
+const REMOTE_FORWARD_REJECTED_PATTERNS = [
+  "remote port forwarding failed for listen port",
+  "remote port forwarding failed for listen path",
+];
 
 /**
  * SSH-tunneled tmux control mode client.
@@ -48,19 +50,27 @@ const MAX_SSH_WARNING_CHARS = 512;
  *   window-pane-changed(windowId: string, paneId: string)
  *   exit()
  *   status-change(status: RemoteConnectionStatus, error?: string)
+ *   hook-port-resolved(port: number) — sshd-allocated remote forward port for the hook ingress
  *   warning(message: string)
  */
 export class RemoteControlClient extends EventEmitter {
+  /** True once the SSH server has rejected our hook forward; we won't request it again. */
+  get hookForwardingRejected(): boolean {
+    return this.hookForwardingFailed;
+  }
   get isConnected(): boolean {
     return !this.closed && this.proc !== null;
   }
-  get remoteHookSocketPath(): string | undefined {
-    return this.resolvedRemoteHookSocketPath ?? undefined;
+  /** Remote loopback TCP port that forwards back to the local agent ingress. */
+  get remoteHookTcpPort(): number | undefined {
+    return this.resolvedRemoteForwardPort ?? undefined;
   }
   get sshPid(): number | undefined {
     return this.proc?.pid;
   }
+  private allocatedPortBuffer = "";
   private closed = false;
+  private hookForwardingFailed = false;
   private intentionallyClosed = false;
   private lastStderr = "";
   private lastStderrWasTruncated = false;
@@ -75,7 +85,7 @@ export class RemoteControlClient extends EventEmitter {
   private ready: Promise<void> | null = null;
   private readyReject: ((err: Error) => void) | null = null;
   private readyResolve: (() => void) | null = null;
-  private resolvedRemoteHookSocketPath: null | string = null;
+  private resolvedRemoteForwardPort: null | number = null;
 
   constructor(
     private config: RemoteServerConfig,
@@ -87,16 +97,12 @@ export class RemoteControlClient extends EventEmitter {
 
   /** Connect to the remote tmux in control mode. Creates session if needed. */
   async connect(): Promise<void> {
-    this.closed = false;
-    this.pendingQueue = [];
-    this.parser = null;
+    this.resetConnectionState();
 
     this.ready = new Promise((resolve, reject) => {
       this.readyResolve = resolve;
       this.readyReject = reject;
     });
-
-    await this.ensureRemoteHookSocketPath();
 
     // First, ensure the mirror session exists on the remote
     const checkProc = Bun.spawn(
@@ -245,10 +251,17 @@ export class RemoteControlClient extends EventEmitter {
     if (this.config.port) args.push("-p", String(this.config.port));
     if (this.config.identityFile) args.push("-i", this.config.identityFile);
     if (this.config.agentForwarding) args.push("-A");
-    if (includeHookForward && this.hookForward && this.resolvedRemoteHookSocketPath) {
-      args.push("-o", "ExitOnForwardFailure=yes");
-      args.push("-o", "StreamLocalBindUnlink=yes");
-      args.push("-R", `${this.resolvedRemoteHookSocketPath}:${this.hookForward.localSocketPath}`);
+    if (includeHookForward && this.hookForward && !this.hookForwardingFailed) {
+      // TCP `-R` form (remote-host:remote-port:local-host:local-port). The remote-port `0`
+      // makes sshd pick an ephemeral port and announce it on stderr, which we capture and
+      // surface via `remoteHookTcpPort`. We bind on the remote loopback (127.0.0.1) so only
+      // processes on the remote host can reach the forward; the agent-ingress requires a
+      // shared-secret token (set in the tmux user-option) on top of that.
+      //
+      // We deliberately avoid `ExitOnForwardFailure=yes` here: if the remote rejects the
+      // forward, we want to detect it from stderr and fall back to "hooks disabled" rather
+      // than tearing down the SSH session and looping at backoff forever.
+      args.push("-R", `${HOOK_FORWARD_LOOPBACK_HOST}:0:${HOOK_FORWARD_LOOPBACK_HOST}:${this.hookForward.localTcpPort}`);
     }
     appendSshDestination(args, this.config.host);
     return args;
@@ -291,25 +304,10 @@ export class RemoteControlClient extends EventEmitter {
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
-          const chunk = decoder.decode(value, { stream: true });
-          const next = appendBoundedSshText(this.lastStderr, chunk, MAX_SSH_STDERR_CHARS);
-          this.lastStderr = next.text;
-          this.lastStderrWasTruncated ||= next.wasTruncated;
-          const message = truncateSshText(chunk, MAX_SSH_WARNING_CHARS);
-          if (message) {
-            this.emit("warning", message);
-          }
+          this.processStderrChunk(decoder.decode(value, { stream: true }));
         }
         const tail = decoder.decode();
-        if (tail) {
-          const next = appendBoundedSshText(this.lastStderr, tail, MAX_SSH_STDERR_CHARS);
-          this.lastStderr = next.text;
-          this.lastStderrWasTruncated ||= next.wasTruncated;
-          const message = truncateSshText(tail, MAX_SSH_WARNING_CHARS);
-          if (message) {
-            this.emit("warning", message);
-          }
-        }
+        if (tail) this.processStderrChunk(tail);
       } catch {}
       this.lastStderr = finalizeSshText(this.lastStderr, this.lastStderrWasTruncated);
       if (this.lastStderr) {
@@ -318,34 +316,60 @@ export class RemoteControlClient extends EventEmitter {
     })();
   }
 
-  private async ensureRemoteHookSocketPath(): Promise<void> {
-    if (!this.hookForward || this.resolvedRemoteHookSocketPath) return;
-
-    const remoteCommand = buildRemoteHookSocketPathProbeCommand(this.getRemoteHookSocketName());
-    try {
-      const { exitCode, stderr, stdout } = await this.runRemoteProcess(remoteCommand);
-      if (exitCode !== 0) {
-        const detail = stderr ? `: ${stderr}` : "";
-        this.emit("warning", `remote hook socket path probe failed${detail}`);
-        return;
-      }
-
-      const path = stdout.trim();
-      if (!path.startsWith("/")) {
-        this.emit("warning", `remote hook socket path probe returned invalid path: ${path || "<empty>"}`);
-        return;
-      }
-
-      this.resolvedRemoteHookSocketPath = path;
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      this.emit("warning", `remote hook socket path probe failed: ${message}`);
-    }
+  /**
+   * OpenSSH prints `Allocated port N for remote forward to ...` on stderr when our
+   * `-R 0:...` request is honored. Buffer raw stderr (chunks may split mid-line) until we
+   * see the message and capture the port. Subsequent occurrences are ignored.
+   */
+  private maybeCaptureAllocatedPort(chunk: string): void {
+    if (!this.hookForward || this.resolvedRemoteForwardPort !== null) return;
+    this.allocatedPortBuffer = (this.allocatedPortBuffer + chunk).slice(-2048);
+    const match = REMOTE_FORWARD_ALLOCATED_RE.exec(this.allocatedPortBuffer);
+    if (!match) return;
+    const port = Number(match[1]);
+    if (!Number.isInteger(port) || port < 1 || port > 65_535) return;
+    this.resolvedRemoteForwardPort = port;
+    this.allocatedPortBuffer = "";
+    // The "Allocated port" stderr line and the control-mode `connected` event
+    // race; whichever loses, this event lets the manager retry option setup
+    // without dropping the configuration.
+    this.emit("hook-port-resolved", port);
   }
 
-  private getRemoteHookSocketName(): string {
-    const digest = createHash("sha256").update(`${this.config.name}\0${this.mirrorSession}`).digest("hex").slice(0, 16);
-    return `hmx-remote-hook-${digest}.sock`;
+  private maybeMarkHookForwardingFailure(chunk: string): void {
+    if (this.hookForwardingFailed || !this.hookForward) return;
+    if (!REMOTE_FORWARD_REJECTED_PATTERNS.some((pattern) => chunk.includes(pattern))) return;
+    this.hookForwardingFailed = true;
+    log(
+      "remote",
+      `remote ssh server rejected hook port forward (${this.config.name}); agent hooks disabled for this server`,
+    );
+    this.emit("warning", "remote ssh server rejected hook port forwarding; agent hooks disabled for this server.");
+  }
+
+  private processStderrChunk(chunk: string): void {
+    const next = appendBoundedSshText(this.lastStderr, chunk, MAX_SSH_STDERR_CHARS);
+    this.lastStderr = next.text;
+    this.lastStderrWasTruncated ||= next.wasTruncated;
+    this.maybeCaptureAllocatedPort(chunk);
+    this.maybeMarkHookForwardingFailure(chunk);
+    const message = truncateSshText(chunk, MAX_SSH_WARNING_CHARS);
+    if (message) this.emit("warning", message);
+  }
+
+  /**
+   * Clears per-connection state at the start of each connect() so a transient
+   * sshd misconfiguration that flipped `hookForwardingFailed` true doesn't
+   * permanently disable `-R` for this client. The cached forward port is
+   * also reset so we re-capture it from the next stderr `Allocated port` line.
+   */
+  private resetConnectionState(): void {
+    this.closed = false;
+    this.pendingQueue = [];
+    this.parser = null;
+    this.resolvedRemoteForwardPort = null;
+    this.allocatedPortBuffer = "";
+    this.hookForwardingFailed = false;
   }
 
   private async runRemoteProcess(
@@ -427,10 +451,6 @@ export function appendBoundedSshText(
     text: combined.slice(combined.length - maxChars),
     wasTruncated: true,
   };
-}
-
-export function buildRemoteHookSocketPathProbeCommand(socketName: string): string {
-  return buildRemoteShellCommand(["sh", "-lc", REMOTE_HOOK_SOCKET_PATH_SCRIPT, "sh", socketName]);
 }
 
 export function finalizeSshText(text: string, wasTruncated = false): string {

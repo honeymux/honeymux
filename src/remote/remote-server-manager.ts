@@ -471,7 +471,7 @@ export class RemoteServerManager extends EventEmitter {
       const client = new RemoteControlClient(
         config,
         mirrorSession,
-        ingress ? { localSocketPath: ingress.localSocketPath } : undefined,
+        ingress ? { localTcpPort: ingress.localTcpPort } : undefined,
       );
       this.clients.set(config.name, client);
 
@@ -512,6 +512,16 @@ export class RemoteServerManager extends EventEmitter {
       // Plain SSH disconnects do not emit "tmux-exit", so pane mappings survive
       // reconnects. A protocol %exit means the remote tmux session itself ended,
       // so the mapped local proxy panes must be torn down.
+
+      // The control-mode `connected` event and the sshd-allocated-port stderr
+      // line race; if the connected handler ran before the port was known, push
+      // the option once the port resolves. Idempotent — a no-op if already set.
+      client.on("hook-port-resolved", () => {
+        this.configureRemoteHookSocketOption(config.name).catch((err) => {
+          log("remote", `remote hook option setup failed for ${this.serverTag(config.name)}: ${err.message}`);
+          this.emit("warning", `Remote hook option setup failed for ${config.name}: ${err.message}`);
+        });
+      });
 
       // Track status changes
       client.on("status-change", (status: RemoteConnectionStatus, error?: string, _sshPid?: number) => {
@@ -557,6 +567,19 @@ export class RemoteServerManager extends EventEmitter {
   /** Stop all connections and clean up. */
   async stopAll(): Promise<void> {
     this.started = false;
+
+    // Best-effort: clear the remote tmux user-option that carries the per-server
+    // auth token so it doesn't outlive our connection in the remote tmux server's
+    // memory. Capped so a hung client can't block shutdown.
+    const cleanups: Promise<unknown>[] = [];
+    for (const client of this.clients.values()) {
+      if (!client.isConnected) continue;
+      cleanups.push(client.sendCommand(`set-option -gqu ${REMOTE_HOOK_SOCKET_TMUX_OPTION}`).catch(() => {}));
+    }
+    if (cleanups.length > 0) {
+      await Promise.race([Promise.allSettled(cleanups), new Promise<void>((resolve) => setTimeout(resolve, 250))]);
+    }
+
     for (const ingress of this.agentIngresses.values()) {
       ingress.close();
     }
@@ -651,11 +674,15 @@ export class RemoteServerManager extends EventEmitter {
 
   private async configureRemoteHookSocketOption(serverName: string): Promise<void> {
     const client = this.clients.get(serverName);
-    const remoteHookSocketPath = client?.remoteHookSocketPath;
-    if (!client || !remoteHookSocketPath) return;
+    if (!client || client.hookForwardingRejected) return;
 
+    const ingress = this.agentIngresses.get(serverName);
+    const port = client.remoteHookTcpPort;
+    if (!ingress || port === undefined) return;
+
+    const value = formatRemoteHookOption(port, ingress.authToken);
     await client.sendCommand(
-      `set-option -gq ${REMOTE_HOOK_SOCKET_TMUX_OPTION} ${quoteTmuxArg("remote hook socket path", remoteHookSocketPath)}`,
+      `set-option -gq ${REMOTE_HOOK_SOCKET_TMUX_OPTION} ${quoteTmuxArg("remote hook socket option", value)}`,
     );
   }
 
@@ -1077,6 +1104,16 @@ export class RemoteServerManager extends EventEmitter {
       }
     });
   }
+}
+
+/**
+ * Value written to the remote tmux user-option `@hmx-agent-socket-path`.
+ * Form: `tcp://127.0.0.1:<port>#<token>` — host+port lets the hook script use
+ * a normal TCP connect, the `#<token>` fragment carries the shared secret each
+ * event must include in its `_authToken` field.
+ */
+export function formatRemoteHookOption(port: number, authToken: string): string {
+  return `tcp://127.0.0.1:${port}#${authToken}`;
 }
 
 function buildPermissionStateKey(serverName: string, routeKey: string): string {

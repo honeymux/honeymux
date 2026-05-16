@@ -253,6 +253,48 @@ describe("HookSocketServer", () => {
     rmSync(tempDir, { force: true, recursive: true });
   });
 
+  it("rejects tcp listen mode without an auth token", () => {
+    expect(() => new HookSocketServer({ port: 0, type: "tcp" })).toThrow(/authToken/);
+  });
+
+  it("drops events on a tcp listener when the auth token does not match", async () => {
+    const server = new HookSocketServer({ port: 0, type: "tcp" }, true, {
+      authToken: "expected-token",
+      eventValidator: () => true,
+      persistEvents: false,
+    });
+    const events: AgentEvent[] = [];
+    server.on("event", (event: AgentEvent) => events.push(event));
+
+    const socket = {
+      data: { buffer: "", pendingWork: Promise.resolve() },
+      end() {},
+      flush() {},
+      write(data: string) {
+        return data.length;
+      },
+    };
+
+    const validBase = {
+      agentType: "claude" as const,
+      cwd: "/srv/project",
+      hookEvent: "SessionStart",
+      pid: 901,
+      sessionId: "sess-1",
+      status: "alive" as const,
+      timestamp: 1,
+      tty: "/dev/pts/7",
+    };
+
+    await (server as any).processLine(socket, JSON.stringify(validBase));
+    await (server as any).processLine(socket, JSON.stringify({ ...validBase, _authToken: "wrong" }));
+    expect(events).toHaveLength(0);
+
+    await (server as any).processLine(socket, JSON.stringify({ ...validBase, _authToken: "expected-token" }));
+    expect(events).toHaveLength(1);
+    expect((events[0] as unknown as Record<string, unknown>)["_authToken"]).toBeUndefined();
+  });
+
   it("denies unanswered events rejected by an async validator", async () => {
     const server = new HookSocketServer(join(tempDir, "honeymux", "remote-hook.sock"), true, {
       eventValidator: async () => false,

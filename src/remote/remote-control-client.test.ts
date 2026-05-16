@@ -3,7 +3,6 @@ import { describe, expect, mock, test } from "bun:test";
 import {
   RemoteControlClient,
   appendBoundedSshText,
-  buildRemoteHookSocketPathProbeCommand,
   finalizeSshText,
   sanitizeSshText,
   truncateSshText,
@@ -62,34 +61,120 @@ describe("RemoteControlClient parser wiring", () => {
     expect(onLayoutChange).toHaveBeenCalledWith("@3", "layout-xyz");
   });
 
-  test("adds a stream-local remote hook forward when configured", () => {
+  test("adds a TCP remote hook forward when configured", () => {
     const client = new RemoteControlClient(
       {
         host: "example-host",
         name: "dev-box",
       },
       "mirror-alpha",
-      { localSocketPath: "/tmp/hmx-local.sock" },
+      { localTcpPort: 51234 },
     );
-
-    (client as unknown as { resolvedRemoteHookSocketPath: string }).resolvedRemoteHookSocketPath =
-      "/home/dev/.local/state/honeymux/runtime/hmx-remote.sock";
 
     const args = (client as unknown as { buildSshArgs: (includeHookForward?: boolean) => string[] }).buildSshArgs(true);
 
-    expect(args).toContain("ExitOnForwardFailure=yes");
     expect(args).toContain("-R");
-    expect(args).toContain("/home/dev/.local/state/honeymux/runtime/hmx-remote.sock:/tmp/hmx-local.sock");
-    expect(args).toContain("StreamLocalBindUnlink=yes");
+    expect(args).toContain("127.0.0.1:0:127.0.0.1:51234");
+    expect(args).not.toContain("StreamLocalBindUnlink=yes");
+    expect(args).not.toContain("ExitOnForwardFailure=yes");
   });
 
-  test("builds a remote hook path probe command without escaping shell expansion", () => {
-    const command = buildRemoteHookSocketPathProbeCommand("hmx-remote-hook.sock");
+  test("captures the remote forward port from ssh stderr", () => {
+    const client = new RemoteControlClient(
+      {
+        host: "example-host",
+        name: "dev-box",
+      },
+      "mirror-alpha",
+      { localTcpPort: 51234 },
+    );
 
-    expect(command).toContain("${XDG_STATE_HOME:-$HOME/.local/state}");
-    expect(command).toContain('rm -f "$runtime/$1"');
-    expect(command).toContain("hmx-remote-hook.sock");
-    expect(command).not.toContain("\\${XDG_STATE_HOME:-$HOME/.local/state}");
+    const internals = client as unknown as {
+      maybeCaptureAllocatedPort: (chunk: string) => void;
+      remoteHookTcpPort: number | undefined;
+    };
+
+    internals.maybeCaptureAllocatedPort("Allocated port ");
+    internals.maybeCaptureAllocatedPort("46157 for remote forward to 127.0.0.1:51234\n");
+
+    expect(client.remoteHookTcpPort).toBe(46157);
+  });
+
+  test("emits hook-port-resolved when the allocated port is captured", () => {
+    const client = new RemoteControlClient(
+      {
+        host: "example-host",
+        name: "dev-box",
+      },
+      "mirror-alpha",
+      { localTcpPort: 51234 },
+    );
+
+    const onResolved = mock((_port: number) => {});
+    client.on("hook-port-resolved", onResolved);
+
+    const detect = (
+      client as unknown as { maybeCaptureAllocatedPort: (chunk: string) => void }
+    ).maybeCaptureAllocatedPort.bind(client);
+    detect("Allocated port 46157 for remote forward to 127.0.0.1:51234\n");
+    detect("Allocated port 46158 for remote forward to 127.0.0.1:51234\n");
+
+    expect(onResolved).toHaveBeenCalledTimes(1);
+    expect(onResolved).toHaveBeenCalledWith(46157);
+  });
+
+  test("clears hookForwardingRejected on reconnect so a fresh -R is attempted", () => {
+    const client = new RemoteControlClient(
+      {
+        host: "example-host",
+        name: "dev-box",
+      },
+      "mirror-alpha",
+      { localTcpPort: 51234 },
+    );
+
+    const internals = client as unknown as {
+      maybeMarkHookForwardingFailure: (chunk: string) => void;
+      resetConnectionState: () => void;
+    };
+    internals.maybeMarkHookForwardingFailure("remote port forwarding failed for listen port 0\n");
+    expect(client.hookForwardingRejected).toBe(true);
+    expect(
+      (client as unknown as { buildSshArgs: (includeHookForward?: boolean) => string[] }).buildSshArgs(true),
+    ).not.toContain("-R");
+
+    internals.resetConnectionState();
+
+    expect(client.hookForwardingRejected).toBe(false);
+    expect(
+      (client as unknown as { buildSshArgs: (includeHookForward?: boolean) => string[] }).buildSshArgs(true),
+    ).toContain("-R");
+  });
+
+  test("disables the remote hook forward after the server rejects port forwarding", () => {
+    const client = new RemoteControlClient(
+      {
+        host: "example-host",
+        name: "dev-box",
+      },
+      "mirror-alpha",
+      { localTcpPort: 51234 },
+    );
+
+    const onWarning = mock((_message: string) => {});
+    client.on("warning", onWarning);
+
+    const detect = (
+      client as unknown as { maybeMarkHookForwardingFailure: (chunk: string) => void }
+    ).maybeMarkHookForwardingFailure.bind(client);
+    detect("remote port forwarding failed for listen port 0\n");
+    detect("remote port forwarding failed for listen port 0\n");
+
+    expect(client.hookForwardingRejected).toBe(true);
+    expect(onWarning).toHaveBeenCalledTimes(1);
+
+    const args = (client as unknown as { buildSshArgs: (includeHookForward?: boolean) => string[] }).buildSshArgs(true);
+    expect(args).not.toContain("-R");
   });
 
   test("sanitizes SSH stderr text before display", () => {

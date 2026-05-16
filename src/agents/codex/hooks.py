@@ -28,7 +28,7 @@ EVENT_STATUS_MAP = {
 }
 
 REMOTE_HOOK_SOCKET_OPTION = "@hmx-agent-socket-path"
-REMOTE_HOOK_SOCKET_RE = r"^/.*?/hmx-remote-hook-[0-9a-f]{16}\.sock$"
+REMOTE_HOOK_TCP_HOSTS = ("127.0.0.1", "localhost")
 TMUX_PANE_RE = r"^%\d+$"
 
 
@@ -43,11 +43,32 @@ def get_runtime_path(name):
     return os.path.join(get_runtime_dir(), name)
 
 
-def get_socket_path(override=None):
-    if override:
-        return override
+def get_local_unix_target():
+    return ("unix", get_runtime_path("hmx-codex.sock"), None)
 
-    return get_runtime_path("hmx-codex.sock")
+
+def get_remote_hook_target():
+    if not os.environ.get("TMUX"):
+        return None
+
+    try:
+        proc = subprocess.run(
+            ["tmux", "show-option", "-gqv", REMOTE_HOOK_SOCKET_OPTION],
+            capture_output=True,
+            stdin=subprocess.DEVNULL,
+            text=True,
+            timeout=1,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+
+    if proc.returncode != 0:
+        return None
+
+    value = proc.stdout.strip()
+    if not value or not value.startswith("tcp://"):
+        return None
+    return parse_remote_tcp_target(value)
 
 
 def get_state_home():
@@ -66,34 +87,22 @@ def ensure_private_dir(path):
     return path
 
 
-def get_tmux_remote_socket_path():
-    if not os.environ.get("TMUX"):
+def parse_remote_tcp_target(value):
+    body = value[len("tcp://"):]
+    if "#" not in body:
         return None
-
-    try:
-        proc = subprocess.run(
-            ["tmux", "show-option", "-gqv", REMOTE_HOOK_SOCKET_OPTION],
-            capture_output=True,
-            stdin=subprocess.DEVNULL,
-            text=True,
-            timeout=1,
-        )
-    except (OSError, subprocess.SubprocessError):
+    addr, token = body.split("#", 1)
+    if not token or ":" not in addr:
         return None
-
-    if proc.returncode != 0:
+    host, port_str = addr.rsplit(":", 1)
+    if host not in REMOTE_HOOK_TCP_HOSTS:
         return None
-
-    path = proc.stdout.strip()
-    if not path or not os.path.isabs(path):
+    if not port_str.isdigit():
         return None
-    if not re_match_remote_hook_socket(path):
+    port = int(port_str)
+    if port < 1 or port > 65535:
         return None
-    return path
-
-
-def re_match_remote_hook_socket(path):
-    return re.match(REMOTE_HOOK_SOCKET_RE, path) is not None
+    return ("tcp", (host, port), token)
 
 
 def running_in_honeymux():
@@ -187,9 +196,9 @@ def main():
     turn_id = data.get("turn_id")
     parent_pid = os.getppid()
 
-    remote_socket_path = get_tmux_remote_socket_path()
+    remote_target = get_remote_hook_target()
     pane_id = get_tmux_pane_id()
-    tty = get_tty() if remote_socket_path or not pane_id else None
+    tty = get_tty() if remote_target or not pane_id else None
 
     event = {
         "sessionId": session_id,
@@ -215,12 +224,17 @@ def main():
 
     event["processSnapshot"] = collect_process_snapshot()
 
-    sock_path = get_socket_path(remote_socket_path)
+    transport, address, token = remote_target if remote_target else get_local_unix_target()
+    if token:
+        event["_authToken"] = token
 
     try:
-        sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        if transport == "unix":
+            sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        else:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.settimeout(5)
-        sock.connect(sock_path)
+        sock.connect(address)
         sock.sendall((json.dumps(event) + "\n").encode())
         discard_resolved_pid_line(sock)
         sock.close()

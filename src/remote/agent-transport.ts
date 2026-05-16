@@ -1,17 +1,19 @@
-import { createHash } from "node:crypto";
+import { randomBytes } from "node:crypto";
 
 import type { HookEventValidatorContext } from "../agents/socket-server.ts";
 import type { AgentEvent, AgentType } from "../agents/types.ts";
 
 import { HookSocketServer } from "../agents/socket-server.ts";
-import { getPrivateSocketPath } from "../util/runtime-paths.ts";
-import { getTmuxServer } from "../util/tmux-server.ts";
 
 const HOLD_OPEN_REMOTE_AGENT_TYPES = new Set<AgentType>(["claude", "opencode"]);
+const REMOTE_HOOK_LOOPBACK_HOST = "127.0.0.1";
 
 export interface RemoteAgentIngress {
+  /** Shared secret embedded in the tmux user-option; remote hook events must include it. */
+  readonly authToken: string;
   close(): void;
-  readonly localSocketPath: string;
+  /** Loopback TCP port where the local agent ingress is bound; meaningful only after start(). */
+  readonly localTcpPort: number;
   respondToPermission(route: RemotePermissionRoute, decision: "allow" | "deny"): boolean;
   start(): void;
 }
@@ -38,17 +40,22 @@ export interface RemotePermissionRoute {
 }
 
 class ForwardedRemoteAgentIngress implements RemoteAgentIngress {
-  readonly localSocketPath: string;
+  readonly authToken: string;
+
+  get localTcpPort(): number {
+    return this.socketServer.listenPort ?? 0;
+  }
 
   private socketServer: HookSocketServer;
 
   constructor(
-    serverName: string,
+    _serverName: string,
     private handlers: RemoteAgentIngressHandlers,
     options: RemoteAgentIngressOptions = {},
   ) {
-    this.localSocketPath = getRemoteAgentIngressSocketPath(serverName);
-    this.socketServer = new HookSocketServer(this.localSocketPath, true, {
+    this.authToken = randomBytes(24).toString("hex");
+    this.socketServer = new HookSocketServer({ hostname: REMOTE_HOOK_LOOPBACK_HOST, port: 0, type: "tcp" }, true, {
+      authToken: this.authToken,
       eventValidator: options.eventValidator ?? (() => true),
       persistEvents: false,
       shouldHoldPermissionConnection: shouldHoldRemotePermissionConnection,
@@ -82,12 +89,6 @@ export class ForwardedRemoteAgentIngressFactory implements RemoteAgentIngressFac
   ): RemoteAgentIngress {
     return new ForwardedRemoteAgentIngress(serverName, handlers, options);
   }
-}
-
-function getRemoteAgentIngressSocketPath(serverName: string): string {
-  const tmuxServer = getTmuxServer();
-  const digest = createHash("sha256").update(`${tmuxServer}\0${serverName}`).digest("hex").slice(0, 16);
-  return getPrivateSocketPath(`hmx-remote-hook-${digest}`);
 }
 
 function shouldHoldRemotePermissionConnection(event: AgentEvent): boolean {

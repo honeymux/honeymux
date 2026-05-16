@@ -3,8 +3,9 @@ import { connect } from "bun";
  * OpenCode plugin for honeymux.
  *
  * This TypeScript module is loaded by OpenCode's plugin system.
- * It connects to honeymux's Unix socket and sends agent events
- * corresponding to OpenCode lifecycle events.
+ * It connects to honeymux's hook socket — a local Unix socket, or for
+ * remote sessions a loopback TCP endpoint forwarded over SSH — and
+ * sends agent events corresponding to OpenCode lifecycle events.
  *
  * Install location: ~/.config/opencode/plugins/opencode-plugin.ts
  */
@@ -15,7 +16,7 @@ import { hostname } from "node:os";
 // --- Socket path (mirrors socket-server.ts logic) ---
 
 const REMOTE_HOOK_SOCKET_OPTION = "@hmx-agent-socket-path";
-const REMOTE_HOOK_SOCKET_RE = /^\/.*?\/hmx-remote-hook-[0-9a-f]{16}\.sock$/;
+const REMOTE_HOOK_TCP_HOSTS = new Set(["127.0.0.1", "localhost"]);
 
 interface AgentEvent {
   agentType: "opencode";
@@ -32,6 +33,10 @@ interface AgentEvent {
   toolUseId?: string;
   tty?: null | string;
 }
+
+type HookTarget =
+  | { authToken: string; hostname: string; port: number; transport: "tcp" }
+  | { path: string; transport: "unix" };
 
 interface PendingPermissionSocket {
   end(): void;
@@ -120,6 +125,11 @@ export default async function plugin(input: any) {
   };
 }
 
+function buildConnectAddress(target: HookTarget): { hostname: string; port: number } | { unix: string } {
+  if (target.transport === "unix") return { unix: target.path };
+  return { hostname: target.hostname, port: target.port };
+}
+
 function clearPendingPermissionSocket(
   pendingPermissionSockets: Map<string, PendingPermissionSocket>,
   sessionId: string,
@@ -151,32 +161,29 @@ function ensurePrivateDir(path: string): string {
   return path;
 }
 
+// --- TTY detection ---
+
 function getRuntimeDir(): string {
   const runtimeDir = process.env.XDG_RUNTIME_DIR;
   if (runtimeDir) return ensurePrivateDir(`${runtimeDir}/honeymux`);
   return ensurePrivateDir(`${getStateHome()}/honeymux/runtime`);
 }
 
-// --- TTY detection ---
+// --- Send event (fire-and-forget) ---
 
 function getRuntimePath(name: string): string {
   return `${getRuntimeDir()}/${name}`;
-}
-
-// --- Send event (fire-and-forget) ---
-
-function getSocketPath(): string {
-  const override = getTmuxRemoteSocketPath();
-  if (override) return override;
-
-  return getRuntimePath("hmx-opencode.sock");
 }
 
 function getStateHome(): string {
   return process.env.XDG_STATE_HOME ?? `${process.env.HOME}/.local/state`;
 }
 
-function getTmuxRemoteSocketPath(): null | string {
+function getTarget(): HookTarget {
+  return getTmuxRemoteHookTarget() ?? { path: getRuntimePath("hmx-opencode.sock"), transport: "unix" };
+}
+
+function getTmuxRemoteHookTarget(): HookTarget | null {
   if (!process.env.TMUX) return null;
 
   try {
@@ -186,9 +193,9 @@ function getTmuxRemoteSocketPath(): null | string {
       timeout: 1000,
     });
     if (proc.status !== 0) return null;
-    const path = proc.stdout.trim();
-    if (!path.startsWith("/") || !REMOTE_HOOK_SOCKET_RE.test(path)) return null;
-    return path;
+    const value = proc.stdout.trim();
+    if (!value || !value.startsWith("tcp://")) return null;
+    return parseRemoteTcpTarget(value);
   } catch {
     return null;
   }
@@ -216,6 +223,26 @@ function normalizeTty(value: string): null | string {
   return tty.startsWith("/dev/") ? tty : `/dev/${tty}`;
 }
 
+function parseRemoteTcpTarget(value: string): HookTarget | null {
+  const body = value.slice("tcp://".length);
+  const hashIndex = body.indexOf("#");
+  if (hashIndex < 0) return null;
+  const addr = body.slice(0, hashIndex);
+  const authToken = body.slice(hashIndex + 1);
+  if (!authToken) return null;
+  const colonIndex = addr.lastIndexOf(":");
+  if (colonIndex < 0) return null;
+  const hostname = addr.slice(0, colonIndex);
+  const portStr = addr.slice(colonIndex + 1);
+  if (!REMOTE_HOOK_TCP_HOSTS.has(hostname)) return null;
+  if (!/^\d+$/.test(portStr)) return null;
+  const port = Number(portStr);
+  if (port < 1 || port > 65_535) return null;
+  return { authToken, hostname, port, transport: "tcp" };
+}
+
+// --- OpenCode Plugin Export ---
+
 function postPermissionReply(
   serverFetch: (input: Request | URL | string, init?: RequestInit) => Promise<Response>,
   baseUrl: string,
@@ -236,26 +263,25 @@ function postPermissionReply(
     .catch((e: any) => log(`permission POST failed: ${e}`));
 }
 
-// --- OpenCode Plugin Export ---
-
 function runningInHoneymux(): boolean {
   return (process.env.TMUX ?? "").includes("honeymux");
 }
 
 async function sendEvent(event: AgentEvent): Promise<void> {
-  const socketPath = getSocketPath();
+  const target = getTarget();
+  const payload = serializeEvent(event, target);
   try {
     await connect({
+      ...buildConnectAddress(target),
       socket: {
         close() {},
         data() {},
         error() {},
         open(socket) {
-          socket.write(JSON.stringify(event) + "\n");
+          socket.write(payload);
           socket.end();
         },
       },
-      unix: socketPath,
     });
   } catch {}
 }
@@ -272,9 +298,11 @@ async function sendPermissionAndWait(
   permissionId: string,
   pendingPermissionSockets: Map<string, PendingPermissionSocket>,
 ): Promise<void> {
-  const socketPath = getSocketPath();
+  const target = getTarget();
+  const payload = serializeEvent(event, target);
   try {
     await connect({
+      ...buildConnectAddress(target),
       socket: {
         close(socket) {
           clearPendingPermissionSocket(pendingPermissionSockets, event.sessionId, socket);
@@ -298,13 +326,18 @@ async function sendPermissionAndWait(
         },
         open(socket) {
           pendingPermissionSockets.set(event.sessionId, socket);
-          socket.write(JSON.stringify(event) + "\n");
+          socket.write(payload);
           // keep open — honeymux will hold and respond later
         },
       },
-      unix: socketPath,
     });
   } catch {
     log(`permission socket unavailable for ${permissionId}`);
   }
+}
+
+function serializeEvent(event: AgentEvent, target: HookTarget): string {
+  const payload =
+    target.transport === "tcp" ? { ...(event as Record<string, unknown>), _authToken: target.authToken } : event;
+  return JSON.stringify(payload) + "\n";
 }
