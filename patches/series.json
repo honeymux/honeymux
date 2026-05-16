@@ -7,7 +7,7 @@
     },
     "sourceRepo": "~/src/opentui",
     "sourceSubdir": "packages/core",
-    "version": "0.2.1",
+    "version": "0.2.12",
     "patches": [
       {
         "branch": "fix-wide-char-alpha-blending",
@@ -45,14 +45,8 @@
     "buildCmd": "bun run build",
     "sourceRepo": "~/src/opentui",
     "sourceSubdir": "packages/react",
-    "version": "0.2.1",
+    "version": "0.2.12",
     "patches": [
-      {
-        "branch": "avoid-duplicate-instance-renders-after-react-commits",
-        "description": "Avoid duplicate instance render requests after React commits",
-        "enabled": true,
-        "file": "0001-avoid-duplicate-instance-renders-after-react-commits.patch"
-      },
       {
         "branch": "batch-render-requests-during-react-commits",
         "description": "Batch render requests during React commits",
@@ -62,10 +56,11 @@
     ]
   },
   "ghostty-opentui": {
-    "buildCmd": "zig build -Doptimize=ReleaseFast && bun run build",
     "diffPaths": [
       "src/"
     ],
+    "sourceRepo": "~/src/ghostty-opentui",
+    "buildCmd": "zig build -Doptimize=ReleaseFast && bun run build",
     "installPaths": [
       "dist",
       "src"
@@ -75,7 +70,6 @@
       "fileName": "ghostty-opentui.node",
       "srcDir": "zig-out/lib"
     },
-    "sourceRepo": "~/src/ghostty-opentui",
     "version": "1.4.11",
     "patches": [
       {

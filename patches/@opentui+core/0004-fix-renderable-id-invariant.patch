@@ -1,5 +1,5 @@
 diff --git a/src/Renderable.ts b/src/Renderable.ts
-index f20d4be4..ff686428 100644
+index fa6b7ec3..bb6a7117 100644
 --- a/src/Renderable.ts
 +++ b/src/Renderable.ts
 @@ -36,6 +36,10 @@ import {

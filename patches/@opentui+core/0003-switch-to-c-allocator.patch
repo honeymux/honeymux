@@ -1,24 +1,21 @@
 diff --git a/src/zig/build.zig b/src/zig/build.zig
-index 5a8bcb87..7b3c335e 100644
+index c9acb426..5ddfa552 100644
 --- a/src/zig/build.zig
 +++ b/src/zig/build.zig
-@@ -18,8 +18,13 @@ const SupportedTarget = struct {
+@@ -17,8 +17,11 @@ const SupportedTarget = struct {
+     description: []const u8,
  };
  
+-// Unpinned linux-gnu targets can bind host libm symbols such as GLIBC_2.29.
  const SUPPORTED_TARGETS = [_]SupportedTarget{
--    .{ .zig_target = "x86_64-linux", .output_name = "x86_64-linux", .description = "Linux x86_64" },
--    .{ .zig_target = "aarch64-linux", .output_name = "aarch64-linux", .description = "Linux aarch64" },
-+    // Linux targets explicitly use the gnu ABI so that std.heap.c_allocator
++    // Linux targets explicitly use the gnu ABI so std.heap.c_allocator
 +    // (enabled by .link_libc) links against glibc and produces NEEDED
-+    // libc.so.6.  The default x86_64-linux / aarch64-linux ABI is musl,
-+    // which produces NEEDED libc.so and fails to load on glibc systems
-+    // because /lib64/libc.so is a text linker script, not an ELF object.
-+    .{ .zig_target = "x86_64-linux-gnu", .output_name = "x86_64-linux", .description = "Linux x86_64" },
-+    .{ .zig_target = "aarch64-linux-gnu", .output_name = "aarch64-linux", .description = "Linux aarch64" },
++    // libc.so.6 instead of libc.so. Pin glibc to 2.28 so the binaries do
++    // not bind newer host symbols such as GLIBC_2.29.
+     .{ .zig_target = "x86_64-linux-gnu.2.28", .output_name = "x86_64-linux", .description = "Linux x86_64" },
+     .{ .zig_target = "aarch64-linux-gnu.2.28", .output_name = "aarch64-linux", .description = "Linux aarch64" },
      .{ .zig_target = "x86_64-macos", .output_name = "x86_64-macos", .description = "macOS x86_64 (Intel)" },
-     .{ .zig_target = "aarch64-macos", .output_name = "aarch64-macos", .description = "macOS aarch64 (Apple Silicon)" },
-     .{ .zig_target = "x86_64-windows-gnu", .output_name = "x86_64-windows", .description = "Windows x86_64" },
-@@ -263,6 +268,9 @@ fn buildTarget(
+@@ -426,6 +429,9 @@ fn buildTarget(
          .root_source_file = b.path(ROOT_SOURCE_FILE),
          .target = target,
          .optimize = optimize,
@@ -29,24 +26,22 @@ index 5a8bcb87..7b3c335e 100644
  
      applyDependencies(b, module, optimize, target, build_options);
 diff --git a/src/zig/lib.zig b/src/zig/lib.zig
-index 628a312a..724c7a8f 100644
+index eb56e9e9..cd67968c 100644
 --- a/src/zig/lib.zig
 +++ b/src/zig/lib.zig
-@@ -55,11 +55,17 @@ export fn setEventCallback(callback: ?*const fn (namePtr: [*]const u8, nameLen:
+@@ -58,11 +58,15 @@ export fn setEventCallback(callback: ?*const fn (namePtr: [*]const u8, nameLen:
      event_bus.setEventCallback(callback);
  }
  
--var gpa = std.heap.GeneralPurposeAllocator(.{
+-var gpa: std.heap.GeneralPurposeAllocator(.{
 -    .enable_memory_limit = build_options.gpa_safe_stats,
 -    .safety = build_options.gpa_safe_stats,
--}){};
+-}) = .{};
 -const globalAllocator = gpa.allocator();
 +// Use libc malloc as the global allocator instead of GeneralPurposeAllocator
-+// (which in Zig 0.15 is std.heap.DebugAllocator under the hood — page-backed,
-+// triggers mmap/munmap with TLB IPI cost on every ArrayList grow/shrink and
-+// HashMap rehash).  c_allocator wraps glibc malloc which pools small
-+// allocations and almost never returns memory to the OS, which is the right
-+// fit for high-frequency live-process workloads like terminal rendering.
++// (which in Zig 0.15 is std.heap.DebugAllocator under the hood). c_allocator
++// wraps glibc malloc, which pools small allocations and is a better fit for
++// high-frequency live-process workloads like terminal rendering.
 +//
 +// The gpa_safe_stats build option is now a no-op (the per-allocation stats
 +// it surfaced are GPA-specific and have no equivalent in the libc allocator);
@@ -55,7 +50,7 @@ index 628a312a..724c7a8f 100644
  var arena = std.heap.ArenaAllocator.init(globalAllocator);
  const globalArena = arena.allocator();
  
-@@ -76,101 +82,24 @@ pub const ExternalAllocatorStats = extern struct {
+@@ -79,101 +83,24 @@ pub const ExternalAllocatorStats = extern struct {
      requested_bytes_valid: bool,
  };
  

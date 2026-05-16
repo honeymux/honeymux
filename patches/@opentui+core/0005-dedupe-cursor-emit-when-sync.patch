@@ -1,8 +1,8 @@
 diff --git a/src/zig/renderer.zig b/src/zig/renderer.zig
-index c1eb2122..686147c0 100644
+index d251e4dd..3540e8ff 100644
 --- a/src/zig/renderer.zig
 +++ b/src/zig/renderer.zig
-@@ -177,8 +177,9 @@ pub const CliRenderer = struct {
+@@ -178,8 +178,9 @@ pub const CliRenderer = struct {
      lastCursorStyleTag: ?u8 = null,
      lastCursorBlinking: ?bool = null,
      lastCursorColorRGB: ?[3]u8 = null,
@@ -14,7 +14,7 @@ index c1eb2122..686147c0 100644
      lastCursorX: ?u32 = null,
      lastCursorY: ?u32 = null,
      lastCursorVisible: ?bool = null,
-@@ -735,7 +736,7 @@ pub const CliRenderer = struct {
+@@ -751,7 +752,7 @@ pub const CliRenderer = struct {
          }
  
          if (!frame_started.*) {
@@ -23,7 +23,7 @@ index c1eb2122..686147c0 100644
              frame_started.* = true;
          }
  
-@@ -867,7 +868,7 @@ pub const CliRenderer = struct {
+@@ -889,7 +890,7 @@ pub const CliRenderer = struct {
  
              resetActiveOutputBuffer();
              const writer = OutputBufferWriter.writer();
@@ -32,7 +32,7 @@ index c1eb2122..686147c0 100644
              var frame_started = true;
              self.applyPendingSplitFooterTransition(writer, &frame_started);
  
-@@ -1239,9 +1240,11 @@ pub const CliRenderer = struct {
+@@ -1273,9 +1274,11 @@ pub const CliRenderer = struct {
          return self.currentRenderBuffer;
      }
  
@@ -46,7 +46,7 @@ index c1eb2122..686147c0 100644
      }
  
      fn prepareRenderFrame(self: *CliRenderer, force: bool, reset_output_buffer: bool, sync_started: bool) void {
-@@ -1255,6 +1258,8 @@ pub const CliRenderer = struct {
+@@ -1289,6 +1292,8 @@ pub const CliRenderer = struct {
          }
  
          var writer = OutputBufferWriter.writer();
@@ -55,7 +55,7 @@ index c1eb2122..686147c0 100644
          // Lazy frame start is the core no-op suppression mechanism. If diffing,
          // cursor state, and pointer state are unchanged, frame_started stays false
          // and we emit nothing at all for this tick.
-@@ -1267,7 +1272,7 @@ pub const CliRenderer = struct {
+@@ -1301,7 +1306,7 @@ pub const CliRenderer = struct {
          var currentLinkId: u32 = 0;
          var utf8Buf: [4]u8 = undefined;
  
@@ -64,7 +64,7 @@ index c1eb2122..686147c0 100644
  
          for (0..self.height) |uy| {
              const y = @as(u32, @intCast(uy));
-@@ -1302,7 +1307,7 @@ pub const CliRenderer = struct {
+@@ -1336,7 +1341,7 @@ pub const CliRenderer = struct {
                  const cell = nextCell.?;
  
                  if (!frame_started) {
@@ -73,7 +73,7 @@ index c1eb2122..686147c0 100644
                      frame_started = true;
                  }
  
-@@ -1394,7 +1399,7 @@ pub const CliRenderer = struct {
+@@ -1428,7 +1433,7 @@ pub const CliRenderer = struct {
  
          if (hyperlinksEnabled and currentLinkId != 0) {
              if (!frame_started) {
@@ -82,7 +82,7 @@ index c1eb2122..686147c0 100644
                  frame_started = true;
              }
              writer.writeAll("\x1b]8;;\x1b\\") catch {};
-@@ -1454,7 +1459,7 @@ pub const CliRenderer = struct {
+@@ -1488,7 +1493,7 @@ pub const CliRenderer = struct {
  
              if (needsCursorRestore) {
                  if (!frame_started) {
@@ -91,7 +91,7 @@ index c1eb2122..686147c0 100644
                      frame_started = true;
                  }
  
-@@ -1469,17 +1474,24 @@ pub const CliRenderer = struct {
+@@ -1503,17 +1508,24 @@ pub const CliRenderer = struct {
                  }
  
                  ansi.ANSI.moveToOutput(writer, cursorX, cursorY) catch {};
@@ -121,7 +121,7 @@ index c1eb2122..686147c0 100644
              }
  
              self.lastCursorStyleTag = null;
-@@ -1493,7 +1505,7 @@ pub const CliRenderer = struct {
+@@ -1527,7 +1539,7 @@ pub const CliRenderer = struct {
          const mousePointer = self.terminal.getMousePointer();
          if (mousePointer != self.lastMousePointerStyle) {
              if (!frame_started) {
@@ -131,10 +131,10 @@ index c1eb2122..686147c0 100644
              }
              ansi.ANSI.setMousePointerOutput(writer, mousePointer.toName()) catch {};
 diff --git a/src/zig/tests/renderer_test.zig b/src/zig/tests/renderer_test.zig
-index d452fe03..163d2cc7 100644
+index 67b87a3a..3f1e522d 100644
 --- a/src/zig/tests/renderer_test.zig
 +++ b/src/zig/tests/renderer_test.zig
-@@ -1963,6 +1963,40 @@ test "renderer - batched split commits share single sync frame" {
+@@ -1961,6 +1961,40 @@
      try std.testing.expectEqual(@as(usize, 1), std.mem.count(u8, output, ansi.ANSI.syncReset));
  }
  
