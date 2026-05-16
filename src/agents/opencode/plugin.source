@@ -3,8 +3,9 @@ import { connect } from "bun";
  * OpenCode plugin for honeymux.
  *
  * This TypeScript module is loaded by OpenCode's plugin system.
- * It connects to honeymux's Unix socket and sends agent events
- * corresponding to OpenCode lifecycle events.
+ * It connects to honeymux's hook socket — a local Unix socket, or for
+ * remote sessions a loopback TCP endpoint forwarded over SSH — and
+ * sends agent events corresponding to OpenCode lifecycle events.
  *
  * Install location: ~/.config/opencode/plugins/opencode-plugin.ts
  */
@@ -15,7 +16,7 @@ import { hostname } from "node:os";
 // --- Socket path (mirrors socket-server.ts logic) ---
 
 const REMOTE_HOOK_SOCKET_OPTION = "@hmx-agent-socket-path";
-const REMOTE_HOOK_SOCKET_RE = /^\/.*?\/hmx-remote-hook-[0-9a-f]{16}\.sock$/;
+const REMOTE_HOOK_TCP_HOSTS = new Set(["127.0.0.1", "localhost"]);
 
 interface AgentEvent {
   agentType: "opencode";
@@ -33,8 +34,22 @@ interface AgentEvent {
   tty?: null | string;
 }
 
+type HookTarget = TcpHookTarget | UnixHookTarget;
+
 interface PendingPermissionSocket {
   end(): void;
+}
+
+interface TcpHookTarget {
+  host: string;
+  port: number;
+  token: string;
+  type: "tcp";
+}
+
+interface UnixHookTarget {
+  path: string;
+  type: "unix";
 }
 
 export default async function plugin(input: any) {
@@ -151,32 +166,15 @@ function ensurePrivateDir(path: string): string {
   return path;
 }
 
-function getRuntimeDir(): string {
-  const runtimeDir = process.env.XDG_RUNTIME_DIR;
-  if (runtimeDir) return ensurePrivateDir(`${runtimeDir}/honeymux`);
-  return ensurePrivateDir(`${getStateHome()}/honeymux/runtime`);
+function getHookTarget(): HookTarget {
+  const remote = getRemoteHookTarget();
+  if (remote) return remote;
+  return { path: getRuntimePath("hmx-opencode.sock"), type: "unix" };
 }
 
 // --- TTY detection ---
 
-function getRuntimePath(name: string): string {
-  return `${getRuntimeDir()}/${name}`;
-}
-
-// --- Send event (fire-and-forget) ---
-
-function getSocketPath(): string {
-  const override = getTmuxRemoteSocketPath();
-  if (override) return override;
-
-  return getRuntimePath("hmx-opencode.sock");
-}
-
-function getStateHome(): string {
-  return process.env.XDG_STATE_HOME ?? `${process.env.HOME}/.local/state`;
-}
-
-function getTmuxRemoteSocketPath(): null | string {
+function getRemoteHookTarget(): TcpHookTarget | null {
   if (!process.env.TMUX) return null;
 
   try {
@@ -186,12 +184,28 @@ function getTmuxRemoteSocketPath(): null | string {
       timeout: 1000,
     });
     if (proc.status !== 0) return null;
-    const path = proc.stdout.trim();
-    if (!path.startsWith("/") || !REMOTE_HOOK_SOCKET_RE.test(path)) return null;
-    return path;
+    const value = proc.stdout.trim();
+    if (!value.startsWith("tcp://")) return null;
+    return parseRemoteTcpTarget(value);
   } catch {
     return null;
   }
+}
+
+// --- Send event (fire-and-forget) ---
+
+function getRuntimeDir(): string {
+  const runtimeDir = process.env.XDG_RUNTIME_DIR;
+  if (runtimeDir) return ensurePrivateDir(`${runtimeDir}/honeymux`);
+  return ensurePrivateDir(`${getStateHome()}/honeymux/runtime`);
+}
+
+function getRuntimePath(name: string): string {
+  return `${getRuntimeDir()}/${name}`;
+}
+
+function getStateHome(): string {
+  return process.env.XDG_STATE_HOME ?? `${process.env.HOME}/.local/state`;
 }
 
 function getTty(): null | string {
@@ -214,6 +228,24 @@ function normalizeTty(value: string): null | string {
   const tty = value.trim();
   if (!tty || tty === "-" || tty === "?" || tty === "??") return null;
   return tty.startsWith("/dev/") ? tty : `/dev/${tty}`;
+}
+
+function parseRemoteTcpTarget(value: string): TcpHookTarget | null {
+  const body = value.slice("tcp://".length);
+  const hashIdx = body.indexOf("#");
+  if (hashIdx < 0) return null;
+  const addr = body.slice(0, hashIdx);
+  const token = body.slice(hashIdx + 1);
+  if (!token) return null;
+  const colonIdx = addr.lastIndexOf(":");
+  if (colonIdx < 0) return null;
+  const host = addr.slice(0, colonIdx);
+  const portStr = addr.slice(colonIdx + 1);
+  if (!REMOTE_HOOK_TCP_HOSTS.has(host)) return null;
+  if (!/^\d+$/.test(portStr)) return null;
+  const port = Number(portStr);
+  if (port < 1 || port > 65535) return null;
+  return { host, port, token, type: "tcp" };
 }
 
 function postPermissionReply(
@@ -243,9 +275,13 @@ function runningInHoneymux(): boolean {
 }
 
 async function sendEvent(event: AgentEvent): Promise<void> {
-  const socketPath = getSocketPath();
+  const target = getHookTarget();
+  if (target.type === "tcp") {
+    (event as unknown as Record<string, unknown>)._authToken = target.token;
+  }
   try {
     await connect({
+      ...(target.type === "tcp" ? { hostname: target.host, port: target.port } : { unix: target.path }),
       socket: {
         close() {},
         data() {},
@@ -255,7 +291,6 @@ async function sendEvent(event: AgentEvent): Promise<void> {
           socket.end();
         },
       },
-      unix: socketPath,
     });
   } catch {}
 }
@@ -272,9 +307,13 @@ async function sendPermissionAndWait(
   permissionId: string,
   pendingPermissionSockets: Map<string, PendingPermissionSocket>,
 ): Promise<void> {
-  const socketPath = getSocketPath();
+  const target = getHookTarget();
+  if (target.type === "tcp") {
+    (event as unknown as Record<string, unknown>)._authToken = target.token;
+  }
   try {
     await connect({
+      ...(target.type === "tcp" ? { hostname: target.host, port: target.port } : { unix: target.path }),
       socket: {
         close(socket) {
           clearPendingPermissionSocket(pendingPermissionSockets, event.sessionId, socket);
@@ -302,7 +341,6 @@ async function sendPermissionAndWait(
           // keep open — honeymux will hold and respond later
         },
       },
-      unix: socketPath,
     });
   } catch {
     log(`permission socket unavailable for ${permissionId}`);

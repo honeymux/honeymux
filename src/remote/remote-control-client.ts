@@ -1,42 +1,31 @@
-import { createHash } from "node:crypto";
-
 import type { RemoteConnectionStatus, RemoteServerConfig } from "./types.ts";
 
 import { MIN_CONTROL_CLIENT_SIZE } from "../tmux/control-client-bootstrap.ts";
-import { ControlModeParser } from "../tmux/control-mode-parser.ts";
-import { trackChildPid, untrackChildPid } from "../util/child-pids.ts";
+import { TmuxControlClient } from "../tmux/control-client.ts";
 import { EventEmitter } from "../util/event-emitter.ts";
-import { log } from "../util/log.ts";
-import { cleanEnv } from "../util/pty.ts";
-import { stripAnsiEscapes, stripNonPrintingControlChars } from "../util/text.ts";
-import { appendSshDestination, buildRemoteShellCommand } from "./ssh.ts";
+import { appendSshDestination } from "./ssh.ts";
+import {
+  SshTransport,
+  buildSshConnectionArgs,
+  runRemoteShellCommand as runShellOverSsh,
+} from "./transport/ssh-transport.ts";
 
-interface PendingCommand {
-  reject: (error: Error) => void;
-  resolve: (output: string) => void;
+export interface RemoteHookForwardConfig {
+  /** Per-server shared secret hooks must include with every event. */
+  authToken: string;
+  /** Local 127.0.0.1 TCP port the agent ingress is listening on. */
+  localTcpPort: number;
 }
-
-interface RemoteHookForwardConfig {
-  localSocketPath: string;
-}
-
-const REMOTE_HOOK_SOCKET_PATH_SCRIPT = [
-  "state_home=${XDG_STATE_HOME:-$HOME/.local/state}",
-  'runtime="$state_home/honeymux/runtime"',
-  'mkdir -p "$runtime"',
-  'chmod 700 "$runtime" 2>/dev/null || true',
-  'rm -f "$runtime/$1"',
-  `printf '%s/%s\\n' "$runtime" "$1"`,
-].join("\n");
-const MAX_SSH_STDERR_CHARS = 8 * 1024;
-const MAX_SSH_WARNING_CHARS = 512;
 
 /**
  * SSH-tunneled tmux control mode client.
  *
- * Connects to a remote tmux instance via `ssh <host> tmux -C attach-session`
- * and parses the control mode protocol. Provides the same %output / send-keys
- * interface as TmuxControlClient but over SSH.
+ * Thin facade around `TmuxControlClient` + `SshTransport`. Owns the
+ * reconnect loop and surfaces SSH-specific events (`status-change`,
+ * `warning`, `hook-port-resolved`) plus tmux control-mode events
+ * (`pane-output`, `layout-change`, `window-add`, etc.) over a single
+ * EventEmitter surface that matches the pre-refactor `RemoteControlClient`
+ * shape.
  *
  * Events:
  *   pane-output(paneId: string, data: string)
@@ -46,36 +35,35 @@ const MAX_SSH_WARNING_CHARS = 512;
  *   window-add(windowId: string)
  *   window-close(windowId: string)
  *   window-pane-changed(windowId: string, paneId: string)
- *   exit()
- *   status-change(status: RemoteConnectionStatus, error?: string)
+ *   exit() — control-mode connection ended, regardless of cause
+ *   status-change(status: RemoteConnectionStatus, error?: string, sshPid?: number)
+ *   hook-port-resolved(port: number) — sshd-allocated remote forward port for the hook ingress
  *   warning(message: string)
  */
 export class RemoteControlClient extends EventEmitter {
-  get isConnected(): boolean {
-    return !this.closed && this.proc !== null;
+  /** Shared secret sent to the local hook ingress. */
+  get hookAuthToken(): string | undefined {
+    return this.hookForward?.authToken;
   }
-  get remoteHookSocketPath(): string | undefined {
-    return this.resolvedRemoteHookSocketPath ?? undefined;
+  /** True once the SSH server has rejected our hook forward. Sticky across reconnects. */
+  get hookForwardingRejected(): boolean {
+    return this.hookForwardingFailed;
+  }
+  get isConnected(): boolean {
+    return !this.closed && this.client !== null;
+  }
+  /** Remote loopback TCP port that forwards back to the local agent ingress. */
+  get remoteHookTcpPort(): number | undefined {
+    return this.activeTransport?.hookTcpPort;
   }
   get sshPid(): number | undefined {
-    return this.proc?.pid;
+    return this.activeTransport?.sshPid;
   }
+  private activeTransport: SshTransport | null = null;
+  private client: TmuxControlClient | null = null;
   private closed = false;
+  private hookForwardingFailed = false;
   private intentionallyClosed = false;
-  private lastStderr = "";
-  private lastStderrWasTruncated = false;
-  private parser: ControlModeParser | null = null;
-  private pendingQueue: PendingCommand[] = [];
-  private proc: {
-    kill: () => void;
-    pid: number;
-    stdin: { end(): void; flush(): void; write(data: Uint8Array | string): number };
-    stdout: ReadableStream<Uint8Array>;
-  } | null = null;
-  private ready: Promise<void> | null = null;
-  private readyReject: ((err: Error) => void) | null = null;
-  private readyResolve: (() => void) | null = null;
-  private resolvedRemoteHookSocketPath: null | string = null;
 
   constructor(
     private config: RemoteServerConfig,
@@ -85,150 +73,74 @@ export class RemoteControlClient extends EventEmitter {
     super();
   }
 
-  /** Connect to the remote tmux in control mode. Creates session if needed. */
-  async connect(): Promise<void> {
-    this.closed = false;
-    this.pendingQueue = [];
-    this.parser = null;
-
-    this.ready = new Promise((resolve, reject) => {
-      this.readyResolve = resolve;
-      this.readyReject = reject;
-    });
-
-    await this.ensureRemoteHookSocketPath();
-
-    // First, ensure the mirror session exists on the remote
-    const checkProc = Bun.spawn(
-      ["ssh", ...this.buildSshArgs(), "tmux", "-L", "honeymux", "has-session", "-t", this.mirrorSession],
-      { env: cleanEnv(), stderr: "ignore", stdout: "ignore" },
-    );
-    const exists = (await checkProc.exited) === 0;
-
-    const remoteCmd = exists
-      ? ["-C", "attach-session", "-t", this.mirrorSession]
-      : ["-C", "new-session", "-s", this.mirrorSession];
-
-    const proc = Bun.spawn(["ssh", ...this.buildSshArgs(true), "tmux", "-L", "honeymux", ...remoteCmd], {
-      env: cleanEnv(),
-      stderr: "pipe",
-      stdin: "pipe",
-      stdout: "pipe",
-    });
-    trackChildPid(proc.pid);
-    void proc.exited.then(
-      () => untrackChildPid(proc.pid),
-      () => untrackChildPid(proc.pid),
-    );
-
-    // Collect stderr for error reporting
-    this.drainStderr(proc);
-
-    this.proc = {
-      kill: () => proc.kill(),
-      pid: proc.pid,
-      stdin: proc.stdin as unknown as {
-        end(): void;
-        flush(): void;
-        write(data: Uint8Array | string): number;
-      },
-      stdout: proc.stdout as ReadableStream<Uint8Array>,
-    };
-    this.parser = this.createParser();
-
-    this.emit("status-change", "connecting" as RemoteConnectionStatus, undefined, proc.pid);
-
-    this.startParsing();
-    await this.ready;
-
-    // Configure the remote session for mirroring.
-    // The mirror session is invisible — only the control-mode client attaches —
-    // so disable the status bar to avoid it stealing a row from the window area.
-    // The local session uses pane-border-status top, so the mirror must match
-    // so that pane content heights (pane_height = layout_cell.sy - 1) are equal.
-    // Remote mirror sessions should survive SSH/control-client loss.
-    await this.sendCommand("set-option -g destroy-unattached off");
-    await this.sendCommand("set-option destroy-unattached off");
-    await this.sendCommand("set-option detach-on-destroy on");
-    await this.sendCommand("set-option -g window-size smallest");
-    await this.sendCommand("set-option status off");
-    await this.sendCommand("set-option -g pane-border-status top");
-    // Bootstrap at the floor; MirrorLayoutManager.syncClientSize takes over
-    // on the first layout-change and drives the remote to match the local
-    // window dims (which are themselves bounded by the user's real terminal).
-    await this.sendCommand(`refresh-client -C ${MIN_CONTROL_CLIENT_SIZE.cols},${MIN_CONTROL_CLIENT_SIZE.rows}`);
-  }
-
   /** Intentionally stop — don't reconnect. */
   destroy(): void {
     this.intentionallyClosed = true;
     if (this.closed) return;
     this.closed = true;
-    try {
-      this.proc?.stdin.end();
-      this.proc?.kill();
-    } catch {
-      // ignore
-    }
-    for (const pending of this.pendingQueue) {
-      pending.reject(new Error("Client destroyed"));
-    }
-    this.pendingQueue = [];
+    this.client?.destroy();
+    this.client = null;
+    this.activeTransport = null;
   }
 
-  parseLine(line: string): void {
-    if (!this.parser) this.parser = this.createParser();
-    this.parser?.parseLine(line);
-  }
-
+  /**
+   * Run a one-shot remote shell command (NOT a control-mode session). Used
+   * by the agent-hook installer to push files / probe paths.
+   */
   async runRemoteShellCommand(
     argv: string[],
     options: { stdin?: string } = {},
   ): Promise<{ exitCode: number; stderr: string; stdout: string }> {
-    return this.runRemoteProcess(buildRemoteShellCommand(argv), options);
+    return runShellOverSsh(this.config, argv, options);
   }
 
   /** Send a tmux command and await the response. */
   sendCommand(cmd: string): Promise<string> {
-    if (this.closed) return Promise.reject(new Error("Client closed"));
-    return new Promise((resolve, reject) => {
-      this.pendingQueue.push({ reject, resolve });
-      this.writeCommand(cmd);
-    });
+    if (this.closed || !this.client) {
+      return Promise.reject(new Error("Client closed"));
+    }
+    return this.client.runCommand(cmd);
   }
 
   /** Start the auto-reconnect loop. Runs forever until intentionally stopped. */
   async startReconnectLoop(): Promise<void> {
     this.intentionallyClosed = false;
+    this.closed = false;
     let retry = 0;
 
     while (!this.intentionallyClosed) {
       let sshPid: number | undefined;
       try {
-        await this.connect();
-        sshPid = this.proc?.pid;
+        await this.attemptConnect();
+        sshPid = this.activeTransport?.sshPid;
         this.emit("status-change", "connected" as RemoteConnectionStatus, undefined, sshPid);
         retry = 0;
 
         // Wait for disconnect
         await new Promise<void>((resolve) => {
-          const handler = () => {
-            this.off("exit", handler);
+          const onExit = (): void => {
+            this.client?.off("exit", onExit);
             resolve();
           };
-          this.on("exit", handler);
+          this.client?.on("exit", onExit);
         });
+
+        this.client = null;
+        this.activeTransport = null;
 
         if (this.intentionallyClosed) break;
         this.emit("status-change", "disconnected" as RemoteConnectionStatus, undefined, sshPid);
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
-        this.emit("status-change", "error" as RemoteConnectionStatus, msg, sshPid);
+        const stderrSummary = this.activeTransport?.stderrSummary ?? "";
+        const detail = stderrSummary ? `${msg}: ${stderrSummary}` : msg;
+        this.client = null;
+        this.activeTransport = null;
+        this.emit("status-change", "error" as RemoteConnectionStatus, detail, sshPid);
       }
 
       if (this.intentionallyClosed) break;
 
-      // Backoff
       retry++;
       const delay = retry < 5 ? 2000 : retry < 15 ? 5000 : 10000;
       await Bun.sleep(delay);
@@ -237,215 +149,112 @@ export class RemoteControlClient extends EventEmitter {
     this.emit("status-change", "disconnected" as RemoteConnectionStatus);
   }
 
-  // --- Private ---
+  private async attemptConnect(): Promise<void> {
+    // Persist hookForwardingFailed across attempts: SshTransport is created
+    // fresh each time, so a rejection observed on a previous attempt would be
+    // forgotten unless we pass it back in here. The transport will omit `-R`
+    // when constructed with rejected:true.
+    const transport = new SshTransport(
+      this.config,
+      this.hookForward ? { ...this.hookForward, rejected: this.hookForwardingFailed } : undefined,
+    );
+    this.activeTransport = transport;
 
-  /** Build SSH args for connecting to the remote host. */
-  private buildSshArgs(includeHookForward = false): string[] {
-    const args: string[] = ["-o", "BatchMode=yes", "-o", "ServerAliveInterval=15", "-o", "ServerAliveCountMax=3"];
-    if (this.config.port) args.push("-p", String(this.config.port));
-    if (this.config.identityFile) args.push("-i", this.config.identityFile);
-    if (this.config.agentForwarding) args.push("-A");
-    if (includeHookForward && this.hookForward && this.resolvedRemoteHookSocketPath) {
-      args.push("-o", "ExitOnForwardFailure=yes");
-      args.push("-o", "StreamLocalBindUnlink=yes");
-      args.push("-R", `${this.resolvedRemoteHookSocketPath}:${this.hookForward.localSocketPath}`);
-    }
-    appendSshDestination(args, this.config.host);
-    return args;
-  }
-
-  private createParser(): ControlModeParser {
-    return new ControlModeParser({
-      getPendingQueue: () => this.pendingQueue,
-      isClosed: () => this.closed,
-      notifications: {
-        onExit: () => {
-          this.closed = true;
-          this.emit("tmux-exit");
-          this.emit("exit");
-        },
-        onLayoutChange: (windowId, layoutString) => this.emit("layout-change", windowId, layoutString),
-        onPaneOutput: (paneId, data) => this.emit("pane-output", paneId, data),
-        onPaneOutputBytes: (paneId, data) => this.emit("pane-output-bytes", paneId, data),
-        onWindowAdd: (windowId) => this.emit("window-add", windowId),
-        onWindowClose: (windowId) => this.emit("window-close", windowId),
-        onWindowPaneChanged: (windowId, paneId) => this.emit("window-pane-changed", windowId, paneId),
-      },
-      onReady: () => {
-        if (this.readyResolve) {
-          this.readyResolve();
-          this.readyResolve = null;
-          this.readyReject = null;
-        }
-      },
+    transport.onForwardingRejected(() => {
+      // Latch the sticky bit eagerly. Reading transport.hookForwardingRejected
+      // after the connect attempt finishes races the stderr drain task, so
+      // we mirror the rejection here the moment it's parsed.
+      this.hookForwardingFailed = true;
     });
-  }
+    transport.onHookPortResolved((port) => {
+      this.emit("hook-port-resolved", port);
+    });
+    transport.onWarning((message) => {
+      this.emit("warning", message);
+    });
 
-  private drainStderr(proc: { stderr: ReadableStream<Uint8Array> }): void {
-    this.lastStderr = "";
-    this.lastStderrWasTruncated = false;
-    (async () => {
-      try {
-        const reader = proc.stderr.getReader();
-        const decoder = new TextDecoder();
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          const chunk = decoder.decode(value, { stream: true });
-          const next = appendBoundedSshText(this.lastStderr, chunk, MAX_SSH_STDERR_CHARS);
-          this.lastStderr = next.text;
-          this.lastStderrWasTruncated ||= next.wasTruncated;
-          const message = truncateSshText(chunk, MAX_SSH_WARNING_CHARS);
-          if (message) {
-            this.emit("warning", message);
-          }
-        }
-        const tail = decoder.decode();
-        if (tail) {
-          const next = appendBoundedSshText(this.lastStderr, tail, MAX_SSH_STDERR_CHARS);
-          this.lastStderr = next.text;
-          this.lastStderrWasTruncated ||= next.wasTruncated;
-          const message = truncateSshText(tail, MAX_SSH_WARNING_CHARS);
-          if (message) {
-            this.emit("warning", message);
-          }
-        }
-      } catch {}
-      this.lastStderr = finalizeSshText(this.lastStderr, this.lastStderrWasTruncated);
-      if (this.lastStderr) {
-        log("remote", `ssh stderr (${this.config.name}): ${this.lastStderr}`);
-      }
-    })();
-  }
+    const client = new TmuxControlClient(transport);
+    this.client = client;
 
-  private async ensureRemoteHookSocketPath(): Promise<void> {
-    if (!this.hookForward || this.resolvedRemoteHookSocketPath) return;
+    // Re-emit tmux events through this facade so existing consumers don't change.
+    client.on("pane-output", (paneId: string, data: string) => this.emit("pane-output", paneId, data));
+    client.on("pane-output-bytes", (paneId: string, data: Uint8Array) => this.emit("pane-output-bytes", paneId, data));
+    client.on("layout-change", (windowId: string, layout: string) => this.emit("layout-change", windowId, layout));
+    client.on("window-add", (windowId: string) => this.emit("window-add", windowId));
+    client.on("window-close", (windowId: string) => this.emit("window-close", windowId));
+    client.on("window-pane-changed", (windowId: string, paneId: string) =>
+      this.emit("window-pane-changed", windowId, paneId),
+    );
+    client.on("tmux-exit", () => this.emit("tmux-exit"));
+    client.on("exit", () => this.emit("exit"));
 
-    const remoteCommand = buildRemoteHookSocketPathProbeCommand(this.getRemoteHookSocketName());
     try {
-      const { exitCode, stderr, stdout } = await this.runRemoteProcess(remoteCommand);
-      if (exitCode !== 0) {
-        const detail = stderr ? `: ${stderr}` : "";
-        this.emit("warning", `remote hook socket path probe failed${detail}`);
-        return;
-      }
+      // Decide between attach-session and new-session via a one-shot probe over
+      // the same auth/destination settings the control-mode connection uses.
+      // Anything else risks the probe succeeding on a different host alias or
+      // pointing at the wrong tmux server.
+      const exists = await this.probeRemoteSession();
+      const tmuxArgs = exists
+        ? ["-C", "attach-session", "-t", this.mirrorSession]
+        : ["-C", "new-session", "-s", this.mirrorSession];
 
-      const path = stdout.trim();
-      if (!path.startsWith("/")) {
-        this.emit("warning", `remote hook socket path probe returned invalid path: ${path || "<empty>"}`);
-        return;
-      }
+      // attachWithArgs intentionally does NOT apply the local-client bootstrap
+      // (mouse, theme colors, cursor style, cwd-aware split bindings) — those
+      // are only appropriate for the user-facing local tmux server. The remote
+      // mirror gets a minimal set of options below.
+      await client.attachWithArgs(tmuxArgs, this.mirrorSession, MIN_CONTROL_CLIENT_SIZE);
 
-      this.resolvedRemoteHookSocketPath = path;
+      // Configure the remote session for mirroring.
+      // The mirror session is invisible — only the control-mode client attaches —
+      // so disable the status bar to avoid it stealing a row from the window area.
+      // The local session uses pane-border-status top, so the mirror must match
+      // so that pane content heights (pane_height = layout_cell.sy - 1) are equal.
+      // Remote mirror sessions should survive SSH/control-client loss.
+      await client.runCommand("set-option -g destroy-unattached off");
+      await client.runCommand("set-option destroy-unattached off");
+      await client.runCommand("set-option detach-on-destroy on");
+      await client.runCommand("set-option -g window-size smallest");
+      await client.runCommand("set-option status off");
+      await client.runCommand("set-option -g pane-border-status top");
+      await client.runCommand(`refresh-client -C ${MIN_CONTROL_CLIENT_SIZE.cols},${MIN_CONTROL_CLIENT_SIZE.rows}`);
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      this.emit("warning", `remote hook socket path probe failed: ${message}`);
-    }
-  }
-
-  private getRemoteHookSocketName(): string {
-    const digest = createHash("sha256").update(`${this.config.name}\0${this.mirrorSession}`).digest("hex").slice(0, 16);
-    return `hmx-remote-hook-${digest}.sock`;
-  }
-
-  private async runRemoteProcess(
-    remoteCommand: string,
-    options: { stdin?: string } = {},
-  ): Promise<{ exitCode: number; stderr: string; stdout: string }> {
-    const hasStdin = options.stdin !== undefined;
-    const proc = Bun.spawn(["ssh", ...this.buildSshArgs(), remoteCommand], {
-      env: cleanEnv(),
-      stderr: "pipe",
-      stdin: hasStdin ? "pipe" : "ignore",
-      stdout: "pipe",
-    });
-    if (hasStdin && proc.stdin) {
-      const writer = proc.stdin as unknown as { end(): void; write(data: string): void };
+      // Partial connection state must be torn down explicitly. Without this,
+      // a failure in the post-connect bootstrap commands would leave the SSH
+      // process running with transport handlers still attached, leaking
+      // warnings/port events into the next attempt's listeners.
       try {
-        writer.write(options.stdin!);
-      } finally {
-        writer.end();
-      }
+        client.destroy();
+      } catch {}
+      this.client = null;
+      // Latch hookForwardingFailed BEFORE clearing activeTransport so the next
+      // attempt sees the sticky state. The transport's own field is the
+      // authoritative signal: it was set by the stderr parser when sshd
+      // refused our `-R`.
+      if (transport.hookForwardingRejected) this.hookForwardingFailed = true;
+      this.activeTransport = null;
+      throw err;
     }
-    const [stdout, stderr, exitCode] = await Promise.all([
-      new Response(proc.stdout).text(),
-      new Response(proc.stderr).text(),
-      proc.exited,
-    ]);
-    const boundedStderr = appendBoundedSshText("", stderr, MAX_SSH_STDERR_CHARS);
-    return {
-      exitCode,
-      stderr: finalizeSshText(boundedStderr.text, boundedStderr.wasTruncated),
-      stdout,
-    };
+
+    // Latch rejection state from a successful connect too — sshd can refuse
+    // `-R` while still completing the rest of the session (the design point
+    // of dropping ExitOnForwardFailure). Future attempts must remember this.
+    if (transport.hookForwardingRejected) this.hookForwardingFailed = true;
   }
 
-  private async startParsing(): Promise<void> {
-    if (!this.proc || !this.parser) return;
-    await this.parser.consumeStream(this.proc.stdout);
-
-    for (const pending of this.pendingQueue) {
-      pending.reject(new Error("Connection closed"));
-    }
-    this.pendingQueue = [];
-
-    // If we never completed the handshake, reject the ready promise
-    if (this.readyReject) {
-      const stderrMsg = this.lastStderr ? `: ${this.lastStderr}` : "";
-      this.readyReject(new Error(`SSH connection closed before tmux handshake${stderrMsg}`));
-      this.readyResolve = null;
-      this.readyReject = null;
-    }
-
-    if (!this.closed) {
-      this.closed = true;
-      this.emit("exit");
-    }
-  }
-
-  private writeCommand(cmd: string): void {
-    if (this.closed || !this.proc) return;
-    this.proc.stdin.write(cmd + "\n");
-    this.proc.stdin.flush();
+  /**
+   * Cheap one-shot probe via `tmux has-session`. Returns true if the mirror
+   * session exists on the remote, false otherwise. Uses the same connection
+   * args as the control-mode session so it cannot diverge in auth, port, or
+   * destination validation.
+   */
+  private async probeRemoteSession(): Promise<boolean> {
+    const sshArgs = buildSshConnectionArgs(this.config, { includeKeepalive: false });
+    appendSshDestination(sshArgs, this.config.host);
+    const argv = ["ssh", ...sshArgs, "tmux", "-L", "honeymux", "has-session", "-t", this.mirrorSession];
+    const proc = Bun.spawn(argv, { stderr: "ignore", stdout: "ignore" });
+    return (await proc.exited) === 0;
   }
 }
 
-export function appendBoundedSshText(
-  existing: string,
-  chunk: string,
-  maxChars: number,
-): { text: string; wasTruncated: boolean } {
-  const sanitizedChunk = sanitizeSshText(chunk);
-  if (!sanitizedChunk) return { text: existing, wasTruncated: false };
-
-  const combined = existing + sanitizedChunk;
-  if (combined.length <= maxChars) {
-    return { text: combined, wasTruncated: false };
-  }
-
-  return {
-    text: combined.slice(combined.length - maxChars),
-    wasTruncated: true,
-  };
-}
-
-export function buildRemoteHookSocketPathProbeCommand(socketName: string): string {
-  return buildRemoteShellCommand(["sh", "-lc", REMOTE_HOOK_SOCKET_PATH_SCRIPT, "sh", socketName]);
-}
-
-export function finalizeSshText(text: string, wasTruncated = false): string {
-  const compact = text.replace(/ {2,}/g, " ").trim();
-  if (!compact) return "";
-  return wasTruncated ? `[truncated] ${compact}` : compact;
-}
-
-export function sanitizeSshText(text: string): string {
-  return stripNonPrintingControlChars(stripAnsiEscapes(text.replace(/[\r\n\t]+/g, " ")));
-}
-
-export function truncateSshText(text: string, maxChars: number): string {
-  const compact = finalizeSshText(sanitizeSshText(text));
-  if (compact.length <= maxChars) return compact;
-  if (maxChars <= 1) return compact.slice(0, maxChars);
-  return compact.slice(0, maxChars - 1) + "…";
-}
+// Re-export legacy helpers that existing tests reach for.
+export { appendBoundedSshText, finalizeSshText, sanitizeSshText, truncateSshText } from "./transport/ssh-transport.ts";

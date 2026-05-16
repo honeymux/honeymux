@@ -23,8 +23,9 @@ function makeStubIngress(): {
   const respondToPermission = mock((_route: RemotePermissionRoute, _decision: "allow" | "deny") => true);
   return {
     ingress: {
+      authToken: "test-token-deadbeef",
       close: mock(() => {}),
-      localSocketPath: "/tmp/hmx-remote-hook.sock",
+      localTcpPort: 45678,
       respondToPermission,
       start: mock(() => {}),
     },
@@ -63,9 +64,9 @@ describe("RemoteServerManager remote hook ingress", () => {
     });
     (manager as any).clients.set("dev-box", {
       isConnected: true,
-      sendCommand: mock(async () => "/dev/pts/7\t%77\t123\n"),
+      sendCommand: mock(async () => "%77\t123\n"),
     });
-    (manager as any).paneMappings.set("%10", {
+    (manager as any).routing.register({
       localPaneId: "%10",
       remotePaneId: "%77",
       serverName: "dev-box",
@@ -78,12 +79,12 @@ describe("RemoteServerManager remote hook ingress", () => {
       agentType: "claude",
       cwd: "/remote/project",
       hookEvent: "PermissionRequest",
+      paneId: "%77",
       remoteHost: "remote-box",
       sessionId: "sess-1",
       status: "unanswered",
       timestamp: 1,
       transcriptPath: "/remote/state/transcript.jsonl",
-      tty: "/dev/pts/7",
     });
 
     expect(events).toHaveLength(1);
@@ -202,7 +203,7 @@ describe("RemoteServerManager remote hook ingress", () => {
       sendCommand: mock(async () => ""),
     });
     (manager as any).mirrors.set("dev-box", {
-      getRemotePaneId: () => "%77",
+      remotePaneFor: () => "%77",
     });
 
     await manager.convertPane("%10", "dev-box");
@@ -225,14 +226,14 @@ describe("RemoteServerManager remote hook ingress", () => {
       isConnected: true,
     });
     (manager as any).mirrors.set("dev-box", {
-      getRemotePaneId: () => undefined,
+      remotePaneFor: () => undefined,
     });
 
     expect(manager.getRemoteConversionAvailability("%10", "dev-box")).toBe("ready");
     expect(manager.hasConvertibleRemoteServer("%10")).toBe(true);
 
     (manager as any).mirrors.set("dev-box", {
-      getRemotePaneId: () => "%77",
+      remotePaneFor: () => "%77",
     });
 
     expect(manager.getRemoteConversionAvailability("%10", "dev-box")).toBe("ready");
@@ -253,7 +254,7 @@ describe("RemoteServerManager remote hook ingress", () => {
       isConnected: true,
       sendCommand,
     });
-    (manager as any).paneMappings.set("%10", {
+    (manager as any).routing.register({
       localPaneId: "%10",
       remotePaneId: "%77",
       serverName: "dev-box",
@@ -277,7 +278,7 @@ describe("RemoteServerManager remote hook ingress", () => {
       isConnected: true,
       sendCommand,
     });
-    (manager as any).paneMappings.set("%10", {
+    (manager as any).routing.register({
       localPaneId: "%10",
       remotePaneId: "%77",
       serverName: "dev-box",
@@ -302,7 +303,7 @@ describe("RemoteServerManager remote hook ingress", () => {
       isConnected: true,
       sendCommand,
     });
-    (manager as any).paneMappings.set("%10", {
+    (manager as any).routing.register({
       localPaneId: "%10",
       remotePaneId: "%77",
       serverName: "dev-box",
@@ -331,7 +332,7 @@ describe("RemoteServerManager remote hook ingress", () => {
       isConnected: true,
       sendCommand,
     });
-    (manager as any).paneMappings.set("%10", {
+    (manager as any).routing.register({
       localPaneId: "%10",
       remotePaneId: "%77",
       serverName: "dev-box",
@@ -355,7 +356,9 @@ describe("RemoteServerManager remote hook ingress", () => {
 
     const manager = new RemoteServerManager(localClient, [{ host: "dev-box", name: "dev-box" }]);
     let remotePaneId: string | undefined;
-    const fullSync = mock(async () => {
+    let requestCount = 0;
+    const request = mock(() => {
+      requestCount += 1;
       remotePaneId = "%77";
     });
 
@@ -364,13 +367,14 @@ describe("RemoteServerManager remote hook ingress", () => {
       sendCommand: mock(async () => ""),
     });
     (manager as any).mirrors.set("dev-box", {
-      fullSync,
-      getRemotePaneId: () => remotePaneId,
+      remotePaneFor: () => remotePaneId,
+      request,
+      whenIdle: async () => {},
     });
 
     await manager.convertPane("%10", "dev-box");
 
-    expect(fullSync).toHaveBeenCalledTimes(1);
+    expect(requestCount).toBe(1);
     expect(respawnPane).toHaveBeenCalledTimes(1);
   });
 
@@ -396,15 +400,15 @@ describe("RemoteServerManager remote hook ingress", () => {
     (manager as any).clients.set("dev-box", {
       isConnected: true,
       sendCommand: mock(async (command: string) => {
-        if (command === "respawn-pane -k -t %77") {
+        if (command === "respawn-pane -k -t '%77'") {
           proxyExpectState.hadExpectation = expectProxy.mock.calls.length === 1;
-          proxyExpectState.hadMapping = (manager as any).paneMappings.get("%10")?.remotePaneId === "%77";
+          proxyExpectState.hadMapping = (manager as any).routing.lookup("%10")?.remotePaneId === "%77";
         }
         return "";
       }),
     });
     (manager as any).mirrors.set("dev-box", {
-      getRemotePaneId: () => "%77",
+      remotePaneFor: () => "%77",
     });
 
     await manager.convertPane("%10", "dev-box");
@@ -416,21 +420,57 @@ describe("RemoteServerManager remote hook ingress", () => {
     expect(forgetProxy).not.toHaveBeenCalled();
   });
 
-  it("stores the remote hook socket path in tmux state instead of process environment", async () => {
+  it("stores the remote hook tcp endpoint and token in the tmux user-option", async () => {
     const sendCommand = mock(async () => "");
     const localClient = {} as any;
     const manager = new RemoteServerManager(localClient, [{ host: "dev-box", name: "dev-box" }]);
 
     (manager as any).clients.set("dev-box", {
-      remoteHookSocketPath: "/home/dev/.local/state/honeymux/runtime/hmx-remote-hook-0123456789abcdef.sock",
+      hookAuthToken: "deadbeefcafebabe",
+      hookForwardingRejected: false,
+      remoteHookTcpPort: 23456,
       sendCommand,
     });
 
     await (manager as any).configureRemoteHookSocketOption("dev-box");
 
     expect(sendCommand).toHaveBeenCalledWith(
-      "set-option -gq @hmx-agent-socket-path '/home/dev/.local/state/honeymux/runtime/hmx-remote-hook-0123456789abcdef.sock'",
+      "set-option -gq @hmx-agent-socket-path 'tcp://127.0.0.1:23456#deadbeefcafebabe'",
     );
+  });
+
+  it("skips writing the hook option when forwarding has been rejected", async () => {
+    const sendCommand = mock(async () => "");
+    const localClient = {} as any;
+    const manager = new RemoteServerManager(localClient, [{ host: "dev-box", name: "dev-box" }]);
+
+    (manager as any).clients.set("dev-box", {
+      hookAuthToken: "deadbeefcafebabe",
+      hookForwardingRejected: true,
+      remoteHookTcpPort: 23456,
+      sendCommand,
+    });
+
+    await (manager as any).configureRemoteHookSocketOption("dev-box");
+
+    expect(sendCommand).not.toHaveBeenCalled();
+  });
+
+  it("skips writing the hook option until the allocated port has resolved", async () => {
+    const sendCommand = mock(async () => "");
+    const localClient = {} as any;
+    const manager = new RemoteServerManager(localClient, [{ host: "dev-box", name: "dev-box" }]);
+
+    (manager as any).clients.set("dev-box", {
+      hookAuthToken: "deadbeefcafebabe",
+      hookForwardingRejected: false,
+      remoteHookTcpPort: undefined,
+      sendCommand,
+    });
+
+    await (manager as any).configureRemoteHookSocketOption("dev-box");
+
+    expect(sendCommand).not.toHaveBeenCalled();
   });
 
   it("kills mapped local proxy panes when the remote tmux session exits", () => {
@@ -445,12 +485,12 @@ describe("RemoteServerManager remote hook ingress", () => {
       { host: "dev-b", name: "dev-b" },
     ]);
 
-    (manager as any).paneMappings.set("%10", {
+    (manager as any).routing.register({
       localPaneId: "%10",
       remotePaneId: "%77",
       serverName: "dev-a",
     });
-    (manager as any).paneMappings.set("%11", {
+    (manager as any).routing.register({
       localPaneId: "%11",
       remotePaneId: "%88",
       serverName: "dev-b",
@@ -460,49 +500,109 @@ describe("RemoteServerManager remote hook ingress", () => {
 
     expect(killPaneById).toHaveBeenCalledTimes(1);
     expect(killPaneById).toHaveBeenCalledWith("%10");
-    expect((manager as any).paneMappings.has("%10")).toBe(false);
-    expect((manager as any).paneMappings.has("%11")).toBe(true);
+    expect(Boolean((manager as any).routing.lookup("%10"))).toBe(false);
+    expect(Boolean((manager as any).routing.lookup("%11"))).toBe(true);
     // 3 option clears (@hmx-remote-host, @hmx-remote-pane, @hmx-remote-token)
     // + 1 border reset.
     expect(runCommandArgs).toHaveBeenCalledTimes(4);
   });
 
-  it("kills a mapped local proxy pane when the remote pane is dead but still listed", async () => {
+  it("cleanupDeadLocalProxiesForServer kills local proxy panes whose remote peer is missing from the snapshot", () => {
     const killPaneById = mock(async () => {});
     const runCommandArgs = mock(async () => {});
     const localClient = {
       killPaneById,
       runCommandArgs,
     } as any;
-    const sendCommand = mock(async () => " %77\t1\n %88\t0\n");
     const manager = new RemoteServerManager(localClient, [{ host: "dev-box", name: "dev-box" }]);
 
-    (manager as any).clients.set("dev-box", {
-      isConnected: true,
-      sendCommand,
+    // Drive the bindings through the snapshot path (rebuildForServer) so
+    // they land in the cache without a pending hold — matching the
+    // post-convert steady state. A register() here would leave them in the
+    // pending overlay and the cleanup guard would (correctly) skip them.
+    (manager as any).routing.rebuildForServer("dev-box", {
+      panesByWindow: new Map([
+        [
+          "@1",
+          [
+            { id: "%10", index: 0, tags: { remoteHost: "dev-box", remotePaneId: "%77" }, windowId: "@1" },
+            { id: "%11", index: 1, tags: { remoteHost: "dev-box", remotePaneId: "%88" }, windowId: "@1" },
+          ],
+        ],
+      ]),
+      windows: [{ id: "@1", index: 0, layout: "x" }],
     });
-    (manager as any).paneMappings.set("%10", {
+
+    // Snapshot shows only %88 alive; %77 has vanished.
+    const remoteSnapshot = {
+      panesByWindow: new Map([["@100", [{ id: "%88", index: 0, tags: {}, windowId: "@100" }]]]),
+      windows: [{ id: "@100", index: 0, layout: "x" }],
+    };
+    (manager as any).cleanupDeadLocalProxiesForServer("dev-box", remoteSnapshot);
+
+    expect(killPaneById).toHaveBeenCalledTimes(1);
+    expect(killPaneById).toHaveBeenCalledWith("%10");
+    expect(Boolean((manager as any).routing.lookup("%10"))).toBe(false);
+    expect((manager as any).routing.lookup("%11")).toEqual({
+      localPaneId: "%11",
+      remotePaneId: "%88",
+      serverName: "dev-box",
+    });
+  });
+
+  it("cleanupDeadLocalProxiesForServer skips bindings still held in the pending overlay", () => {
+    // Regression for the convertPane race: when the routing cache has a
+    // pending registration (set between routing.register and the next
+    // snapshot that observes the local @hmx-remote-* tags), the
+    // pre-mutation remote snapshot the reconciler walks here can lag the
+    // actual remote state by a cycle. Killing the proxy on that stale
+    // signal tears down a pane the user is in the middle of converting.
+    const killPaneById = mock(async () => {});
+    const runCommandArgs = mock(async () => {});
+    const localClient = { killPaneById, runCommandArgs } as any;
+    const manager = new RemoteServerManager(localClient, [{ host: "dev-box", name: "dev-box" }]);
+
+    // convertPane just called routing.register — pending holds %10 → %77.
+    (manager as any).routing.register({
       localPaneId: "%10",
       remotePaneId: "%77",
       serverName: "dev-box",
     });
-    (manager as any).paneMappings.set("%11", {
-      localPaneId: "%11",
-      remotePaneId: "%88",
+
+    // Remote snapshot does NOT contain %77 (e.g. the prior reconcile
+    // killed the window during the create-window thrash, or the snapshot
+    // was captured before the just-respawned pane was published).
+    const remoteSnapshot = {
+      panesByWindow: new Map([["@100", [{ id: "%88", index: 0, tags: {}, windowId: "@100" }]]]),
+      windows: [{ id: "@100", index: 0, layout: "x" }],
+    };
+    (manager as any).cleanupDeadLocalProxiesForServer("dev-box", remoteSnapshot);
+
+    expect(killPaneById).not.toHaveBeenCalled();
+    expect((manager as any).routing.lookup("%10")).toEqual({
+      localPaneId: "%10",
+      remotePaneId: "%77",
+      serverName: "dev-box",
+    });
+  });
+
+  it("cleanupDeadLocalProxiesForServer treats an empty snapshot as unavailable and kills nothing", () => {
+    const killPaneById = mock(async () => {});
+    const localClient = { killPaneById, runCommandArgs: mock(async () => {}) } as any;
+    const manager = new RemoteServerManager(localClient, [{ host: "dev-box", name: "dev-box" }]);
+
+    (manager as any).routing.register({
+      localPaneId: "%10",
+      remotePaneId: "%77",
       serverName: "dev-box",
     });
 
-    await (manager as any).checkForDeadRemotePanes("dev-box");
-
-    expect(sendCommand).toHaveBeenCalledWith("list-panes -a -F ' #{pane_id}\t#{pane_dead}'");
-    expect(killPaneById).toHaveBeenCalledTimes(1);
-    expect(killPaneById).toHaveBeenCalledWith("%10");
-    expect((manager as any).paneMappings.has("%10")).toBe(false);
-    expect((manager as any).paneMappings.get("%11")).toEqual({
-      localPaneId: "%11",
-      remotePaneId: "%88",
-      serverName: "dev-box",
+    (manager as any).cleanupDeadLocalProxiesForServer("dev-box", {
+      panesByWindow: new Map(),
+      windows: [],
     });
+
+    expect(killPaneById).not.toHaveBeenCalled();
   });
 
   it("token-reuse recovery re-registers the stored token without respawning the pane", async () => {
@@ -524,7 +624,7 @@ describe("RemoteServerManager remote hook ingress", () => {
 
     (manager as any).clients.set("dev-box", { isConnected: true });
     (manager as any).mirrors.set("dev-box", {
-      getRemotePaneId: (localId: string) => (localId === "%10" ? "%77" : undefined),
+      remotePaneFor: (localId: string) => (localId === "%10" ? "%77" : undefined),
     });
 
     const converted: Array<[string, string]> = [];
@@ -534,7 +634,7 @@ describe("RemoteServerManager remote hook ingress", () => {
 
     await manager.recoverPaneMappings("dev-box");
 
-    expect((manager as any).paneMappings.get("%10")).toEqual({
+    expect((manager as any).routing.lookup("%10")).toEqual({
       localPaneId: "%10",
       remotePaneId: "%77",
       serverName: "dev-box",
@@ -565,12 +665,12 @@ describe("RemoteServerManager remote hook ingress", () => {
 
     (manager as any).clients.set("dev-box", { isConnected: true });
     (manager as any).mirrors.set("dev-box", {
-      getRemotePaneId: (localId: string) => (localId === "%10" ? "%77" : undefined),
+      remotePaneFor: (localId: string) => (localId === "%10" ? "%77" : undefined),
     });
 
     await manager.recoverPaneMappings("dev-box");
 
-    expect((manager as any).paneMappings.get("%10")).toEqual({
+    expect((manager as any).routing.lookup("%10")).toEqual({
       localPaneId: "%10",
       remotePaneId: "%77",
       serverName: "dev-box",
@@ -588,20 +688,21 @@ describe("RemoteServerManager remote hook ingress", () => {
     expect(respawnArgv).toEqual(buildRemoteProxyProcessArgv("%10", expectedToken));
 
     // %11 has no host, %12 is a different server — neither should be touched.
-    expect((manager as any).paneMappings.has("%11")).toBe(false);
-    expect((manager as any).paneMappings.has("%12")).toBe(false);
+    expect(Boolean((manager as any).routing.lookup("%11"))).toBe(false);
+    expect(Boolean((manager as any).routing.lookup("%12"))).toBe(false);
   });
 
-  it("re-syncs connected mirrors when the active session changes", async () => {
+  it("enqueues a reconcile when the active session changes", async () => {
     const localClient = new LocalEventClient();
     const manager = new RemoteServerManager(localClient as any, [{ host: "dev-box", name: "dev-box" }]);
-    const fullSync = mock(async () => {});
+    const request = mock(() => {});
 
     (manager as any).clients.set("dev-box", {
       isConnected: true,
     });
     (manager as any).mirrors.set("dev-box", {
-      fullSync,
+      request,
+      whenIdle: async () => {},
     });
 
     (manager as any).wireLocalEvents();
@@ -609,10 +710,10 @@ describe("RemoteServerManager remote hook ingress", () => {
     localClient.emitEvent("session-window-changed");
     await Promise.resolve();
 
-    expect(fullSync).toHaveBeenCalledTimes(1);
+    expect(request).toHaveBeenCalledTimes(1);
   });
 
-  it("re-syncs mapped remote pane ids after a local layout change", async () => {
+  it("re-syncs mapped remote pane ids after a local layout change settles", async () => {
     const runCommandArgs = mock(async () => {});
     const localClient = Object.assign(new LocalEventClient(), { runCommandArgs });
     const manager = new RemoteServerManager(localClient as any, [{ host: "dev-box", name: "dev-box" }]);
@@ -620,7 +721,7 @@ describe("RemoteServerManager remote hook ingress", () => {
       ["%10", "%77"],
       ["%11", "%88"],
     ]);
-    const onLayoutChange = mock(async () => {
+    const request = mock(() => {
       remotePaneIds.set("%11", "%99");
     });
 
@@ -628,15 +729,16 @@ describe("RemoteServerManager remote hook ingress", () => {
       isConnected: true,
     });
     (manager as any).mirrors.set("dev-box", {
-      getRemotePaneId: (paneId: string) => remotePaneIds.get(paneId),
-      onLayoutChange,
+      remotePaneFor: (paneId: string) => remotePaneIds.get(paneId),
+      request,
+      whenIdle: async () => {},
     });
-    (manager as any).paneMappings.set("%10", {
+    (manager as any).routing.register({
       localPaneId: "%10",
       remotePaneId: "%77",
       serverName: "dev-box",
     });
-    (manager as any).paneMappings.set("%11", {
+    (manager as any).routing.register({
       localPaneId: "%11",
       remotePaneId: "%88",
       serverName: "dev-box",
@@ -645,16 +747,13 @@ describe("RemoteServerManager remote hook ingress", () => {
     (manager as any).wireLocalEvents();
 
     localClient.emitEvent("layout-change", "@1", "layout");
+    // Let the microtask queue drain so the whenIdle.then() callback fires.
+    await Promise.resolve();
     await Promise.resolve();
     await Promise.resolve();
 
-    expect(onLayoutChange).toHaveBeenCalledWith("@1", "layout");
-    expect((manager as any).paneMappings.get("%10")).toEqual({
-      localPaneId: "%10",
-      remotePaneId: "%77",
-      serverName: "dev-box",
-    });
-    expect((manager as any).paneMappings.get("%11")).toEqual({
+    expect(request).toHaveBeenCalledTimes(1);
+    expect((manager as any).routing.lookup("%11")).toEqual({
       localPaneId: "%11",
       remotePaneId: "%99",
       serverName: "dev-box",
@@ -680,12 +779,12 @@ describe("RemoteServerManager remote hook ingress", () => {
 
     (manager as any).clients.set("dev-box", { isConnected: true });
     (manager as any).mirrors.set("dev-box", {
-      getRemotePaneId: () => undefined,
+      remotePaneFor: () => undefined,
     });
 
     await manager.recoverPaneMappings("dev-box");
 
-    expect((manager as any).paneMappings.has("%10")).toBe(false);
+    expect(Boolean((manager as any).routing.lookup("%10"))).toBe(false);
     expect(expectProxy).not.toHaveBeenCalled();
     expect(respawnPane).not.toHaveBeenCalled();
 
@@ -696,7 +795,7 @@ describe("RemoteServerManager remote hook ingress", () => {
     expect(clearedKeys).toEqual(expect.arrayContaining(["@hmx-remote-host", "@hmx-remote-pane", "@hmx-remote-token"]));
   });
 
-  it("skips panes already present in paneMappings", async () => {
+  it("skips panes this instance has already claimed via pendingRegistrations", async () => {
     const respawnPane = mock(async () => {});
     const runCommand = mock(async () => " %10\tdev-box\tsometoken\n");
     const localClient = {
@@ -711,8 +810,34 @@ describe("RemoteServerManager remote hook ingress", () => {
     (manager as any).proxyServer = { expectProxy, forgetProxy: mock(() => {}) };
 
     (manager as any).clients.set("dev-box", { isConnected: true });
-    (manager as any).mirrors.set("dev-box", { getRemotePaneId: () => "%77" });
-    (manager as any).paneMappings.set("%10", {
+    (manager as any).mirrors.set("dev-box", { remotePaneFor: () => "%77" });
+    (manager as any).pendingRegistrations.set("%10", () => {});
+
+    await manager.recoverPaneMappings("dev-box");
+
+    expect(expectProxy).not.toHaveBeenCalled();
+    expect(respawnPane).not.toHaveBeenCalled();
+  });
+
+  it("re-runs recovery for panes whose routing was rebuilt from tags but never claimed this run", async () => {
+    // Simulates the post-restart scenario: the first reconcile populates
+    // routing from surviving @hmx-remote-* tags BEFORE recoverPaneMappings
+    // runs. The pane must still go through recovery so expectProxy is
+    // called and the in-pane proxy can authenticate.
+    const runCommand = mock(async () => " %10\tdev-box\tsometoken\n");
+    const localClient = {
+      runCommand,
+      runCommandArgs: mock(async () => {}),
+      setPaneBorderFormat: mock(async () => {}),
+    } as any;
+
+    const manager = new RemoteServerManager(localClient, [{ host: "dev-box", name: "dev-box" }]);
+    const expectProxy = mock((_paneId: string, _token: string) => {});
+    (manager as any).proxyServer = { expectProxy, forgetProxy: mock(() => {}) };
+
+    (manager as any).clients.set("dev-box", { isConnected: true });
+    (manager as any).mirrors.set("dev-box", { remotePaneFor: () => "%77" });
+    (manager as any).routing.register({
       localPaneId: "%10",
       remotePaneId: "%77",
       serverName: "dev-box",
@@ -720,8 +845,7 @@ describe("RemoteServerManager remote hook ingress", () => {
 
     await manager.recoverPaneMappings("dev-box");
 
-    expect(expectProxy).not.toHaveBeenCalled();
-    expect(respawnPane).not.toHaveBeenCalled();
+    expect(expectProxy).toHaveBeenCalledWith("%10", "sometoken");
   });
 
   it("persists the proxy token in @hmx-remote-token when converting a pane", async () => {
@@ -739,7 +863,7 @@ describe("RemoteServerManager remote hook ingress", () => {
       isConnected: true,
       sendCommand: mock(async () => ""),
     });
-    (manager as any).mirrors.set("dev-box", { getRemotePaneId: () => "%77" });
+    (manager as any).mirrors.set("dev-box", { remotePaneFor: () => "%77" });
 
     await manager.convertPane("%10", "dev-box");
 
