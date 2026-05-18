@@ -2,6 +2,7 @@ import type { MutableRefObject } from "react";
 
 import type { AgentProviderRegistry } from "../agents/provider.ts";
 import type { AgentSession } from "../agents/types.ts";
+import type { TmuxControlClient } from "../tmux/control-client.ts";
 
 import { theme } from "../themes/theme.ts";
 import { centerToWidth, stringWidth } from "../util/text.ts";
@@ -9,6 +10,7 @@ import { AgentTree } from "./agent-tree.tsx";
 
 interface AgentsZoomOverlayProps {
   agentSessions: AgentSession[];
+  clientRef?: MutableRefObject<TmuxControlClient | null>;
   height: number;
   onSessionSelect?: (session: AgentSession) => void;
   registryRef?: MutableRefObject<AgentProviderRegistry | null>;
@@ -19,6 +21,7 @@ interface AgentsZoomOverlayProps {
 
 export function AgentsZoomOverlay({
   agentSessions,
+  clientRef,
   height,
   onSessionSelect,
   registryRef,
@@ -74,6 +77,7 @@ export function AgentsZoomOverlay({
         {/* Agent tree */}
         {activeSessions.length > 0 ? (
           <AgentTree
+            clientRef={clientRef}
             height={contentHeight - 2}
             onSelect={(session) => onSessionSelect?.(session)}
             registryRef={registryRef}
