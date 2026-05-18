@@ -441,6 +441,7 @@ export function AppOverlays({
       {muxotronFocusActive && zoomAction === "zoomAgentsView" && (
         <AgentsZoomOverlay
           agentSessions={agentSessions}
+          clientRef={clientRef}
           height={height}
           onSessionSelect={onAgentSessionSelect}
           registryRef={registryRef}
