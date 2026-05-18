@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+## v0.108.0 - 2026-05-17
+
+- Add support for `tmux switch-client -t session:window` 
+- Auto-revert panes to local login shell on remote shell exit
+- Fix IME composition text not reaching tmux on Kitty-protocol terminals (thanks @zenyr)
+- Improve agent liveness check to detect remote agents that exit forcibly
+- Prevent remote tmux server instance name collisions
+- Refactor remote stitching architecture to new reconciler-based approach
+- Switch agent hook forwarding from Unix sockets to authenticated TCP (thanks @tfriedel)
+- Upgrade opentui to 0.2.12
+
+
 ## v0.107.0 - 2026-05-12
 
 - Auto-refresh remote hook scripts on connect (thanks @tfriedel)
