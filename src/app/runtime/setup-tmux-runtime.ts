@@ -8,7 +8,7 @@ import { setupInputLayer } from "./setup-input-layer.ts";
 export function setupTmuxRuntime(ctx: SetupTmuxRuntimeContext): () => void {
   const {
     agentRuntime: { registryRef, storeRef },
-    sessionRuntime: { clientRef, initTargetRef, ptyRef },
+    sessionRuntime: { clientRef, initTargetRef, ptyRef, remoteManagerRef },
   } = ctx;
 
   const targetSession = initTargetRef.current;
@@ -34,6 +34,8 @@ export function setupTmuxRuntime(ctx: SetupTmuxRuntimeContext): () => void {
       // ignore
     }
     clearKeybindingRefresh();
+    void remoteManagerRef.current?.stopAll();
+    remoteManagerRef.current = null;
     registryRef.current?.stopAll();
     storeRef.current?.destroy();
     if (clientRef.current === client) {

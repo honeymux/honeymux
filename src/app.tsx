@@ -682,6 +682,7 @@ export function App({ sessionName }: AppProps) {
     handleSshServerStatusChange,
     refs: appRuntimeRefs,
     remoteConfigs: config.remote,
+    runtimeKey: sessionKey,
   });
   const recoveringPaneRects = useRecoveringPaneRects({
     clientRef,
@@ -931,8 +932,9 @@ export function App({ sessionName }: AppProps) {
         onConvertToRemote={(paneId, serverName) => {
           void (async () => {
             const manager = remoteManagerRef.current;
-            if (!manager || manager.getRemoteConversionAvailability(paneId, serverName) === "unavailable") {
-              log("remote", `convertPane skipped: server unavailable for ${paneId} on ${serverName}`);
+            const availability = manager?.getRemoteConversionAvailability(paneId, serverName) ?? "unavailable";
+            if (!manager || availability !== "ready") {
+              log("remote", `convertPane skipped: server ${availability} for ${paneId} on ${serverName}`);
               return;
             }
             // Evict the pane from any pane-tab group BEFORE conversion so the

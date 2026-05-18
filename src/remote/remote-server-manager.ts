@@ -104,6 +104,7 @@ interface RemotePermissionState {
 export class RemoteServerManager extends EventEmitter {
   private agentIngresses = new Map<string, RemoteAgentIngress>();
   private clients = new Map<string, RemoteControlClient>();
+  private localEventUnsubscribers: Array<() => void> = [];
   private localPaneMetadataCache: CachedLocalPaneMeta = { at: 0, mappings: new Map() };
   private mirrors = new Map<string, RemoteMirror>();
   /** Pending registration disposers held during convertPane's mid-mutation window. */
@@ -233,13 +234,13 @@ export class RemoteServerManager extends EventEmitter {
     return names;
   }
 
-  getRemoteConversionAvailability(_localPaneId: string, serverName: string): "ready" | "unavailable" | "waiting" {
+  getRemoteConversionAvailability(localPaneId: string, serverName: string): "ready" | "unavailable" | "waiting" {
     const client = this.clients.get(serverName);
     const mirror = this.mirrors.get(serverName);
     if (!client || !mirror || !client.isConnected) {
       return "unavailable";
     }
-    return "ready";
+    return mirror.remotePaneFor(localPaneId) ? "ready" : "waiting";
   }
 
   hasConvertibleRemoteServer(localPaneId: string): boolean {
@@ -633,6 +634,13 @@ export class RemoteServerManager extends EventEmitter {
   async stopAll(): Promise<void> {
     this.started = false;
 
+    for (const unsubscribe of this.localEventUnsubscribers) {
+      unsubscribe();
+    }
+    this.localEventUnsubscribers = [];
+
+    const mirrorStops = [...this.mirrors.values()].map((mirror) => mirror.stop().catch(() => {}));
+
     if (this.remoteLivenessTimer) {
       clearInterval(this.remoteLivenessTimer);
       this.remoteLivenessTimer = null;
@@ -668,6 +676,7 @@ export class RemoteServerManager extends EventEmitter {
     this.localPaneMetadataCache = { at: 0, mappings: new Map() };
     this.proxyServer.off("proxy-input", this.handleProxyInput);
     this.proxyServer.stop();
+    await Promise.allSettled(mirrorStops);
   }
 
   /**
@@ -1157,10 +1166,13 @@ export class RemoteServerManager extends EventEmitter {
           .catch(() => {});
       }
     };
-    this.localClient.on("session-window-changed", requestAll);
-    this.localClient.on("layout-change", requestAll);
-    this.localClient.on("window-add", requestAll);
-    this.localClient.on("window-close", requestAll);
+    const events = ["session-window-changed", "layout-change", "window-add", "window-close"] as const;
+    for (const event of events) {
+      this.localClient.on(event, requestAll);
+      this.localEventUnsubscribers.push(() => {
+        this.localClient.off(event, requestAll);
+      });
+    }
   }
 }
 
