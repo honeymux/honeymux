@@ -25,6 +25,7 @@ EVENT_STATUS_MAP = {
     "PermissionRequest": "unanswered",
     "PostToolUse": "alive",
     "SessionStart": "alive",
+    "UserPromptSubmit": "alive",
 }
 
 REMOTE_HOOK_SOCKET_OPTION = "@hmx-agent-socket-path"
@@ -198,6 +199,15 @@ def main():
         event["toolInput"] = tool_input
     if turn_id:
         event["toolUseId"] = turn_id
+
+    # Forward transcript path (every event) and the user prompt (only the
+    # UserPromptSubmit event carries it) so the agents list can label the row.
+    transcript_path = data.get("transcript_path")
+    if isinstance(transcript_path, str) and transcript_path:
+        event["transcriptPath"] = transcript_path
+    prompt = data.get("prompt")
+    if isinstance(prompt, str) and prompt:
+        event["prompt"] = prompt[:200]
 
     event["processSnapshot"] = collect_process_snapshot()
 
