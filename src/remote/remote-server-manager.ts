@@ -530,7 +530,7 @@ export class RemoteServerManager extends EventEmitter {
       this.clients.set(config.name, client);
 
       const mirror = new RemoteMirror({
-        activeRemotePaneIds: () => this.getActiveRemotePaneIdsForServer(config.name),
+        activeBindings: () => this.getActiveBindingsForServer(config.name),
         onReconciled: ({ local, remote }) => {
           // Refresh the per-server routing cache from the latest local
           // snapshot. Tags (@hmx-remote-host + @hmx-remote-pane) are the
@@ -538,6 +538,16 @@ export class RemoteServerManager extends EventEmitter {
           // installed by convertPane / recoverPaneMappings survive the
           // rebuild until their disposers fire.
           this.routing.rebuildForServer(config.name, local);
+          // Bring routing in line with the mirror's pane index BEFORE
+          // cleanup. The local `@hmx-remote-pane` tag can lag the mirror
+          // by one cycle when a local pane was moved between windows
+          // and the new peer was just split in: the tag still names the
+          // (now-killed) old peer. Without this update, cleanup's
+          // "remote peer is dead" check would fire against a stale
+          // routing entry and revert the live local proxy. The sync
+          // method's synchronous portion fixes routing immediately;
+          // the trailing local-tag rewrite is fire-and-forget.
+          this.syncPaneMappingsFromMirror(config.name).catch(() => {});
           // Kill local proxy panes whose paired remote pane has vanished
           // from the remote snapshot.
           this.cleanupDeadLocalProxiesForServer(config.name, remote);
@@ -818,11 +828,12 @@ export class RemoteServerManager extends EventEmitter {
   }
 
   /**
-   * The set of remote pane ids currently hosting an active local proxy
-   * process for this server, fed into the reconciler's active-pane guard.
+   * Current routing bindings for this server, keyed by remote pane id
+   * with the bound local pane id as the value. Fed into the reconciler's
+   * active-proxy guard so it can window-scope the protection.
    */
-  private getActiveRemotePaneIdsForServer(serverName: string): ReadonlySet<string> {
-    return this.routing.activeRemotePaneIds(serverName);
+  private getActiveBindingsForServer(serverName: string): ReadonlyMap<string, string> {
+    return this.routing.activeBindings(serverName);
   }
 
   private async getLocalPaneMetadata(paneId: string): Promise<{ sessionName: string; windowId: string } | undefined> {

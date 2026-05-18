@@ -17,7 +17,7 @@ interface SnapshotInit {
 
 function baseInput(overrides: Partial<ReconcileInput>): ReconcileInput {
   return {
-    activeRemotePaneIds: new Set(),
+    activeBindings: new Map(),
     hasReconciledBefore: false,
     lastAppliedLayoutByRemoteWindow: new Map(),
     local: makeSnapshot({ panesByWindow: {}, windows: [] }),
@@ -385,7 +385,10 @@ describe("reconciler — ported mirror-layout cases", () => {
     // Local @1 has %0, %1; remote has %11(→%0), %13(→stale %2), %12(→%1).
     // %13's local target vanished; %12 is the active proxy peer for local %1.
     const input = baseInput({
-      activeRemotePaneIds: new Set(["%12"]),
+      activeBindings: new Map([
+        ["%11", "%0"],
+        ["%12", "%1"],
+      ]),
       hasReconciledBefore: true,
       local: makeSnapshot({
         panesByWindow: { "@1": [makePane("%0", 0, "@1"), makePane("%1", 1, "@1")] },
@@ -408,7 +411,8 @@ describe("reconciler — ported mirror-layout cases", () => {
     expect(mutationsOfKind(plan, "kill-pane")).toEqual([
       { kind: "kill-pane", reason: "stale-tag", remotePaneId: "%13" },
     ]);
-    // %11 and %12 must survive (active proxy %12 preserved by activeRemotePaneIds).
+    // %11 and %12 must survive: both are paired with their respective
+    // local panes in @1, so the active-proxy guard isn't even hit for them.
     expect(mutationsOfKind(plan, "split-window")).toEqual([]);
   });
 });
@@ -582,12 +586,12 @@ describe("reconciler — additional invariants", () => {
 
   test("active-pane guard protects only the genuine proxy peer, not duplicate-tagged interlopers", () => {
     // Local @1[%10] has a live proxy talking to remote %200.
-    // activeRemotePaneIds names %200 specifically. A duplicate-tagged
+    // activeBindings names the %200 → %10 pairing. A duplicate-tagged
     // interloper %201 (same stale @hmx-local-pane-id=%10) is still an
     // orphan and must be killed: %201 is not the proxy peer, and leaving
     // it alive lets duplicates accumulate indefinitely.
     const input = baseInput({
-      activeRemotePaneIds: new Set(["%200"]),
+      activeBindings: new Map([["%200", "%10"]]),
       hasReconciledBefore: true,
       local: makeSnapshot({
         panesByWindow: { "@1": [makePane("%10", 0, "@1")] },
@@ -706,9 +710,10 @@ describe("reconciler — additional invariants", () => {
     // After tmux on the remote restarted the pane's shell (respawn-pane),
     // the @hmx-local-pane-id tag remained but now points at a vanished
     // local id. The orphan IS the active peer per the executor's record
-    // of @hmx-remote-pane on local panes; do not kill.
+    // of @hmx-remote-pane on local panes (activeBindings has %200 → %10),
+    // and %10 is in the paired local window — do not kill.
     const input = baseInput({
-      activeRemotePaneIds: new Set(["%200"]),
+      activeBindings: new Map([["%200", "%10"]]),
       hasReconciledBefore: true,
       local: makeSnapshot({
         panesByWindow: { "@1": [makePane("%10", 0, "@1")] },
@@ -723,5 +728,52 @@ describe("reconciler — additional invariants", () => {
     const plan = reconcile(input);
 
     expect(mutationsOfKind(plan, "kill-pane")).toEqual([]);
+  });
+
+  test("active-pane guard does NOT protect an orphan whose owner local pane is in a different window", () => {
+    // Regression for the "moved pane" bug: local %10 was originally
+    // converted to remote %200 in mirror window @100 (paired with local
+    // @1). The user then moved %10 to local @2 (e.g. via move-pane).
+    // The reconciler ran for @2's mirror and split a new remote pane
+    // %300 there; %10's @hmx-remote-pane on the local side has not been
+    // refreshed yet, so activeBindings still has %200 → %10.
+    //
+    // When reconcile runs for local @1, remote %200 is an orphan in
+    // @100. The window-blind guard would protect %200 (its id is in
+    // activeBindings) and apply-layout would then fail forever with
+    // "have 2 panes but need 1". The window-aware guard sees that %10
+    // is in @2's local panes, NOT @1's, so it allows the kill.
+    const input = baseInput({
+      activeBindings: new Map([["%200", "%10"]]),
+      hasReconciledBefore: true,
+      local: makeSnapshot({
+        // %10 currently lives in @2, not @1.
+        panesByWindow: {
+          "@1": [makePane("%11", 0, "@1")],
+          "@2": [makePane("%10", 0, "@2")],
+        },
+        windows: [makeWindow("@1", 0, "aaaa,80x24,0,0,11"), makeWindow("@2", 1, "bbbb,80x24,0,0,10")],
+      }),
+      remote: makeSnapshot({
+        panesByWindow: {
+          "@100": [
+            makePane("%150", 0, "@100", { localPaneId: "%11" }),
+            // Stale orphan: %200's @hmx-local-pane-id=%10 from before
+            // the move, but %10 is now in @2.
+            makePane("%200", 1, "@100", { localPaneId: "%10" }),
+          ],
+          "@200": [makePane("%300", 0, "@200", { localPaneId: "%10" })],
+        },
+        windows: [makeWindow("@100", 0, "x", "@1"), makeWindow("@200", 1, "y", "@2")],
+      }),
+    });
+
+    const plan = reconcile(input);
+
+    // %200 MUST be killed despite the stale activeBindings entry —
+    // otherwise apply-layout for @100 would fail with the wrong pane count.
+    expect(mutationsOfKind(plan, "kill-pane")).toEqual([
+      { kind: "kill-pane", reason: "stale-tag", remotePaneId: "%200" },
+    ]);
   });
 });

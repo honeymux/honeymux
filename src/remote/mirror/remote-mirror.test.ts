@@ -125,7 +125,7 @@ describe("RemoteMirror", () => {
     });
 
     const mirror = new RemoteMirror({
-      activeRemotePaneIds: () => new Set(),
+      activeBindings: () => new Map(),
       runLocal: fixture.runLocal,
       runRemote: fixture.runRemote,
       serverName: "test",
@@ -151,7 +151,7 @@ describe("RemoteMirror", () => {
     });
 
     const mirror = new RemoteMirror({
-      activeRemotePaneIds: () => new Set(),
+      activeBindings: () => new Map(),
       runLocal: fixture.runLocal,
       runRemote: fixture.runRemote,
       serverName: "test",
@@ -172,7 +172,7 @@ describe("RemoteMirror", () => {
     const onReconciled = mock((_snapshot: unknown) => {});
 
     const mirror = new RemoteMirror({
-      activeRemotePaneIds: () => new Set(),
+      activeBindings: () => new Map(),
       onReconciled,
       runLocal: fixture.runLocal,
       runRemote: fixture.runRemote,
@@ -193,7 +193,7 @@ describe("RemoteMirror", () => {
     });
 
     const mirror = new RemoteMirror({
-      activeRemotePaneIds: () => new Set(),
+      activeBindings: () => new Map(),
       onReconciled,
       runLocal: failingLocal,
       runRemote,
@@ -226,7 +226,7 @@ describe("RemoteMirror", () => {
     };
 
     const mirror = new RemoteMirror({
-      activeRemotePaneIds: () => new Set(),
+      activeBindings: () => new Map(),
       onReconciled,
       runLocal: fixture.runLocal,
       runRemote: wrappedRunRemote,
@@ -265,7 +265,7 @@ describe("RemoteMirror", () => {
     fixture.state.remote.panesByWindow.set("@100", [{ id: "%200", tags: { "@hmx-local-pane-id": "%10" } }]);
 
     const mirror = new RemoteMirror({
-      activeRemotePaneIds: () => new Set(),
+      activeBindings: () => new Map(),
       runLocal: fixture.runLocal,
       runRemote: fixture.runRemote,
       serverName: "test",
@@ -303,7 +303,7 @@ describe("RemoteMirror", () => {
     };
 
     const mirror = new RemoteMirror({
-      activeRemotePaneIds: () => new Set(),
+      activeBindings: () => new Map(),
       runLocal: fixture.runLocal,
       runRemote: wrappedRunRemote,
       serverName: "test",
@@ -329,7 +329,7 @@ describe("RemoteMirror", () => {
     };
 
     const mirror = new RemoteMirror({
-      activeRemotePaneIds: () => new Set(),
+      activeBindings: () => new Map(),
       runLocal: fixture.runLocal,
       runRemote: wrappedRunRemote,
       serverName: "test",
@@ -349,5 +349,58 @@ describe("RemoteMirror", () => {
     });
     await captureLocalMirrorSnapshot(run);
     expect(commands[0]).toMatch(/^list-windows\s+-a\s/);
+  });
+
+  test("remotePaneFor returns the peer in the local pane's current window's mirror, not a stale tag in another window", async () => {
+    // Regression: rebuildIndexes used to walk all paired remote windows
+    // with first-tag-wins semantics, so a remote pane in @100 carrying a
+    // stale `@hmx-local-pane-id=%10` could be returned for local %10
+    // even after %10 was moved to local @2 and a fresh remote peer was
+    // created in @2's mirror @200. The window-scoped lookup must only
+    // consider remote panes whose remote window is paired with the local
+    // window that currently contains %10.
+    const fixture = createServerStub({
+      panesByWindow: new Map([
+        ["@1", [{ id: "%11", index: 0 }]],
+        ["@2", [{ id: "%10", index: 0, tags: { "@hmx-remote-host": "test" } }]],
+      ]),
+      windows: [
+        { id: "@1", index: 0, layout: "aaaa,80x24,0,0,11" },
+        { id: "@2", index: 1, layout: "bbbb,80x24,0,0,10" },
+      ],
+    });
+    // Pre-populate the remote with two paired mirror windows. @100 (paired
+    // with @1) carries a STALE tag pointing at %10 — from before the move.
+    // @200 (paired with @2) has the freshly split current peer for %10.
+    fixture.state.remote.nextWindowNum = 201;
+    fixture.state.remote.nextPaneNum = 301;
+    fixture.state.remote.windows.push(
+      { id: "@100", layout: "x", tags: { "@hmx-local-window-id": "@1" } },
+      { id: "@200", layout: "y", tags: { "@hmx-local-window-id": "@2" } },
+    );
+    fixture.state.remote.panesByWindow.set("@100", [
+      { id: "%150", tags: { "@hmx-local-pane-id": "%11" } },
+      { id: "%200", tags: { "@hmx-local-pane-id": "%10" } }, // stale
+    ]);
+    fixture.state.remote.panesByWindow.set("@200", [{ id: "%300", tags: { "@hmx-local-pane-id": "%10" } }]);
+
+    const mirror = new RemoteMirror({
+      // Stale binding %200 → %10 mirrors what the routing cache would
+      // hold immediately after the move (the local @hmx-remote-pane tag
+      // on %10 is still %200 until the post-reconcile sync rewrites it).
+      activeBindings: () => new Map([["%200", "%10"]]),
+      runLocal: fixture.runLocal,
+      runRemote: fixture.runRemote,
+      serverName: "test",
+    });
+
+    mirror.request();
+    await mirror.whenIdle();
+    // Drain any rearm that follows the first pass so the indexes settle
+    // against the final remote state.
+    mirror.request();
+    await mirror.whenIdle();
+
+    expect(mirror.remotePaneFor("%10")).toBe("%300");
   });
 });

@@ -25,13 +25,19 @@ export class RoutingCache {
   /** Held registrations not yet observed in any snapshot. */
   private pending = new Map<string, RemotePaneMapping>();
 
-  /** All currently-bound local pane ids on the given server. */
-  activeRemotePaneIds(serverName: string): ReadonlySet<string> {
-    const set = new Set<string>();
-    for (const mapping of this.byLocal.values()) {
-      if (mapping.serverName === serverName) set.add(mapping.remotePaneId);
+  /**
+   * Current bindings on the given server, keyed by remote pane id with
+   * the bound local pane id as the value. Used by the reconciler's
+   * active-proxy guard, which needs to know not just whether a remote
+   * pane is bound, but WHICH local pane owns it — so it can compare
+   * against the local panes in the window being reconciled.
+   */
+  activeBindings(serverName: string): ReadonlyMap<string, string> {
+    const map = new Map<string, string>();
+    for (const [localId, mapping] of this.byLocal) {
+      if (mapping.serverName === serverName) map.set(mapping.remotePaneId, localId);
     }
-    return set;
+    return map;
   }
 
   /** Remove all bindings (used by stopAll). */
