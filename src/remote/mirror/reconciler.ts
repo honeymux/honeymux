@@ -30,17 +30,22 @@ export type Mutation =
 
 export interface ReconcileInput {
   /**
-   * Remote panes that are the active proxy peer of a live local pane. The
-   * reconciler MUST NOT emit `kill-pane` for any pane in this set — killing
-   * it while a live proxy is rendering its output tears down user-visible
-   * work.
+   * Current routing bindings keyed by remote pane id, with the bound local
+   * pane id as the value. Derived from `@hmx-remote-pane` on local panes.
    *
-   * Computed by the executor by looking up `@hmx-remote-pane` on each
-   * local pane that currently hosts a live proxy process. Only panes that
-   * ARE the active peer get the guard — a duplicate-tagged orphan does
-   * not, even if its (stale) tag matches an active local pane.
+   * Used by the active-proxy guard: an orphan remote pane is protected
+   * from kill ONLY when (a) some local pane is bound to it AND (b) that
+   * local pane is in the local window currently being reconciled. The
+   * window check is essential — without it, a remote pane whose bound
+   * local pane has moved to a different window stays protected forever,
+   * blocking `select-layout` for the original mirror window with "have N
+   * panes but need M".
+   *
+   * A duplicate-tagged orphan in the SAME mirror window is still killed:
+   * the binding maps remote → ONE local pane, so duplicate interlopers
+   * are not in the map and fail the guard.
    */
-  readonly activeRemotePaneIds: ReadonlySet<string>;
+  readonly activeBindings: ReadonlyMap<string, string>;
   /**
    * True if any prior reconcile has committed mutations against this
    * server. Gates "bootstrap window" warnings on the very first sync:
@@ -174,22 +179,28 @@ export function reconcile(input: ReconcileInput): MirrorPlan {
       splits.push({ kind: "split-window", localPaneId: localId, remoteWindowId: remoteWindow.id });
     }
 
+    const localIds = new Set(localPanes.map((p) => p.id));
     const desiredLayout = localWindow.layout;
     const lastApplied = input.lastAppliedLayoutByRemoteWindow.get(remoteWindow.id);
     const splitsHappening = pairing.unpairedLocal.length > 0;
-    const killsHappening = pairing.orphanRemote.some((o) => !input.activeRemotePaneIds.has(o.remotePaneId));
+    const killsHappening = pairing.orphanRemote.some((o) => {
+      const owner = input.activeBindings.get(o.remotePaneId);
+      return !owner || !localIds.has(owner);
+    });
     // Apply when: layout changed, OR we mutated the pane set (which
     // invalidates any cached "no-op" judgment regardless of string equality).
     if (desiredLayout && (lastApplied !== desiredLayout || splitsHappening || killsHappening)) {
       applyLayouts.push({ kind: "apply-layout", layout: desiredLayout, remoteWindowId: remoteWindow.id });
     }
 
-    // Active-proxy guard checks the orphan's OWN id against the set of
-    // active remote panes. A duplicate-tagged interloper has a different
-    // remote id from the genuine paired peer, so the guard does not
-    // protect it.
+    // Active-proxy guard. Protect an orphan ONLY when its owner local pane
+    // (per the routing cache) is in THIS local window's pane list — the
+    // genuine "live proxy is talking to this remote pane" case. If the
+    // owner has been moved to a different local window, the binding is
+    // stale: kill the orphan so apply-layout can succeed for this window.
     for (const orphan of pairing.orphanRemote) {
-      if (input.activeRemotePaneIds.has(orphan.remotePaneId)) continue;
+      const owner = input.activeBindings.get(orphan.remotePaneId);
+      if (owner && localIds.has(owner)) continue;
       paneKills.push({
         kind: "kill-pane",
         reason: orphan.localPaneId ? "stale-tag" : "orphan",

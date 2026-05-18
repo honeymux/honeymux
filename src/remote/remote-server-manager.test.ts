@@ -666,6 +666,49 @@ describe("RemoteServerManager remote hook ingress", () => {
     expect(respawnPane).not.toHaveBeenCalled();
   });
 
+  it("syncPaneMappingsFromMirror rewrites a stale routing entry before cleanup can revert a moved-pane proxy", async () => {
+    // Migration safety regression: after a local pane is moved between
+    // windows, the local @hmx-remote-pane tag briefly names the
+    // just-killed old peer. rebuildForServer reads that stale tag into
+    // the routing cache; without a sync pass, cleanupDeadLocalProxiesForServer
+    // would see remotePaneId=%200 dead and respawn the local proxy.
+    // syncPaneMappingsFromMirror must consult the mirror's pane index
+    // and rewrite the routing entry to the fresh peer first.
+    const respawnPane = mock(async (_paneId: string, _argv?: string[]) => {});
+    const runCommandArgs = mock(async () => {});
+    const localClient = { respawnPane, runCommandArgs } as any;
+    const manager = new RemoteServerManager(localClient, [{ host: "dev-box", name: "dev-box" }]);
+
+    // Routing reflects the stale local tag: %10 → %200.
+    (manager as any).routing.rebuildForServer("dev-box", {
+      panesByWindow: new Map([
+        ["@2", [{ id: "%10", index: 0, tags: { remoteHost: "dev-box", remotePaneId: "%200" }, windowId: "@2" }]],
+      ]),
+      windows: [{ id: "@2", index: 1, layout: "x" }],
+    });
+    // The mirror's pane index knows the fresh peer is %300 (split into @2's mirror).
+    (manager as any).mirrors.set("dev-box", {
+      remotePaneFor: (paneId: string) => (paneId === "%10" ? "%300" : undefined),
+    });
+    // Remote snapshot: %200 has been killed; %300 is alive.
+    const remoteSnapshot = {
+      panesByWindow: new Map([["@200", [{ id: "%300", index: 0, tags: {}, windowId: "@200" }]]]),
+      windows: [{ id: "@200", index: 0, layout: "y" }],
+    };
+
+    // Mimic the onReconciled order: sync first, then cleanup.
+    await (manager as any).syncPaneMappingsFromMirror("dev-box");
+    (manager as any).cleanupDeadLocalProxiesForServer("dev-box", remoteSnapshot);
+
+    expect(respawnPane).not.toHaveBeenCalled();
+    expect((manager as any).routing.lookup("%10")).toEqual({
+      localPaneId: "%10",
+      remotePaneId: "%300",
+      serverName: "dev-box",
+    });
+    expect(runCommandArgs).toHaveBeenCalledWith(["set-option", "-p", "-t", "%10", "@hmx-remote-pane", "%300"]);
+  });
+
   it("token-reuse recovery re-registers the stored token without respawning the pane", async () => {
     const respawnPane = mock(async (_paneId: string, _argv?: string[]) => {});
     const runCommand = mock(async () => " %10\tdev-box\tstoredtoken123\n");

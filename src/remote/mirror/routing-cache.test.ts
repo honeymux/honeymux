@@ -105,7 +105,7 @@ describe("RoutingCache", () => {
     expect(cache.lookup("%10")).toBeUndefined();
   });
 
-  test("activeRemotePaneIds returns the set bound to a specific server", () => {
+  test("activeBindings returns the per-server remote→local pairings", () => {
     const cache = new RoutingCache();
     cache.rebuildForServer(
       "dev-a",
@@ -120,10 +120,14 @@ describe("RoutingCache", () => {
       }),
     );
 
-    const setA = cache.activeRemotePaneIds("dev-a");
-    expect(setA).toEqual(new Set(["%200", "%201"]));
-    expect(cache.activeRemotePaneIds("dev-b")).toEqual(new Set(["%300"]));
-    expect(cache.activeRemotePaneIds("server-missing")).toEqual(new Set());
+    expect(cache.activeBindings("dev-a")).toEqual(
+      new Map([
+        ["%200", "%10"],
+        ["%201", "%11"],
+      ]),
+    );
+    expect(cache.activeBindings("dev-b")).toEqual(new Map([["%300", "%20"]]));
+    expect(cache.activeBindings("server-missing")).toEqual(new Map());
   });
 
   test("delete removes a binding from both directions", () => {

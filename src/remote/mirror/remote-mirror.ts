@@ -15,14 +15,15 @@ const RECONCILE_DEBOUNCE_MS = 25;
 
 export interface RemoteMirrorOptions {
   /**
-   * Return the set of remote pane ids currently hosting an active local
-   * proxy process. The reconciler will never propose `kill-pane` for any
-   * pane in this set.
+   * Current routing bindings on this server, keyed by remote pane id with
+   * the bound local pane id as the value. The reconciler uses this for
+   * its active-proxy guard: an orphan is protected from kill only when
+   * the bound local pane is in the local window being reconciled.
    *
-   * Returns a fresh set on each call — RemoteMirror does not cache it
+   * Returns a fresh map on each call — RemoteMirror does not cache it
    * across reconciles.
    */
-  activeRemotePaneIds: () => ReadonlySet<string>;
+  activeBindings: () => ReadonlyMap<string, string>;
   /**
    * Invoked after each successful reconcile pass (zero or more mutations
    * applied) with both the local and remote snapshots that drove this
@@ -196,33 +197,43 @@ export class RemoteMirror {
     }
     this.windowIndex = newWindowIndex;
 
-    // paneIndex must mirror windowIndex's restriction: only consider
-    // pane tags from windows that ARE the live pair for some local
-    // window. A pane tagged with `@hmx-local-pane-id=%50` inside a
-    // stale-tag remote window @17 is going to die when the reconciler
-    // kills @17 on this pass — using it as the answer to
-    // `mirror.remotePaneFor(%50)` would have convertPane respawn a
-    // doomed pane.
-    const pairedRemoteWindowIds = new Set<string>();
-    for (const remoteWindow of this.latestRemote.windows) {
-      if (remoteWindow.localWindowId && localWindowIds.has(remoteWindow.localWindowId)) {
-        pairedRemoteWindowIds.add(remoteWindow.id);
+    // paneIndex must be window-scoped: a remote pane with
+    // `@hmx-local-pane-id=%50` only counts as the peer for local %50
+    // when both are in paired windows. If local %50 has been moved to
+    // a different local window since the tag was set, the old remote
+    // pane is stale and a new remote peer lives in %50's current
+    // window's mirror (created via split-window). Returning the stale
+    // one from `remotePaneFor(%50)` would feed the recovery / convert
+    // paths a doomed pane and prevent the active-proxy guard from ever
+    // unblocking the original mirror window's apply-layout.
+    const localPaneToWindow = new Map<string, string>();
+    for (const [windowId, panes] of this.latestLocal.panesByWindow) {
+      for (const pane of panes) {
+        localPaneToWindow.set(pane.id, windowId);
       }
     }
-    for (const remoteId of applied.appliedCreateWindows.values()) {
-      pairedRemoteWindowIds.add(remoteId);
+    const remoteToLocalWindow = new Map<string, string>();
+    for (const remoteWindow of this.latestRemote.windows) {
+      if (remoteWindow.localWindowId && localWindowIds.has(remoteWindow.localWindowId)) {
+        remoteToLocalWindow.set(remoteWindow.id, remoteWindow.localWindowId);
+      }
+    }
+    for (const [localId, remoteId] of applied.appliedCreateWindows) {
+      remoteToLocalWindow.set(remoteId, localId);
     }
 
     const newPaneIndex = new Map<string, string>();
     for (const [remoteWindowId, panes] of this.latestRemote.panesByWindow) {
-      if (!pairedRemoteWindowIds.has(remoteWindowId)) continue;
+      const pairedLocalWindowId = remoteToLocalWindow.get(remoteWindowId);
+      if (!pairedLocalWindowId) continue;
       for (const pane of panes) {
-        if (pane.tags.localPaneId) {
-          // Only the FIRST tag wins (matches reconciler's deterministic
-          // pairing). Subsequent duplicates are orphans, not pairs.
-          if (!newPaneIndex.has(pane.tags.localPaneId)) {
-            newPaneIndex.set(pane.tags.localPaneId, pane.id);
-          }
+        const tag = pane.tags.localPaneId;
+        if (!tag) continue;
+        if (localPaneToWindow.get(tag) !== pairedLocalWindowId) continue;
+        // Only the FIRST tag wins (matches reconciler's deterministic
+        // pairing). Subsequent duplicates are orphans, not pairs.
+        if (!newPaneIndex.has(tag)) {
+          newPaneIndex.set(tag, pane.id);
         }
       }
     }
@@ -264,7 +275,7 @@ export class RemoteMirror {
     await this.syncRemoteClientSize();
 
     const plan = reconcile({
-      activeRemotePaneIds: this.options.activeRemotePaneIds(),
+      activeBindings: this.options.activeBindings(),
       hasReconciledBefore: this.hasReconciledBefore,
       lastAppliedLayoutByRemoteWindow: this.lastAppliedLayoutByRemoteWindow,
       local: this.latestLocal,
