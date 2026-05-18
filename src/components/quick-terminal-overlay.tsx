@@ -249,7 +249,7 @@ export function QuickTerminalOverlay({
   useEffect(() => {
     closedRef.current = false;
 
-    const sessionName = `hmx_qt_${Date.now()}`;
+    const sessionName = `__hmx-qt-${Date.now()}`;
     quickTerminalSessionRef.current = sessionName;
 
     (async () => {

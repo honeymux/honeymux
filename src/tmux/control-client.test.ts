@@ -242,13 +242,13 @@ describe("TmuxControlClient new-window cwd inheritance", () => {
 
     (client as unknown as { runCommandArgs: typeof runCommandArgs }).runCommandArgs = runCommandArgs;
 
-    await client.createDetachedSession("hmx_qt_demo");
+    await client.createDetachedSession("__hmx-qt-demo");
 
     expect(runCommandArgs).toHaveBeenCalledWith([
       "new-session",
       "-d",
       "-s",
-      "hmx_qt_demo",
+      "__hmx-qt-demo",
       "-c",
       "#{pane_current_path}",
     ]);
