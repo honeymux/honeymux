@@ -12,6 +12,7 @@ interface UseRemoteManagerOptions {
   handleSshServerStatusChange: (serverName: string, status: string, error?: string) => void;
   refs: Pick<AppRuntimeRefs, "clientRef" | "registryRef" | "remoteManagerRef">;
   remoteConfigs: RemoteServerConfig[] | undefined;
+  runtimeKey: number;
 }
 
 export function getRemoteConfigKey(remoteConfigs: RemoteServerConfig[] | undefined): string {
@@ -31,6 +32,7 @@ export function useRemoteManager({
   handleSshServerStatusChange,
   refs,
   remoteConfigs,
+  runtimeKey,
 }: UseRemoteManagerOptions): number {
   const remoteConfigKey = getRemoteConfigKey(remoteConfigs);
   const [mirrorStateVersion, setMirrorStateVersion] = useState(0);
@@ -82,6 +84,7 @@ export function useRemoteManager({
     refs.clientRef,
     refs.registryRef,
     refs.remoteManagerRef,
+    runtimeKey,
     stableRemoteConfigs,
   ]);
 

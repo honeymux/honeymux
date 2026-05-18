@@ -287,7 +287,7 @@ describe("RemoteServerManager remote hook ingress", () => {
       remotePaneFor: () => undefined,
     });
 
-    expect(manager.getRemoteConversionAvailability("%10", "dev-box")).toBe("ready");
+    expect(manager.getRemoteConversionAvailability("%10", "dev-box")).toBe("waiting");
     expect(manager.hasConvertibleRemoteServer("%10")).toBe(true);
 
     (manager as any).mirrors.set("dev-box", {
@@ -772,6 +772,32 @@ describe("RemoteServerManager remote hook ingress", () => {
     await Promise.resolve();
 
     expect(request).toHaveBeenCalledTimes(1);
+  });
+
+  it("unwires local mirror events when stopped", async () => {
+    const localClient = new LocalEventClient();
+    const manager = new RemoteServerManager(localClient as any, [{ host: "dev-box", name: "dev-box" }]);
+    const request = mock(() => {});
+    const stop = mock(async () => {});
+
+    (manager as any).mirrors.set("dev-box", {
+      request,
+      stop,
+      whenIdle: async () => {},
+    });
+    (manager as any).wireLocalEvents();
+
+    await manager.stopAll();
+    (manager as any).mirrors.set("dev-box", {
+      request,
+      whenIdle: async () => {},
+    });
+
+    localClient.emitEvent("layout-change");
+    await Promise.resolve();
+
+    expect(stop).toHaveBeenCalledTimes(1);
+    expect(request).not.toHaveBeenCalled();
   });
 
   it("re-syncs mapped remote pane ids after a local layout change settles", async () => {
