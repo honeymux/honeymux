@@ -11,11 +11,12 @@ import { localInstallHost } from "../install-host.ts";
 import HOOK_CONTENT from "./hooks.py" with { type: "text" };
 
 const HOOK_SCRIPT_NAME = "honeymux.py";
-// SessionStart fires at session boot; PermissionRequest marks the session as
-// awaiting an approval decision; PostToolUse signals the approval was resolved
-// (whether by codex's auto-policy or by the user answering codex's native
-// prompt) so honeymux can clear the unanswered state.
-const HOOK_EVENTS = ["PermissionRequest", "PostToolUse", "SessionStart"] as const;
+// SessionStart fires at session boot; UserPromptSubmit carries the user's
+// prompt text and transcript path for the agents-list label; PermissionRequest
+// marks the session as awaiting an approval decision; PostToolUse signals the
+// approval was resolved (whether by codex's auto-policy or by the user
+// answering codex's native prompt) so honeymux can clear the unanswered state.
+const HOOK_EVENTS = ["PermissionRequest", "PostToolUse", "SessionStart", "UserPromptSubmit"] as const;
 type HookEvent = (typeof HOOK_EVENTS)[number];
 
 // Codex persists per-hook trust state under config.toml keys whose event-name
@@ -25,6 +26,7 @@ const HOOK_EVENT_KEY_LABEL: Record<HookEvent, string> = {
   PermissionRequest: "permission_request",
   PostToolUse: "post_tool_use",
   SessionStart: "session_start",
+  UserPromptSubmit: "user_prompt_submit",
 };
 
 type CodexSettings = {
