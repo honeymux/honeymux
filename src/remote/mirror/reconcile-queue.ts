@@ -9,32 +9,46 @@ import { log } from "../../util/log.ts";
  * collapses bursts of `%layout-change` / `%window-add` events into a
  * single follow-up pass instead of fanning them into N reconciliations.
  *
- * Optional debounce between back-to-back runs prevents pathological
- * livelock under continuous event streams.
+ * Optional debounce waits for a quiet period after the latest request
+ * before each run starts. This prevents an expensive reconcile from
+ * snapshotting a transient intermediate layout mid-burst (e.g. while the
+ * user is dragging the sidebar) and then taking several follow-up passes
+ * to settle on the final dimensions.
  */
 export interface ReconcileQueueOptions {
-  /** Minimum gap between successive runs, ms. Default 0. */
+  /** Quiet period after the latest request before a run starts, ms. Default 0. */
   debounceMs?: number;
   /** Tag used in log messages for diagnostics. */
   label?: string;
   /** The actual reconcile work, including snapshot capture + executor. */
   run: () => Promise<void>;
-  /** Optional clock injection for tests. Defaults to Date.now + Bun.sleep. */
+  /** Optional clock injection for tests. Defaults to Bun.sleep. */
   sleep?: (ms: number) => Promise<void>;
 }
 
 export class ReconcileQueue {
+  // Set synchronously inside `request()` before `drain()` is invoked. This
+  // prevents re-entrant `request()` calls — fired from event handlers that
+  // execute inside the synchronous prologue of `drain()` (e.g. a sleep mock
+  // or any other code path that runs during the first `await sleep(...)`) —
+  // from starting a parallel drain because `this.loop` has not yet been
+  // assigned by `this.loop = this.drain()` (the RHS evaluates first).
+  private active = false;
   private dirty = false;
-  private lastRunAt = 0;
   private loop: Promise<void> | null = null;
+  private requestVersion = 0;
   private stopped = false;
 
   constructor(private options: ReconcileQueueOptions) {}
 
   request(): void {
     if (this.stopped) return;
+    this.requestVersion += 1;
     this.dirty = true;
-    if (!this.loop) this.loop = this.drain();
+    if (!this.active) {
+      this.active = true;
+      this.loop = this.drain();
+    }
   }
 
   /**
@@ -53,23 +67,31 @@ export class ReconcileQueue {
   private async drain(): Promise<void> {
     try {
       while (this.dirty && !this.stopped) {
-        this.dirty = false;
         await this.respectDebounce();
+        if (this.stopped) break;
+        this.dirty = false;
         await this.runOnce();
-        this.lastRunAt = nowMs();
       }
     } finally {
+      this.active = false;
       this.loop = null;
     }
   }
 
   private async respectDebounce(): Promise<void> {
     const debounce = this.options.debounceMs ?? 0;
-    if (debounce <= 0 || this.lastRunAt === 0) return;
-    const elapsed = nowMs() - this.lastRunAt;
-    if (elapsed >= debounce) return;
+    if (debounce <= 0) return;
     const sleep = this.options.sleep ?? defaultSleep;
-    await sleep(debounce - elapsed);
+    // Trailing-edge debounce: sleep for `debounce`, and if any new
+    // request arrived during the sleep, sleep again. This way we only
+    // run after a quiet period — bursts of layout-change events
+    // settle into one reconcile with the final state, not one per
+    // intermediate frame.
+    let observedVersion: number;
+    do {
+      observedVersion = this.requestVersion;
+      await sleep(debounce);
+    } while (!this.stopped && this.requestVersion !== observedVersion);
   }
 
   private async runOnce(): Promise<void> {
@@ -88,8 +110,4 @@ export class ReconcileQueue {
 
 function defaultSleep(ms: number): Promise<void> {
   return Bun.sleep(ms);
-}
-
-function nowMs(): number {
-  return Date.now();
 }

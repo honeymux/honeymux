@@ -87,7 +87,7 @@ describe("ReconcileQueue", () => {
     expect(attempts).toBe(2);
   });
 
-  test("respects debounceMs between back-to-back runs", async () => {
+  test("waits for a quiet period before each run (trailing-edge debounce)", async () => {
     const runs: number[] = [];
     const sleep = mock(async (_ms: number) => {});
     const queue = new ReconcileQueue({
@@ -99,16 +99,50 @@ describe("ReconcileQueue", () => {
       sleep,
     });
 
+    // Single request: debounce sleeps once, then runs.
     queue.request();
     await queue.whenIdle();
-    expect(sleep).not.toHaveBeenCalled(); // first run is immediate
-
-    queue.request();
-    await queue.whenIdle();
-    // Second run should have waited.
     expect(sleep).toHaveBeenCalledTimes(1);
-    const [delay] = sleep.mock.calls[0]!;
-    expect(delay as unknown as number).toBeLessThanOrEqual(100);
+    const [firstDelay] = sleep.mock.calls[0]!;
+    expect(firstDelay as unknown as number).toBe(100);
+
+    // Second request after the first run idles: another single sleep, then run.
+    sleep.mockClear();
+    queue.request();
+    await queue.whenIdle();
+    expect(sleep).toHaveBeenCalledTimes(1);
+    expect(runs.length).toBe(2);
+  });
+
+  test("re-sleeps when a new request arrives during the quiet period", async () => {
+    let arrived: (() => void) | null = null;
+    const sleepCalls: number[] = [];
+    const sleep = mock(async (ms: number) => {
+      sleepCalls.push(ms);
+      // On the first sleep, inject a new request so the queue must re-sleep.
+      if (sleepCalls.length === 1 && arrived) {
+        arrived();
+        arrived = null;
+      }
+    });
+    const runs = { value: 0 };
+    const queue = new ReconcileQueue({
+      debounceMs: 50,
+      label: "test",
+      run: async () => {
+        runs.value += 1;
+      },
+      sleep,
+    });
+
+    arrived = () => queue.request();
+    queue.request();
+    await queue.whenIdle();
+
+    // Two sleeps (initial quiet attempt + re-sleep after the injected request)
+    // but only one run, because both requests fell within the same quiet window.
+    expect(sleepCalls.length).toBe(2);
+    expect(runs.value).toBe(1);
   });
 
   test("stop() prevents future requests from starting a run", async () => {
