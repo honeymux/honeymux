@@ -42,6 +42,23 @@ describe("tab-bar drag helpers", () => {
     expect(state.displaySlotIndex).toBe(-1);
   });
 
+  it("bounds drag reorder to the visible subset when overflow is present", () => {
+    const visibleWindows = windows.slice(0, 2);
+    const state = computeDragDisplayState({
+      activeIndex: 1,
+      dragFrom: 0,
+      dragOver: 1,
+      hasOverflow: true,
+      visibleActiveIndex: 1,
+      visibleWindows,
+      windows,
+    });
+
+    expect(state.displayWindows.map((w) => w.id)).toEqual(["@2", "@1"]);
+    expect(state.displayActiveIndex).toBe(0);
+    expect(state.displaySlotIndex).toBe(1);
+  });
+
   it("computes drop index from dragged tab position", () => {
     const from = 1;
     expect(computeDropIndexForDrag(windows, from, 0)).toBe(0);

@@ -171,18 +171,23 @@ export function useTabBarInteractions({
       const from = dragFromRef.current;
       if (from === null) return;
 
+      const tabWindows = hasOverflow ? visibleWindows : windows;
+      if (from >= tabWindows.length) return;
+      const tabDisplayNames = hasOverflow ? windowDisplayNames.slice(0, visibleWindows.length) : windowDisplayNames;
+      const tabActiveIndex = hasOverflow && activeIndex >= visibleWindows.length ? -1 : activeIndex;
+
       const dropIndex = computeDropIndexForDrag(
-        windows,
+        tabWindows,
         from,
         x,
         sidebarReserve,
-        activeIndex,
+        tabActiveIndex,
         showId,
-        windowDisplayNames,
+        tabDisplayNames,
       );
       setDragOver(dropIndex !== from ? dropIndex : null);
     },
-    [activeIndex, showId, sidebarReserve, windowDisplayNames, windows],
+    [activeIndex, hasOverflow, showId, sidebarReserve, visibleWindows, windowDisplayNames, windows],
   );
 
   const clearDrag = useCallback(() => {
@@ -260,7 +265,7 @@ export function useTabBarInteractions({
       }
 
       if (idx >= 0) {
-        if (onTabReorder && !hasOverflow) {
+        if (onTabReorder) {
           setDragFrom(idx);
           if (tabDragMoveRef) tabDragMoveRef.current = updateDragPosition;
           if (tabDragEndRef) tabDragEndRef.current = () => finalizeDrag();
@@ -335,6 +340,15 @@ export function useTabBarInteractions({
     },
     [handleChildPrimaryClick, onSidebarToggle],
   );
+
+  // Keep the drag refs pointing at the latest callbacks while a drag is in
+  // flight. hasOverflow and visibleWindows shift once the muxotron hides
+  // mid-drag, so the move/end handlers captured at mousedown would otherwise
+  // hit-test against the pre-drag visible set and refuse to reorder past it.
+  if (dragFrom !== null) {
+    if (tabDragMoveRef) tabDragMoveRef.current = updateDragPosition;
+    if (tabDragEndRef) tabDragEndRef.current = () => finalizeDrag();
+  }
 
   return {
     handleBadgeMouseDown,

@@ -198,7 +198,6 @@ export function useTmuxPaneViewModel({
     onTabClick,
     overflowOpenRef,
     rightReserve,
-    tabDragging,
     uiMode,
     width,
     windows,

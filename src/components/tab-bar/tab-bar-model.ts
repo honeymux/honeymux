@@ -93,9 +93,11 @@ export function buildTabBarModel({
   const profileReserve = hasLayoutProfileClick ? 3 : 0;
   const toolbarReserve = toolbarIconReserve + profileReserve;
 
-  const muxotronEnabled = muxotronEnabledProp !== false;
+  const muxotronEnabledProvided = muxotronEnabledProp !== false;
+  // The badge's metrics ignore the drag so its rendered width stays stable
+  // while the muxotron is hidden mid-drag.
   const { badgeLabel, badgeWidth } = computeBadgeMetrics({
-    muxotronEnabled,
+    muxotronEnabled: muxotronEnabledProvided,
     sessionName,
     toolbarReserve,
     uiMode,
@@ -103,17 +105,24 @@ export function buildTabBarModel({
   });
   const badgeReserve = (badgeWidth > 0 ? badgeWidth + 2 : 0) + toolbarReserve;
 
+  // While a tab drag is in flight, hide the muxotron so the freed center space
+  // lets previously-hidden overflow tabs become directly manipulable. The
+  // session badge on the right still bounds the tab area, so the overflow
+  // indicator reappears when enough tabs push up against it.
+  const isDragging = dragFrom !== null && dragX !== null;
+  const muxotronEnabled = muxotronEnabledProvided && !isDragging;
+  const muxotronExpandedActive = !!muxotronExpanded && !isDragging;
+
   const muxotronWidth = getMuxotronWidth(width, uiMode, muxotronEnabled, false);
   const muxotronRight = Math.floor((width - muxotronWidth) / 2) + muxotronWidth;
   const badgeLeft = width - toolbarReserve - 1 - badgeWidth;
 
-  const isDragging = dragFrom !== null && dragX !== null;
   const badgeRightReserve = badgeWidth > 0 ? badgeWidth + toolbarReserve + 4 : toolbarReserve;
   const maxExpandedWidth = getMaxExpandedMuxotronWidth(width, windows.length, sidebarReserve, badgeRightReserve);
   const muxotronWidthOverride =
-    muxotronExpanded && expandedMuxotronWidth <= 0
+    muxotronExpandedActive && expandedMuxotronWidth <= 0
       ? maxExpandedWidth
-      : muxotronExpanded
+      : muxotronExpandedActive
         ? expandedMuxotronWidth
         : undefined;
   const showId = activeWindowIdDisplayEnabled ?? false;
@@ -121,7 +130,6 @@ export function buildTabBarModel({
     windows,
     width,
     hasNewWindow,
-    isDragging,
     uiMode,
     muxotronEnabled,
     sidebarReserve,
@@ -233,7 +241,9 @@ export function buildTabBarModel({
     }
   }
 
-  const hintGap = badgeLeft - muxotronRight;
+  // Hide the centered hint while dragging so it doesn't pop into the freed
+  // muxotron space alongside the expanding tabs.
+  const hintGap = isDragging ? 0 : badgeLeft - muxotronRight;
 
   return {
     activeHiddenInOverflow,
