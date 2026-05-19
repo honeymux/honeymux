@@ -153,10 +153,17 @@ export function useAppChromeFocus({ refs, uiChromeState, width }: UseAppChromeFo
   };
 
   sidebarDragMoveRef.current = (x: number) => {
+    // Pause remote-mirror reconciles for the duration of the drag.
+    // ptyRef.resize fires on every termCols change and produces a burst
+    // of local %layout-change events; without pausing, each one starts
+    // an SSH reconcile capturing a partial intermediate layout.
+    // pauseLocalReconcile is idempotent, so calling on every move is
+    // cheap and lets us treat the first move as the drag-start signal.
+    refs.remoteManagerRef.current?.pauseLocalReconcile();
     setSidebarWidth(clampSidebarWidth(x, width));
   };
   sidebarDragEndRef.current = () => {
-    // Optionally persist width to config here.
+    refs.remoteManagerRef.current?.resumeLocalReconcile();
   };
 
   handleToolbarFocusRef.current = () => {

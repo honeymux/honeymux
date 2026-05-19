@@ -106,6 +106,15 @@ export class RemoteServerManager extends EventEmitter {
   private clients = new Map<string, RemoteControlClient>();
   private localEventUnsubscribers: Array<() => void> = [];
   private localPaneMetadataCache: CachedLocalPaneMeta = { at: 0, mappings: new Map() };
+  /**
+   * When true, local-side tmux events stop triggering reconcile requests.
+   * Used by the sidebar drag handler: during a drag, ptyRef.resize fires
+   * on every mouse move, producing a burst of local `%layout-change`
+   * events that would each kick off an SSH reconcile capturing a partial
+   * intermediate layout. Pausing collapses the burst into one reconcile
+   * fired on drag release. See `pauseLocalReconcile`/`resumeLocalReconcile`.
+   */
+  private localReconcilePaused = false;
   private mirrors = new Map<string, RemoteMirror>();
   /** Pending registration disposers held during convertPane's mid-mutation window. */
   private pendingRegistrations = new Map<string, () => void>();
@@ -255,6 +264,17 @@ export class RemoteServerManager extends EventEmitter {
   }
 
   /**
+   * Stop triggering reconciles from local-side tmux events until
+   * {@link resumeLocalReconcile} is called. Used to suppress the burst
+   * of `%layout-change` events produced by a sidebar drag so the
+   * accumulated change collapses into a single reconcile on release.
+   * Idempotent.
+   */
+  pauseLocalReconcile(): void {
+    this.localReconcilePaused = true;
+  }
+
+  /**
    * Re-register proxy tokens for a server after Honeymux restart.
    *
    * Panes converted in a previous run have `@hmx-remote-host`,
@@ -383,6 +403,18 @@ export class RemoteServerManager extends EventEmitter {
     }
 
     log("remote", `failed to write remote permission response for ${state.serverName} key=${key}`);
+  }
+
+  /**
+   * Re-enable local-side reconcile triggers (paired with
+   * {@link pauseLocalReconcile}). Fires one reconcile immediately to
+   * flush any layout changes that occurred during the paused window.
+   * Idempotent: a no-op when not currently paused.
+   */
+  resumeLocalReconcile(): void {
+    if (!this.localReconcilePaused) return;
+    this.localReconcilePaused = false;
+    this.dispatchLocalReconcile();
   }
 
   /**
@@ -780,6 +812,29 @@ export class RemoteServerManager extends EventEmitter {
     );
   }
 
+  /**
+   * Fire one reconcile request to every mirror plus chain a routing-cache
+   * sync for each. Shared by the local-event listeners and by
+   * {@link resumeLocalReconcile} so a flush after a paused window
+   * follows the same code path as a normal local-event-driven reconcile.
+   */
+  private dispatchLocalReconcile(): void {
+    for (const mirror of this.mirrors.values()) {
+      mirror.request();
+    }
+    // syncPaneMappingsFromMirror runs opportunistically once the
+    // queue settles; the onReconciled callback fires emitMirrorStateChange
+    // already, so we don't need to chain a second emit here.
+    for (const serverName of this.mirrors.keys()) {
+      const mirror = this.mirrors.get(serverName);
+      if (!mirror) continue;
+      mirror
+        .whenIdle()
+        .then(() => this.syncPaneMappingsFromMirror(serverName))
+        .catch(() => {});
+    }
+  }
+
   private emitMirrorStateChange(): void {
     this.emit("mirror-state-change");
   }
@@ -1162,20 +1217,8 @@ export class RemoteServerManager extends EventEmitter {
    */
   private wireLocalEvents(): void {
     const requestAll = (): void => {
-      for (const mirror of this.mirrors.values()) {
-        mirror.request();
-      }
-      // syncPaneMappingsFromMirror runs opportunistically once the
-      // queue settles; the onReconciled callback fires emitMirrorStateChange
-      // already, so we don't need to chain a second emit here.
-      for (const serverName of this.mirrors.keys()) {
-        const mirror = this.mirrors.get(serverName);
-        if (!mirror) continue;
-        mirror
-          .whenIdle()
-          .then(() => this.syncPaneMappingsFromMirror(serverName))
-          .catch(() => {});
-      }
+      if (this.localReconcilePaused) return;
+      this.dispatchLocalReconcile();
     };
     const events = ["session-window-changed", "layout-change", "window-add", "window-close"] as const;
     for (const event of events) {
