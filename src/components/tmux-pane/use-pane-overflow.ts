@@ -30,7 +30,6 @@ interface UsePaneOverflowOptions {
   onTabClick: TmuxPaneCoreProps["onTabClick"];
   overflowOpenRef: TmuxPaneSharedProps["overflowOpenRef"];
   rightReserve?: number;
-  tabDragging: boolean;
   uiMode?: UIMode;
   width: number;
   windows: TmuxPaneCoreProps["windows"];
@@ -71,7 +70,6 @@ export function usePaneOverflow({
   onTabClick,
   overflowOpenRef,
   rightReserve,
-  tabDragging,
   uiMode,
   width,
   windows,
@@ -93,7 +91,6 @@ export function usePaneOverflow({
     windows,
     width,
     !!onNewWindow,
-    tabDragging,
     uiMode ?? "adaptive",
     muxotronEnabled,
     leftReserve,

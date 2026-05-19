@@ -123,7 +123,6 @@ export function computeOverflow(
   windows: TmuxWindow[],
   width: number,
   hasNewWindow: boolean,
-  isDragging: boolean,
   uiMode: UIMode = "adaptive",
   muxotronEnabled = true,
   leftReserve = 0,
@@ -143,7 +142,7 @@ export function computeOverflow(
   let visibleCount = windows.length;
   let overflowStartX = -1;
 
-  if (!isDragging && windows.length > 1) {
+  if (windows.length > 1) {
     // Check if all tabs fit at full name length.
     let totalTabsW = 0;
     for (let i = 0; i < windows.length; i++) {

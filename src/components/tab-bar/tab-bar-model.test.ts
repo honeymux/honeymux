@@ -175,6 +175,43 @@ describe("tab-bar model", () => {
     expect(reserve).toBe(30);
   });
 
+  test("hides the muxotron during drag to expand the visible tab range", () => {
+    const windows = [
+      makeWindow("@1", "alpha-long"),
+      makeWindow("@2", "beta-long"),
+      makeWindow("@3", "gamma-long"),
+      makeWindow("@4", "delta-long"),
+      makeWindow("@5", "epsilon-long"),
+    ];
+    const baseOptions = {
+      activeIndex: 0,
+      activeWindowIdDisplayEnabled: false,
+      dragOver: null,
+      expandedMuxotronWidth: 0,
+      hasLayoutProfileClick: false,
+      hasNewWindow: false,
+      hasSidebarToggle: false,
+      hasToolbarToggle: false,
+      muxotronEnabledProp: true,
+      muxotronExpanded: false,
+      sessionName: "alpha",
+      uiMode: "adaptive" as const,
+      width: 100,
+      windows,
+    };
+
+    const idle = buildTabBarModel({ ...baseOptions, dragFrom: null, dragX: null });
+    expect(idle.muxotronEnabled).toBe(true);
+    expect(idle.muxotronWidth).toBeGreaterThan(0);
+    expect(idle.hasOverflow).toBe(true);
+
+    const dragging = buildTabBarModel({ ...baseOptions, dragFrom: 0, dragX: 10 });
+    expect(dragging.muxotronEnabled).toBe(false);
+    expect(dragging.muxotronWidth).toBe(0);
+    expect(dragging.hintGap).toBe(0);
+    expect(dragging.visibleCount).toBeGreaterThan(idle.visibleCount);
+  });
+
   test("places the plus button after the overflow indicator when tabs overflow", () => {
     const model = buildTabBarModel({
       activeIndex: 0,

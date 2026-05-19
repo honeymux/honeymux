@@ -28,21 +28,25 @@ export function computeDragDisplayState({
   visibleWindows,
   windows,
 }: ComputeDragDisplayStateOptions): DragDisplayState {
-  let displayWindows = hasOverflow ? visibleWindows : windows;
+  const baseWindows = hasOverflow ? visibleWindows : windows;
+  let displayWindows = baseWindows;
   let displayActiveIndex = hasOverflow ? visibleActiveIndex : activeIndex;
   let displaySlotIndex = -1;
 
-  if (dragFrom !== null && dragOver !== null && dragFrom !== dragOver) {
-    const reordered = [...windows];
+  const inRange = (idx: null | number): idx is number => idx !== null && idx >= 0 && idx < baseWindows.length;
+
+  if (inRange(dragFrom) && inRange(dragOver) && dragFrom !== dragOver) {
+    const reordered = [...baseWindows];
     const [moved] = reordered.splice(dragFrom, 1);
     reordered.splice(dragOver, 0, moved!);
     displayWindows = reordered;
     displaySlotIndex = dragOver;
     const activeWin = windows[activeIndex];
     if (activeWin) {
-      displayActiveIndex = reordered.indexOf(activeWin);
+      const newIdx = reordered.indexOf(activeWin);
+      if (newIdx >= 0) displayActiveIndex = newIdx;
     }
-  } else if (dragFrom !== null) {
+  } else if (inRange(dragFrom)) {
     displaySlotIndex = dragFrom;
   }
 
