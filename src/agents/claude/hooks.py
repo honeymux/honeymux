@@ -21,6 +21,7 @@ EVENT_STATUS_MAP = {
     "SessionStart": "alive",
     "PermissionRequest": "unanswered",
     "SessionEnd": "ended",
+    "UserPromptSubmit": "alive",  # Carries the user's prompt text for agents-list label
     "TaskCreated": "alive",  # Team task created — may include early team metadata
     "TeammateIdle": "alive",  # Team progress update — teammate went idle
     "TaskCompleted": "alive",  # Team task completion update
@@ -256,12 +257,13 @@ def main():
     if tool_use_id:
         event["toolUseId"] = tool_use_id
 
-    # Forward transcript path and user prompt for conversation labels
+    # Forward transcript path (every event) and the user prompt (only the
+    # UserPromptSubmit event carries it) so the agents list can label the row.
     transcript_path = data.get("transcript_path")
-    if transcript_path:
+    if isinstance(transcript_path, str) and transcript_path:
         event["transcriptPath"] = transcript_path
     prompt = data.get("prompt")
-    if prompt:
+    if isinstance(prompt, str) and prompt:
         event["prompt"] = prompt[:200]
 
     event["processSnapshot"] = collect_process_snapshot()
