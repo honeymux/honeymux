@@ -314,7 +314,7 @@ export function AgentTree({
 
     const inFocusedPane = !!row.paneId && !!activePaneId && row.paneId === activePaneId;
     const fg = row.active
-      ? theme.statusWarning
+      ? (row.agentColor ?? theme.statusWarning)
       : row.type === "root"
         ? theme.textSecondary
         : inFocusedPane
@@ -782,7 +782,7 @@ function AgentTreeRowLeft({
       if (intermittentActive && state.agentAlertAnimGlow) {
         const glowT = (Math.sin((now / 1000) * Math.PI) + 1) / 2;
         const from = hexToRgb(theme.text);
-        const to = hexToRgb(theme.statusWarning);
+        const to = hexToRgb(state.agentColor ?? state.fg);
         leftFgHex = rgbToHex(lerpRgb(from, to, glowT));
       }
       const leftFg = cachedParseColor(leftFgHex);
