@@ -10,7 +10,7 @@ import { localInstallHost } from "../install-host.ts";
 import HOOK_CONTENT from "./hooks.py" with { type: "text" };
 
 const HOOK_SCRIPT_NAME = "honeymux.py";
-const HOOK_EVENTS = ["SessionStart", "PermissionRequest", "SessionEnd"];
+const HOOK_EVENTS = ["SessionStart", "PermissionRequest", "UserPromptSubmit", "SessionEnd"];
 // PermissionRequest is synchronous (script blocks for approval); all others async
 const SYNC_EVENTS = new Set(["PermissionRequest"]);
 
