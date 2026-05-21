@@ -1,8 +1,8 @@
 diff --git a/src/zig/build.zig b/src/zig/build.zig
-index c9acb426..5ddfa552 100644
+index 43aff8dc..430a3daa 100644
 --- a/src/zig/build.zig
 +++ b/src/zig/build.zig
-@@ -17,8 +17,11 @@ const SupportedTarget = struct {
+@@ -17,8 +17,10 @@ const SupportedTarget = struct {
      description: []const u8,
  };
  
@@ -10,12 +10,11 @@ index c9acb426..5ddfa552 100644
  const SUPPORTED_TARGETS = [_]SupportedTarget{
 +    // Linux targets explicitly use the gnu ABI so std.heap.c_allocator
 +    // (enabled by .link_libc) links against glibc and produces NEEDED
-+    // libc.so.6 instead of libc.so. Pin glibc to 2.28 so the binaries do
-+    // not bind newer host symbols such as GLIBC_2.29.
-     .{ .zig_target = "x86_64-linux-gnu.2.28", .output_name = "x86_64-linux", .description = "Linux x86_64" },
-     .{ .zig_target = "aarch64-linux-gnu.2.28", .output_name = "aarch64-linux", .description = "Linux aarch64" },
++    // libc.so.6 instead of libc.so.
+     .{ .zig_target = "x86_64-linux-gnu.2.17", .output_name = "x86_64-linux", .description = "Linux x86_64" },
+     .{ .zig_target = "aarch64-linux-gnu.2.17", .output_name = "aarch64-linux", .description = "Linux aarch64" },
      .{ .zig_target = "x86_64-macos", .output_name = "x86_64-macos", .description = "macOS x86_64 (Intel)" },
-@@ -426,6 +429,9 @@ fn buildTarget(
+@@ -437,6 +439,9 @@ fn buildTarget(
          .root_source_file = b.path(ROOT_SOURCE_FILE),
          .target = target,
          .optimize = optimize,
@@ -26,11 +25,11 @@ index c9acb426..5ddfa552 100644
  
      applyDependencies(b, module, optimize, target, build_options);
 diff --git a/src/zig/lib.zig b/src/zig/lib.zig
-index eb56e9e9..cd67968c 100644
+index a674acf7..a34b73ac 100644
 --- a/src/zig/lib.zig
 +++ b/src/zig/lib.zig
-@@ -58,11 +58,15 @@ export fn setEventCallback(callback: ?*const fn (namePtr: [*]const u8, nameLen:
-     event_bus.setEventCallback(callback);
+@@ -62,11 +62,15 @@ export fn destroyEventSink(sink: *event_bus.EventSink) void {
+     event_bus.destroyEventSink(globalAllocator, sink);
  }
  
 -var gpa: std.heap.GeneralPurposeAllocator(.{
@@ -50,7 +49,7 @@ index eb56e9e9..cd67968c 100644
  var arena = std.heap.ArenaAllocator.init(globalAllocator);
  const globalArena = arena.allocator();
  
-@@ -79,101 +83,24 @@ pub const ExternalAllocatorStats = extern struct {
+@@ -83,101 +87,24 @@ pub const ExternalAllocatorStats = extern struct {
      requested_bytes_valid: bool,
  };
  
