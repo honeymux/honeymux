@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+## v0.108.1 - 2026-05-21
+
+- Allow window tab drag-and-drop reordering during tab overflow
+- Ensure prompt column for remote claude and codex sessions is populated in the agents view
+- Fix issue causing delayed terminal dimension updates to remote panes after sidebar resize
+- Fix issue with terminal cursor state restoration after exiting buffer zoom
+- Fix regression causing unexpected session switch on Quick Terminal close
+- Fix remote pane mirror reconciliation following tmux client restart and cross-window pane moves
+- Highlight all agent tree columns in the zoomed sidebar view to match recent non-zoomed view change
+- Upgrade opentui to 0.2.15
+- Use agent brand colors consistently when styling agent tree rows during active permission requests
+
 ## v0.108.0 - 2026-05-17
 
 - Add support for `tmux switch-client -t session:window` 
