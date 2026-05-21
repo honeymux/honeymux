@@ -7,7 +7,7 @@
     },
     "sourceRepo": "~/src/opentui",
     "sourceSubdir": "packages/core",
-    "version": "0.2.12",
+    "version": "0.2.15",
     "patches": [
       {
         "branch": "fix-wide-char-alpha-blending",
@@ -45,7 +45,7 @@
     "buildCmd": "bun run build",
     "sourceRepo": "~/src/opentui",
     "sourceSubdir": "packages/react",
-    "version": "0.2.12",
+    "version": "0.2.15",
     "patches": [
       {
         "branch": "batch-render-requests-during-react-commits",
