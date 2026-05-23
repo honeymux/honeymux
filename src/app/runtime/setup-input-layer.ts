@@ -67,8 +67,8 @@ export function setupInputLayer(ctx: SetupTmuxRuntimeContext): () => void {
       handleSidebarToggleRef,
       handleSidebarUpRef,
       handleSidebarZoomRef,
-      handleTabNext,
-      handleTabPrev,
+      handleTabNextRef,
+      handleTabPrevRef,
       handleTextInputEscape,
       handleToolbarActivateRef,
       handleToolbarCancelRef,
@@ -213,8 +213,8 @@ export function setupInputLayer(ctx: SetupTmuxRuntimeContext): () => void {
         onSidebarRight: () => handleSidebarRightRef.current(),
         onSidebarUp: () => handleSidebarUpRef.current(),
         onSidebarZoom: () => handleSidebarZoomRef.current(),
-        onTabNext: handleTabNext,
-        onTabPrev: handleTabPrev,
+        onTabNext: () => handleTabNextRef.current(),
+        onTabPrev: () => handleTabPrevRef.current(),
         onTextInputEscape: () => handleTextInputEscape(),
         onTmuxPrefixKeyAlias: () => {
           const seq = tmuxPrefixSequenceRef.current;

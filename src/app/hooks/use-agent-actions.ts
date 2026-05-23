@@ -177,41 +177,30 @@ export function useAgentActions({
       };
 
       const targetSession = session.sessionName;
-      if (targetSession && targetSession !== currentSessionName) {
-        // Different tmux session — use the full session switch flow
-        handleSessionSelect(targetSession).then(async () => {
-          const client = clientRef.current;
-          if (!client) return;
-          if (session.windowId) await client.selectWindow(session.windowId).catch(() => {});
-          if (session.paneId) {
-            await switchToTab(session.paneId);
-            const paneSelected = await client
-              .selectPane(session.paneId)
-              .then(() => true)
-              .catch(() => false);
-            if (paneSelected) {
-              setActivePaneId(session.paneId);
-            }
-          }
-        });
-      } else {
-        // Same session — use control client for window/pane selection
+      const selectTarget = async () => {
         const client = clientRef.current;
-        if (client) {
-          (async () => {
-            if (session.windowId) await client.selectWindow(session.windowId).catch(() => {});
-            if (session.paneId) {
-              await switchToTab(session.paneId);
-              const paneSelected = await client
-                .selectPane(session.paneId)
-                .then(() => true)
-                .catch(() => false);
-              if (paneSelected) {
-                setActivePaneId(session.paneId);
-              }
-            }
-          })();
+        if (!client) return;
+        if (session.windowId) {
+          const select = targetSession
+            ? client.selectWindowInSession(targetSession, session.windowId)
+            : client.selectWindow(session.windowId);
+          await select.catch(() => {});
         }
+        if (session.paneId) {
+          await switchToTab(session.paneId);
+          const select = targetSession
+            ? client.selectPaneInSession(targetSession, session.paneId)
+            : client.selectPane(session.paneId);
+          if (await select.then(() => true).catch(() => false)) {
+            setActivePaneId(session.paneId);
+          }
+        }
+      };
+
+      if (targetSession && targetSession !== currentSessionName) {
+        handleSessionSelect(targetSession).then(() => void selectTarget());
+      } else {
+        void selectTarget();
       }
     },
     [
