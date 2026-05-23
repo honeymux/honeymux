@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-import { type MouseEvent } from "@opentui/core";
+import { type MouseEvent, RGBA } from "@opentui/core";
 import { Fragment, useEffect, useRef, useState } from "react";
 
 import type { CodingAgentPaneActivity } from "../../agents/pane-activity.ts";
@@ -288,10 +288,15 @@ export function Muxotron({
     selectedSession: !!selectedSessionProp,
   });
 
-  // Use actual probed terminal bg for the opaque box — theme.bg may not match.
-  // Hoisted so both collapsed and expanded paths can paint dashed-gap cells
-  // opaque (otherwise the gap spaces would let underlying content through).
+  // Probed terminal bg as a concrete hex — only used as a foreground color
+  // for the cut-out text effect on hint buttons. Don't use as a cell bg: on
+  // transparent terminals the explicit RGB renders opaque, defeating the
+  // compositor.
   const realBg = rgbToHex(terminalBgRgb);
+  // For all cell backgrounds, use SGR 49 "default background" so terminals
+  // with compositor transparency render see-through and opaque terminals
+  // paint their own bg.
+  const defaultBg = RGBA.defaultBackground();
 
   // Anamorphic Equalizer border characters
   const cornerTL = eqActive ? "┏" : "╭";
@@ -535,7 +540,7 @@ export function Muxotron({
             const scannerStartCol = bx + 1 + Math.max(0, Math.floor((expandedInner - collapsedInner) / 2));
             return scannerColors.map((c, i) => (
               <text
-                bg={realBg}
+                bg={defaultBg}
                 content="━"
                 fg={c}
                 key={`sc-${i}`}
@@ -552,7 +557,7 @@ export function Muxotron({
       expandedBottomNode = (
         <>
           <text
-            bg={realBg}
+            bg={defaultBg}
             content={botBaseStr}
             fg={borderColor}
             left={bx}
@@ -636,7 +641,7 @@ export function Muxotron({
             const scannerStartCol = bx + 1 + Math.max(0, Math.floor((expandedInner - collapsedInner) / 2));
             return scannerColors.map((c, i) => (
               <text
-                bg={realBg}
+                bg={defaultBg}
                 content="━"
                 fg={c}
                 key={`sc-${i}`}
@@ -652,7 +657,7 @@ export function Muxotron({
       expandedBottomNode = (
         <>
           <text
-            bg={realBg}
+            bg={defaultBg}
             content={botBaseStr}
             fg={borderColor}
             left={bx}
@@ -662,7 +667,7 @@ export function Muxotron({
           />
           {eqEls}
           <text
-            bg={realBg}
+            bg={defaultBg}
             content=" "
             fg={realBg}
             left={expandPadLeft}
@@ -680,7 +685,7 @@ export function Muxotron({
             top={buttonsRow}
           />
           <text
-            bg={realBg}
+            bg={defaultBg}
             content=" "
             fg={realBg}
             left={expandPadRight}
@@ -748,6 +753,7 @@ export function Muxotron({
         centeredLeft={centeredLeft}
         counterDisplay={counterDisplay}
         counterStr={counterStr}
+        defaultBg={defaultBg}
         expandedIl={expandedIl}
         expandedInner={expandedInner}
         expandedTopLineStr={expandedTopLineStr}
@@ -782,7 +788,6 @@ export function Muxotron({
               }
             : undefined
         }
-        realBg={realBg}
         sideBar={sideBar}
         sineWaveLastOutputTickAt={sineWaveLastOutputTickAt}
         terminalContentRows={interactiveActive ? clampedExtraLines : 0}
@@ -831,7 +836,7 @@ export function Muxotron({
     bottomBorderNode = (
       <>
         <text
-          bg={isDashed ? realBg : undefined}
+          bg={isDashed ? defaultBg : undefined}
           content={botLineStr}
           fg={borderColor}
           left={il}
@@ -841,7 +846,7 @@ export function Muxotron({
         />
         {botTextOverlays.map((ov, idx) => (
           <text
-            bg={isDashed ? realBg : undefined}
+            bg={isDashed ? defaultBg : undefined}
             content={ov.content}
             fg={labelColor}
             key={`bot-ov-${idx}`}
@@ -857,7 +862,7 @@ export function Muxotron({
     const plainBottom = `${cornerBL}${hDash.repeat(inner)}${cornerBR}`;
     bottomBorderNode = (
       <text
-        bg={isDashed ? realBg : undefined}
+        bg={isDashed ? defaultBg : undefined}
         content={isDashed ? punchDashedBorderGaps(plainBottom) : plainBottom}
         fg={borderColor}
         left={il}
@@ -874,6 +879,7 @@ export function Muxotron({
       borderColor={borderColor}
       bottomNode={bottomBorderNode}
       counterDisplay={counterDisplay}
+      defaultBg={defaultBg}
       hasAnyAgent={hasAnyAgent}
       hasUnansweredElsewhere={unansweredElsewhere}
       hmPad={hmPad}
@@ -887,7 +893,6 @@ export function Muxotron({
       labelColor={labelColor}
       marqueeToolInfo={marqueeToolInfo}
       onNotificationsClick={onNotificationsClick}
-      realBg={realBg}
       showNoAgents={showNoAgents}
       sineWaveHasConnectedAgent={sineWaveHasConnectedAgent}
       sineWaveLastOutputTickAt={sineWaveLastOutputTickAt}

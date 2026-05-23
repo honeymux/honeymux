@@ -1,10 +1,10 @@
 import type { ReactNode } from "react";
 
-import { type MouseEvent, TextAttributes } from "@opentui/core";
+import { type MouseEvent, RGBA, TextAttributes } from "@opentui/core";
 
 import type { AgentType, HoneymuxState } from "../../agents/types.ts";
 
-import { rgbToHex, terminalBgRgb, theme } from "../../themes/theme.ts";
+import { theme } from "../../themes/theme.ts";
 import { stringWidth, truncateToWidth } from "../../util/text.ts";
 import { MuxotronMascotOverlay } from "./muxotron-mascot-overlay.tsx";
 import { type MuxotronBorderOverlay, toSuperscript } from "./muxotron-model.ts";
@@ -15,6 +15,7 @@ interface MuxotronCollapsedViewProps {
   borderColor: string;
   bottomNode: ReactNode;
   counterDisplay: string;
+  defaultBg: RGBA;
   hasAnyAgent: boolean;
   hasUnansweredElsewhere: boolean;
   hmPad: number;
@@ -28,7 +29,6 @@ interface MuxotronCollapsedViewProps {
   labelColor: string;
   marqueeToolInfo: string;
   onNotificationsClick?: () => void;
-  realBg: string;
   showNoAgents: boolean;
   sineWaveHasConnectedAgent: boolean;
   sineWaveLastOutputTickAt: null | number;
@@ -44,6 +44,7 @@ export function MuxotronCollapsedView({
   borderColor,
   bottomNode,
   counterDisplay,
+  defaultBg,
   hasAnyAgent,
   hasUnansweredElsewhere,
   hmPad,
@@ -57,7 +58,6 @@ export function MuxotronCollapsedView({
   labelColor,
   marqueeToolInfo,
   onNotificationsClick,
-  realBg,
   showNoAgents,
   sineWaveHasConnectedAgent,
   sineWaveLastOutputTickAt,
@@ -108,7 +108,7 @@ export function MuxotronCollapsedView({
         width={inner + 2}
       />
       <text
-        bg={isDashed ? realBg : undefined}
+        bg={isDashed ? defaultBg : undefined}
         content={topLineStr}
         fg={borderColor}
         left={il}
@@ -118,7 +118,7 @@ export function MuxotronCollapsedView({
       />
       {topTextOverlays.map((overlay, idx) => (
         <text
-          bg={isDashed ? realBg : undefined}
+          bg={isDashed ? defaultBg : undefined}
           content={overlay.content}
           fg={labelColor}
           key={`top-ov-${idx}`}
@@ -129,7 +129,7 @@ export function MuxotronCollapsedView({
         />
       ))}
       <text
-        bg={isDashed ? realBg : undefined}
+        bg={isDashed ? defaultBg : undefined}
         content={vBar}
         fg={borderColor}
         left={il}
@@ -138,7 +138,7 @@ export function MuxotronCollapsedView({
         top={1}
       />
       <text
-        bg={isDashed ? realBg : undefined}
+        bg={isDashed ? defaultBg : undefined}
         content={vBar}
         fg={borderColor}
         left={il + inner + 1}
@@ -169,7 +169,7 @@ export function MuxotronCollapsedView({
         return (
           <>
             <box
-              backgroundColor={rgbToHex(terminalBgRgb)}
+              backgroundColor={defaultBg}
               height={1}
               left={badgeLeft}
               onMouseDown={(event: MouseEvent) => {
