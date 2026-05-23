@@ -117,11 +117,10 @@ export async function completeReviewGoto({
 export function getDismissTargetSession(
   selectedSession: AgentSession | null,
   agentSessions: AgentSession[],
+  activePaneId?: null | string,
 ): AgentSession | undefined {
   if (selectedSession) return selectedSession;
-  return agentSessions
-    .filter((session) => session.status === "unanswered" && !session.dismissed)
-    .sort((a, b) => a.startedAt - b.startedAt)[0];
+  return getTargetOrFirstWaitingSession(null, agentSessions, activePaneId);
 }
 
 export function getPaneBorderMenuAnchor(
@@ -139,11 +138,15 @@ export function getPaneBorderMenuAnchor(
 export function getTargetOrFirstWaitingSession(
   selectedSession: AgentSession | null,
   agentSessions: AgentSession[],
+  activePaneId?: null | string,
 ): AgentSession | undefined {
   if (selectedSession) return selectedSession;
-  return agentSessions
-    .filter((session) => session.status === "unanswered")
-    .sort((a, b) => a.startedAt - b.startedAt)[0];
+  const waiting = agentSessions
+    .filter((session) => session.status === "unanswered" && !session.dismissed)
+    .sort((a, b) => a.startedAt - b.startedAt);
+  const outsideActivePane =
+    activePaneId == null ? undefined : waiting.find((session) => session.paneId !== activePaneId);
+  return outsideActivePane ?? waiting[0];
 }
 
 export function useAppRuntimeShortcuts({
@@ -196,7 +199,8 @@ export function useAppRuntimeShortcuts({
     terminalRef,
   } = refs;
 
-  const getTargetOrFirstWaiting = () => getTargetOrFirstWaitingSession(treeSelectedSessionRef.current, agentSessions);
+  const getTargetOrFirstWaiting = () =>
+    getTargetOrFirstWaitingSession(treeSelectedSessionRef.current, agentSessions, activePaneIdRef.current);
 
   handleQuickApproveRef.current = () => {
     const session = getTargetOrFirstWaiting();
@@ -240,7 +244,7 @@ export function useAppRuntimeShortcuts({
   };
 
   handleDismissRef.current = () => {
-    const session = getDismissTargetSession(treeSelectedSessionRef.current, agentSessions);
+    const session = getDismissTargetSession(treeSelectedSessionRef.current, agentSessions, activePaneIdRef.current);
     if (session) {
       storeRef.current?.dismissSession(session.sessionId);
       clearTreeSelectedSession();
@@ -249,10 +253,11 @@ export function useAppRuntimeShortcuts({
 
   handleAgentLatchRef.current = () => {
     // Context-sensitive agent latch binding: when no review session is active,
-    // focus the muxotron on the oldest unanswered agent (mirroring
-    // the permission-context tap behavior of `zoomAgentsView`). Latch
-    // toggling for tree-selected sessions is handled in the router via
-    // `onReviewLatchToggle` before this callback is reached.
+    // focus the muxotron on the oldest unanswered agent outside the active
+    // pane (mirroring the permission-context tap behavior of
+    // `zoomAgentsView`). Latch toggling for tree-selected sessions is
+    // handled in the router via `onReviewLatchToggle` before this callback
+    // is reached.
     if (muxotronFocusActiveRef.current) {
       handleZoomEndRef.current?.();
     } else {

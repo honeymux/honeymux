@@ -6,7 +6,6 @@ import type { AgentDialogState, TmuxSessionState, UiChromeState } from "./use-ap
 import type { HistoryWorkflowApi } from "./use-history-workflow.ts";
 import type { LayoutProfilesApi } from "./use-layout-profiles.ts";
 import type { OptionsWorkflowApi } from "./use-options-workflow.ts";
-import type { TabActionsApi } from "./use-tab-actions.ts";
 import type { UiActionsApi } from "./use-ui-actions.ts";
 
 interface BuildAppRuntimeContextOptions {
@@ -19,7 +18,6 @@ interface BuildAppRuntimeContextOptions {
   refs: AppRuntimeRefs;
   renderer: SetupTmuxRuntimeSessionRuntimeContext["renderer"];
   spawnPtyBridge: (targetSession: string) => unknown;
-  tabActions: TabActionsApi;
   tmuxSessionState: TmuxSessionState;
   uiActions: UiActionsApi;
   uiChromeState: UiChromeState;
@@ -35,7 +33,6 @@ export function buildAppRuntimeContext({
   refs,
   renderer,
   spawnPtyBridge,
-  tabActions,
   tmuxSessionState,
   uiActions,
   uiChromeState,
@@ -112,8 +109,8 @@ export function buildAppRuntimeContext({
       handleSidebarToggleRef: refs.handleSidebarToggleRef,
       handleSidebarUpRef: refs.handleSidebarUpRef,
       handleSidebarZoomRef: refs.handleSidebarZoomRef,
-      handleTabNext: tabActions.handleTabNext,
-      handleTabPrev: tabActions.handleTabPrev,
+      handleTabNextRef: refs.handleTabNextRef,
+      handleTabPrevRef: refs.handleTabPrevRef,
       handleTextInputEscape: uiActions.handleTextInputEscape,
       handleToolbarActivateRef: refs.handleToolbarActivateRef,
       handleToolbarCancelRef: refs.handleToolbarCancelRef,

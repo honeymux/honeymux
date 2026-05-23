@@ -138,9 +138,9 @@ export function useMainPaneModel({
       const selectTargetPane = async () => {
         const client = refs.clientRef.current;
         if (!client) return;
-        await client.selectWindow(windowId).catch(() => {});
+        await client.selectWindowInSession(sessionName, windowId).catch(() => {});
         const paneSelected = await client
-          .selectPane(paneId)
+          .selectPaneInSession(sessionName, paneId)
           .then(() => true)
           .catch(() => false);
         if (paneSelected) {

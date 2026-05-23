@@ -85,8 +85,8 @@ export interface SetupTmuxRuntimeInputContext {
   handleSidebarToggleRef: MutableRefObject<() => void>;
   handleSidebarUpRef: MutableRefObject<() => void>;
   handleSidebarZoomRef: MutableRefObject<() => void>;
-  handleTabNext: () => void;
-  handleTabPrev: () => void;
+  handleTabNextRef: MutableRefObject<() => void>;
+  handleTabPrevRef: MutableRefObject<() => void>;
   handleTextInputEscape: () => void;
   handleToolbarActivateRef: MutableRefObject<() => void>;
   handleToolbarCancelRef: MutableRefObject<() => void>;

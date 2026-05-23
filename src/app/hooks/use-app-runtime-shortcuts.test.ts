@@ -33,20 +33,16 @@ function session(overrides: Partial<AgentSession>): AgentSession {
 }
 
 describe("app runtime shortcut helpers", () => {
-  test("prefers the selected session, otherwise the earliest unanswered session", () => {
-    const earliest = session({ sessionId: "a", startedAt: 1 });
-    const later = session({ sessionId: "b", startedAt: 2 });
-    const selected = session({ sessionId: "selected", startedAt: 5 });
+  test("targets selected session or first non-dismissed unanswered session outside the active pane", () => {
+    const activePane = session({ paneId: "%1", sessionId: "active", startedAt: 1 });
+    const dismissed = session({ dismissed: true, paneId: "%2", sessionId: "dismissed", startedAt: 2 });
+    const elsewhere = session({ paneId: "%3", sessionId: "elsewhere", startedAt: 3 });
+    const selected = session({ paneId: "%4", sessionId: "selected", startedAt: 4 });
 
-    expect(getTargetOrFirstWaitingSession(selected, [later, earliest])?.sessionId).toBe("selected");
-    expect(getTargetOrFirstWaitingSession(null, [later, earliest])?.sessionId).toBe("a");
-  });
-
-  test("dismiss target skips dismissed unanswered sessions", () => {
-    const dismissed = session({ dismissed: true, sessionId: "dismissed", startedAt: 1 });
-    const live = session({ sessionId: "live", startedAt: 2 });
-
-    expect(getDismissTargetSession(null, [live, dismissed])?.sessionId).toBe("live");
+    expect(getTargetOrFirstWaitingSession(selected, [elsewhere, activePane], "%1")?.sessionId).toBe("selected");
+    expect(getTargetOrFirstWaitingSession(null, [elsewhere, dismissed, activePane], "%1")?.sessionId).toBe("elsewhere");
+    expect(getTargetOrFirstWaitingSession(null, [activePane], "%1")?.sessionId).toBe("active");
+    expect(getDismissTargetSession(null, [elsewhere, dismissed, activePane], "%1")?.sessionId).toBe("elsewhere");
   });
 
   test("computes the pane-border menu anchor from pane geometry and sidebar offset", () => {

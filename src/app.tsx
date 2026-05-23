@@ -139,6 +139,8 @@ export function App({ sessionName }: AppProps) {
     handleSessionClickRef,
     handleSessionNextRef,
     handleSessionPrevRef,
+    handleTabNextRef,
+    handleTabPrevRef,
     inputReady,
     mobileModeRef,
     promptClickStateRef,
@@ -606,6 +608,8 @@ export function App({ sessionName }: AppProps) {
   handleSessionClickRef.current = handleSessionClick;
   handleSessionNextRef.current = handleSessionNext;
   handleSessionPrevRef.current = handleSessionPrev;
+  handleTabNextRef.current = tabActionState.handleTabNext;
+  handleTabPrevRef.current = tabActionState.handleTabPrev;
   handleRedrawRef.current = handleRedraw;
 
   // Redraw after UI mode change — the terminal component remounts and needs
@@ -665,7 +669,6 @@ export function App({ sessionName }: AppProps) {
     refs: appRuntimeRefs,
     renderer,
     spawnPtyBridge,
-    tabActions: tabActionState,
     tmuxSessionState,
     uiActions: uiActionState,
     uiChromeState,

@@ -204,7 +204,7 @@ export class RemoteControlClient extends EventEmitter {
       // (mouse, theme colors, cursor style, cwd-aware split bindings) — those
       // are only appropriate for the user-facing local tmux server. The remote
       // mirror gets a minimal set of options below.
-      await client.attachWithArgs(tmuxArgs, this.mirrorSession, MIN_CONTROL_CLIENT_SIZE);
+      await client.attachWithArgs(tmuxArgs, MIN_CONTROL_CLIENT_SIZE);
 
       // Configure the remote session for mirroring.
       // The mirror session is invisible — only the control-mode client attaches —

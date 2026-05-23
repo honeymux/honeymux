@@ -28,7 +28,7 @@ export function useTabActions({
   uiChromeState,
 }: UseTabActionsOptions): TabActionsApi {
   const { clientRef } = refs;
-  const { setActiveIndex, setWindows } = tmuxSessionState;
+  const { currentSessionName, setActiveIndex, setWindows } = tmuxSessionState;
   const { setDropdownOpen } = uiChromeState;
   const handleTabNext = useCallback(() => {
     setWindows((wins) => {
@@ -36,13 +36,13 @@ export function useTabActions({
         const next = prev + 1 >= wins.length ? 0 : prev + 1;
         const win = wins[next];
         if (win && clientRef.current) {
-          clientRef.current.selectWindow(win.id).catch(() => {});
+          clientRef.current.selectWindowInSession(currentSessionName, win.id).catch(() => {});
         }
         return next;
       });
       return wins;
     });
-  }, [clientRef, setActiveIndex, setWindows]);
+  }, [clientRef, currentSessionName, setActiveIndex, setWindows]);
 
   const handleTabPrev = useCallback(() => {
     setWindows((wins) => {
@@ -50,13 +50,13 @@ export function useTabActions({
         const next = prev - 1 < 0 ? wins.length - 1 : prev - 1;
         const win = wins[next];
         if (win && clientRef.current) {
-          clientRef.current.selectWindow(win.id).catch(() => {});
+          clientRef.current.selectWindowInSession(currentSessionName, win.id).catch(() => {});
         }
         return next;
       });
       return wins;
     });
-  }, [clientRef, setActiveIndex, setWindows]);
+  }, [clientRef, currentSessionName, setActiveIndex, setWindows]);
 
   const handleTabReorder = useCallback(
     (fromIndex: number, toIndex: number) => {
@@ -66,7 +66,7 @@ export function useTabActions({
         clientRef.current
           .moveWindow(windowIds, fromIndex, toIndex)
           .then(() => {
-            clientRef.current?.selectWindow(windowIds[fromIndex]!).catch(() => {});
+            clientRef.current?.selectWindowInSession(currentSessionName, windowIds[fromIndex]!).catch(() => {});
           })
           .catch(() => {});
 
@@ -78,7 +78,7 @@ export function useTabActions({
         return updated;
       });
     },
-    [clientRef, setActiveIndex, setWindows],
+    [clientRef, currentSessionName, setActiveIndex, setWindows],
   );
 
   const handleTabClick = useCallback(
@@ -89,14 +89,14 @@ export function useTabActions({
           if (prev === index) return prev;
           const win = wins[index];
           if (win && clientRef.current) {
-            clientRef.current.selectWindow(win.id).catch(() => {});
+            clientRef.current.selectWindowInSession(currentSessionName, win.id).catch(() => {});
           }
           return index;
         });
         return wins;
       });
     },
-    [clientRef, setActiveIndex, setDropdownOpen, setWindows],
+    [clientRef, currentSessionName, setActiveIndex, setDropdownOpen, setWindows],
   );
 
   const handleTabRename = useCallback(

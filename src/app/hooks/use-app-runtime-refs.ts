@@ -80,6 +80,8 @@ export interface AppRuntimeRefs {
   handleSidebarToggleRef: MutableRefObject<() => void>;
   handleSidebarUpRef: MutableRefObject<() => void>;
   handleSidebarZoomRef: MutableRefObject<() => void>;
+  handleTabNextRef: MutableRefObject<() => void>;
+  handleTabPrevRef: MutableRefObject<() => void>;
   handleToolbarActivateRef: MutableRefObject<() => void>;
   handleToolbarCancelRef: MutableRefObject<() => void>;
   handleToolbarDismissRef: MutableRefObject<() => void>;
@@ -312,6 +314,8 @@ export function useAppRuntimeRefs({ sequenceMap }: UseAppRuntimeRefsOptions): Ap
   const handleNewPaneTabRef = useRef<() => void>(() => {});
   const handlePrevPaneTabRef = useRef<() => void>(() => {});
   const handleNextPaneTabRef = useRef<() => void>(() => {});
+  const handleTabNextRef = useRef<() => void>(() => {});
+  const handleTabPrevRef = useRef<() => void>(() => {});
   // activePaneIdRef has many writers (window-pane-changed handler, optimistic
   // updates after pane navigation, async syncActivePaneRef on bootstrap).
   // All writes go through setActivePaneId so React renders on every change.
@@ -372,6 +376,8 @@ export function useAppRuntimeRefs({ sequenceMap }: UseAppRuntimeRefsOptions): Ap
     handleSidebarToggleRef,
     handleSidebarUpRef,
     handleSidebarZoomRef,
+    handleTabNextRef,
+    handleTabPrevRef,
     handleToolbarActivateRef,
     handleToolbarCancelRef,
     handleToolbarDismissRef,

@@ -71,8 +71,6 @@ export class TmuxControlClient extends EventEmitter {
    * condition worth surfacing to the user.
    */
   cleanExit = false;
-  private attachedSessionId: null | string = null;
-  private attachedSessionName: null | string = null;
   private closed = false;
   private lastClientSize: ControlClientSize | null = null;
   private parser: ControlModeParser | null = null;
@@ -107,7 +105,7 @@ export class TmuxControlClient extends EventEmitter {
    * watchers that forward `pane-output` back to the agent pane-activity map.
    */
   async attachExisting(sessionName: string, size: ControlClientSize = MIN_CONTROL_CLIENT_SIZE): Promise<void> {
-    await this.attachWithArgs(["-C", "attach-session", "-t", sessionName], sessionName, size);
+    await this.attachWithArgs(["-C", "attach-session", "-t", sessionName], size);
   }
 
   /**
@@ -120,13 +118,8 @@ export class TmuxControlClient extends EventEmitter {
    * defaults like mouse, theme colors, and cwd-aware split bindings. Per-client
    * size is the only post-spawn action.
    */
-  async attachWithArgs(
-    tmuxArgs: string[],
-    sessionName: string,
-    size: ControlClientSize = MIN_CONTROL_CLIENT_SIZE,
-  ): Promise<void> {
+  async attachWithArgs(tmuxArgs: string[], size: ControlClientSize = MIN_CONTROL_CLIENT_SIZE): Promise<void> {
     await this.spawnControlModeProcess(tmuxArgs);
-    this.attachedSessionName = sessionName;
     const clamped = clampControlClientSize(size);
     await setControlClientSize((command) => this.sendCommand(command), clamped);
     this.lastClientSize = clamped;
@@ -143,7 +136,6 @@ export class TmuxControlClient extends EventEmitter {
    */
   async connect(sessionName: string, size: ControlClientSize = MIN_CONTROL_CLIENT_SIZE): Promise<void> {
     await this.spawnControlModeProcess(["-C", "new-session", "-A", "-s", sessionName]);
-    this.attachedSessionName = sessionName;
     const clamped = clampControlClientSize(size);
     await applyControlClientBootstrap(
       (command) => this.sendCommand(command),
@@ -704,7 +696,6 @@ export class TmuxControlClient extends EventEmitter {
    */
   async renameSession(oldName: string, newName: string): Promise<void> {
     await this.sendCommand(`rename-session -t ${quoteTmuxArg("oldName", oldName)} ${quoteTmuxArg("newName", newName)}`);
-    if (this.attachedSessionName === oldName) this.attachedSessionName = newName;
   }
 
   /**
@@ -816,18 +807,6 @@ export class TmuxControlClient extends EventEmitter {
    */
   async selectWindow(windowId: string): Promise<void> {
     assertWindowId(windowId);
-    // Qualify with the attached session so the command is unambiguous when
-    // grouped sessions share this window (e.g. the agent-pty-bridge's
-    // `__hmx-zoom-*` overlay). Without the prefix, tmux may resolve the
-    // window in the overlay session and retarget this client there instead
-    // of switching the user's main session's current window — which leaves
-    // the visible view stuck on the previously-active pane.
-    if (this.attachedSessionName) {
-      await this.sendCommand(
-        `select-window -t ${quoteSessionScopedTarget("windowTarget", this.attachedSessionName, windowId)}`,
-      );
-      return;
-    }
     await this.sendCommand(`select-window -t ${quoteTmuxArg("windowId", windowId)}`);
   }
 
@@ -1083,15 +1062,8 @@ export class TmuxControlClient extends EventEmitter {
         onPaneOutput: (paneId, data) => this.emit("pane-output", paneId, data),
         onPaneOutputBytes: (paneId, data) => this.emit("pane-output-bytes", paneId, data),
         onPaneTitleChanged: (paneId, newTitle) => this.emit("pane-title-changed", paneId, newTitle),
-        onSessionChanged: (sessionId, sessionName) => {
-          this.attachedSessionId = sessionId;
-          this.attachedSessionName = sessionName;
-          this.emit("session-changed", sessionId, sessionName);
-        },
-        onSessionRenamed: (sessionId, newName) => {
-          if (this.attachedSessionId === sessionId) this.attachedSessionName = newName;
-          this.emit("session-renamed", sessionId, newName);
-        },
+        onSessionChanged: (sessionId, sessionName) => this.emit("session-changed", sessionId, sessionName),
+        onSessionRenamed: (sessionId, newName) => this.emit("session-renamed", sessionId, newName),
         onSessionWindowChanged: () => this.emit("session-window-changed"),
         onSubscriptionChanged: ({ name, paneId, sessionId, value, windowId, windowIndex }) =>
           this.emit("subscription-changed", name, sessionId, windowId, windowIndex, paneId, value),
