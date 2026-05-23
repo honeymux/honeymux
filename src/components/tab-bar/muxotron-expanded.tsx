@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-import { type MouseEvent, TextAttributes } from "@opentui/core";
+import { type MouseEvent, RGBA, TextAttributes } from "@opentui/core";
 import { Fragment } from "react";
 
 import type { AgentType, HoneymuxState } from "../../agents/types.ts";
@@ -19,6 +19,7 @@ interface MuxotronExpandedViewProps {
   centeredLeft: number;
   counterDisplay: string;
   counterStr: string;
+  defaultBg: RGBA;
   expandedIl: number;
   expandedInner: number;
   expandedTopLineStr: string;
@@ -37,7 +38,6 @@ interface MuxotronExpandedViewProps {
   onInteractiveScrollSequence?: (sequence: string) => void;
   onMouseDown?: (event: MouseEvent) => void;
   onMouseScroll?: (event: MouseEvent) => void;
-  realBg: string;
   sideBar: string;
   sineWaveLastOutputTickAt?: null | number;
   /** Number of content rows the agentTerminalNode should occupy. */
@@ -61,6 +61,7 @@ export function MuxotronExpandedView({
   centeredLeft,
   counterDisplay,
   counterStr,
+  defaultBg,
   expandedIl,
   expandedInner,
   expandedTopLineStr,
@@ -76,7 +77,6 @@ export function MuxotronExpandedView({
   onInteractiveScrollSequence,
   onMouseDown,
   onMouseScroll,
-  realBg,
   sideBar,
   sineWaveLastOutputTickAt,
   terminalContentRows = 0,
@@ -122,9 +122,16 @@ export function MuxotronExpandedView({
       width={expandedWidth}
       zIndex={zIndex}
     >
-      <box backgroundColor={realBg} height={totalHeight} left={0} position="absolute" top={0} width={expandedWidth} />
+      <box
+        backgroundColor={defaultBg}
+        height={totalHeight}
+        left={0}
+        position="absolute"
+        top={0}
+        width={expandedWidth}
+      />
       <text
-        bg={realBg}
+        bg={defaultBg}
         content={expandedTopLineStr}
         fg={borderColor}
         left={bx}
@@ -134,7 +141,7 @@ export function MuxotronExpandedView({
       />
       {expandedTopOverlays.map((overlay, idx) => (
         <text
-          bg={realBg}
+          bg={defaultBg}
           content={overlay.content}
           fg={labelColor}
           key={`etop-ov-${idx}`}
@@ -145,7 +152,7 @@ export function MuxotronExpandedView({
         />
       ))}
       <text
-        bg={realBg}
+        bg={defaultBg}
         content={sideBarAt(mascotRow)}
         fg={borderColor}
         left={bx}
@@ -163,7 +170,7 @@ export function MuxotronExpandedView({
       {truncatedInfo && (
         <text
           attributes={TextAttributes.BOLD}
-          bg={realBg}
+          bg={defaultBg}
           content={truncatedInfo}
           fg="#ffffff"
           left={bx + centeredLeft}
@@ -174,7 +181,7 @@ export function MuxotronExpandedView({
       )}
       {hasAnyAgent && (
         <text
-          bg={realBg}
+          bg={defaultBg}
           content={counterDisplay}
           fg={hasUnansweredElsewhere ? theme.statusWarning : theme.textSecondary}
           left={bx + expandedInner - counterStr.length}
@@ -184,7 +191,7 @@ export function MuxotronExpandedView({
         />
       )}
       <text
-        bg={realBg}
+        bg={defaultBg}
         content={sideBarAt(mascotRow)}
         fg={borderColor}
         left={bx + expandedInner + 1}
@@ -194,7 +201,7 @@ export function MuxotronExpandedView({
       />
       {(wrappedLines.length > 0 || showInteractiveTerminal) && (
         <text
-          bg={realBg}
+          bg={defaultBg}
           content={"\u251C" + "\u2500".repeat(expandedInner) + "\u2524"}
           fg={borderColor}
           left={bx}
@@ -228,7 +235,7 @@ export function MuxotronExpandedView({
         wrappedLines.map((line, row) => (
           <box key={`wrap-${row}`}>
             <text
-              bg={realBg}
+              bg={defaultBg}
               content={sideBarAt(contentTop + row)}
               fg={borderColor}
               left={bx}
@@ -238,7 +245,7 @@ export function MuxotronExpandedView({
             />
             <text
               attributes={TextAttributes.BOLD}
-              bg={realBg}
+              bg={defaultBg}
               content={line}
               fg="#ffffff"
               left={bx + 2}
@@ -247,7 +254,7 @@ export function MuxotronExpandedView({
               top={contentTop + row}
             />
             <text
-              bg={realBg}
+              bg={defaultBg}
               content={sideBarAt(contentTop + row)}
               fg={borderColor}
               left={bx + expandedInner + 1}
@@ -268,7 +275,7 @@ export function MuxotronExpandedView({
         Array.from({ length: terminalContentRows }, (_, row) => (
           <Fragment key={`frame-edge-${row}`}>
             <text
-              bg={realBg}
+              bg={defaultBg}
               content={sideBarAt(contentTop + row)}
               fg={borderColor}
               left={bx}
@@ -278,7 +285,7 @@ export function MuxotronExpandedView({
               zIndex={50}
             />
             <text
-              bg={realBg}
+              bg={defaultBg}
               content={sideBarAt(contentTop + row)}
               fg={borderColor}
               left={bx + expandedInner + 1}
