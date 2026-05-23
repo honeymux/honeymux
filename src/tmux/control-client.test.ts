@@ -9,6 +9,20 @@ import {
 import { quoteTmuxArg } from "./escape.ts";
 
 describe("TmuxControlClient connection guards", () => {
+  test("keeps scoped window selects on the renamed attached session", async () => {
+    const client = new TmuxControlClient();
+    const parser = (client as unknown as { createParser: () => { parseLine: (line: string) => void } }).createParser();
+    const sendCommand = mock(async (_command: string) => "");
+
+    parser.parseLine("%session-changed $7 alpha");
+    parser.parseLine("%session-renamed $7 beta renamed");
+    (client as unknown as { sendCommand: typeof sendCommand }).sendCommand = sendCommand;
+
+    await client.selectWindow("@3");
+
+    expect(sendCommand).toHaveBeenCalledWith(`select-window -t ${quoteTmuxArg("windowTarget", "beta renamed:@3")}`);
+  });
+
   test("emits tmux-exit (and exit) when the parser delivers an onExit notification", () => {
     const client = new TmuxControlClient();
     // Construct the parser via the same path connect() uses — even without
