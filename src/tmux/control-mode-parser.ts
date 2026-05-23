@@ -10,8 +10,8 @@ interface ControlModeNotificationHandlers {
   onPaneOutput?: (paneId: string, data: string) => void;
   onPaneOutputBytes?: (paneId: string, data: Uint8Array) => void;
   onPaneTitleChanged?: (paneId: string, title: string) => void;
-  onSessionChanged?: (fromSession: string, toSession: string) => void;
-  onSessionRenamed?: (oldName: string, newName: string) => void;
+  onSessionChanged?: (sessionId: string, sessionName: string) => void;
+  onSessionRenamed?: (sessionId: string, newName: string) => void;
   onSessionWindowChanged?: () => void;
   onSubscriptionChanged?: (notification: SubscriptionChangedNotification) => void;
   onWindowAdd?: (windowId: string) => void;

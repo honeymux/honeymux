@@ -15,6 +15,7 @@ function createParserHarness() {
   const onExit = mock(() => {});
   const onWindowAdd = mock((_windowId: string) => {});
   const onPaneOutputBytes = mock((_paneId: string, _data: Uint8Array) => {});
+  const onSessionRenamed = mock((_sessionId: string, _sessionName: string) => {});
   const onSubscriptionChanged = mock(
     (_name: string, _sessionId: string, _windowId: string, _windowIndex: string, _paneId: string, _value: string) => {},
   );
@@ -33,6 +34,7 @@ function createParserHarness() {
       },
       onPaneOutput,
       onPaneOutputBytes,
+      onSessionRenamed,
       onSubscriptionChanged: ({ name, paneId, sessionId, value, windowId, windowIndex }) =>
         onSubscriptionChanged(name, sessionId, windowId, windowIndex, paneId, value),
       onWindowAdd,
@@ -46,6 +48,7 @@ function createParserHarness() {
     onPaneOutput,
     onPaneOutputBytes,
     onReady,
+    onSessionRenamed,
     onSubscriptionChanged,
     onWindowAdd,
     parser,
@@ -135,6 +138,14 @@ describe("ControlModeParser", () => {
     parser.parseLine("%client-session-changed /dev/pts/3");
 
     expect(onClientSessionChanged).not.toHaveBeenCalled();
+  });
+
+  test("parses session-renamed notifications by session id", () => {
+    const { onSessionRenamed, parser } = createParserHarness();
+
+    parser.parseLine("%session-renamed $7 renamed session");
+
+    expect(onSessionRenamed).toHaveBeenCalledWith("$7", "renamed session");
   });
 
   test("parses subscription-changed notifications", () => {

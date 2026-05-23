@@ -71,6 +71,7 @@ export class TmuxControlClient extends EventEmitter {
    * condition worth surfacing to the user.
    */
   cleanExit = false;
+  private attachedSessionId: null | string = null;
   private attachedSessionName: null | string = null;
   private closed = false;
   private lastClientSize: ControlClientSize | null = null;
@@ -703,6 +704,7 @@ export class TmuxControlClient extends EventEmitter {
    */
   async renameSession(oldName: string, newName: string): Promise<void> {
     await this.sendCommand(`rename-session -t ${quoteTmuxArg("oldName", oldName)} ${quoteTmuxArg("newName", newName)}`);
+    if (this.attachedSessionName === oldName) this.attachedSessionName = newName;
   }
 
   /**
@@ -1081,13 +1083,14 @@ export class TmuxControlClient extends EventEmitter {
         onPaneOutput: (paneId, data) => this.emit("pane-output", paneId, data),
         onPaneOutputBytes: (paneId, data) => this.emit("pane-output-bytes", paneId, data),
         onPaneTitleChanged: (paneId, newTitle) => this.emit("pane-title-changed", paneId, newTitle),
-        onSessionChanged: (fromSession, toSession) => {
-          this.attachedSessionName = toSession;
-          this.emit("session-changed", fromSession, toSession);
+        onSessionChanged: (sessionId, sessionName) => {
+          this.attachedSessionId = sessionId;
+          this.attachedSessionName = sessionName;
+          this.emit("session-changed", sessionId, sessionName);
         },
-        onSessionRenamed: (oldName, newName) => {
-          if (this.attachedSessionName === oldName) this.attachedSessionName = newName;
-          this.emit("session-renamed", oldName, newName);
+        onSessionRenamed: (sessionId, newName) => {
+          if (this.attachedSessionId === sessionId) this.attachedSessionName = newName;
+          this.emit("session-renamed", sessionId, newName);
         },
         onSessionWindowChanged: () => this.emit("session-window-changed"),
         onSubscriptionChanged: ({ name, paneId, sessionId, value, windowId, windowIndex }) =>
