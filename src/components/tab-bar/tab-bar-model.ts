@@ -115,7 +115,7 @@ export function buildTabBarModel({
 
   const muxotronWidth = getMuxotronWidth(width, uiMode, muxotronEnabled, false);
   const muxotronRight = Math.floor((width - muxotronWidth) / 2) + muxotronWidth;
-  const badgeLeft = width - toolbarReserve - 1 - badgeWidth;
+  const badgeLeft = width - toolbarReserve - 2 - badgeWidth;
 
   const badgeRightReserve = badgeWidth > 0 ? badgeWidth + toolbarReserve + 4 : toolbarReserve;
   const maxExpandedWidth = getMaxExpandedMuxotronWidth(width, windows.length, sidebarReserve, badgeRightReserve);
