@@ -160,7 +160,11 @@ export function planValidateGroup(
     const survivorInWindowId =
       survivors.find((survivor) => targetWindowPanes.some((pane) => pane.id === survivor.paneId))?.paneId ?? null;
     const promotedIndex = runtimeGroup.activeIndex < survivors.length ? runtimeGroup.activeIndex : survivors.length - 1;
-    const joinTargetPaneId = targetWindowPanes.length > 0 ? targetWindowPanes[targetWindowPanes.length - 1]!.id : null;
+    // If the visible slot is gone, do not approximate it by joining the
+    // survivor into an arbitrary sibling pane. In mixed local/remote windows
+    // that sibling can be a remote proxy, and `join-pane -h` reflows the
+    // whole local tmux layout.
+    const joinTargetPaneId = null;
     const logMessage = `validateTabGroups: active tab ${activeTab.paneId} gone in group ${slotKey}, ${survivors.length} survivors`;
 
     if (survivorInWindowId) {
