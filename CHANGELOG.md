@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+## v0.108.2 - 2026-05-25
+
+- Better handling of socket write failures to remote-backed panes when under PTY backpressure
+- Fix intermittent agent pane targeting issue during mux-o-tron mouse click handling
+- Fix issue causing layout corruption when mixing pane tab use and remote pane use in same window
+- Fix issue with pane tab label click handling with single tab panes
+- Fix issue with terminal bg transparency in the mux-o-tron during active permission requests
+- Fix issue with window selection after rename of active session
+- Fix issue preventing correct pane selection when using the sidebar server tree view to navigate
+- Fix off-by-one in the session dropdown mouse hit zone calculation
+
 ## v0.108.1 - 2026-05-21
 
 - Allow window tab drag-and-drop reordering during tab overflow
