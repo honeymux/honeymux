@@ -49,7 +49,7 @@ interface ServerTreeProps {
   /** Callback fired when tree counts change (sessions, windows, panes, paneTabsEnabled). */
   onCountsChange?: (counts: { paneTabsEnabled: number; panes: number; sessions: number; windows: number }) => void;
   onNavigate: (sessionName: string, windowId: string, paneId: string) => void;
-  onSwitchPaneTab?: (slotKey: string, tabIndex: number) => void;
+  onSwitchPaneTab?: (slotKey: string, tabIndex: number) => Promise<void> | void;
   paneTabGroups: Map<string, PaneTabGroup>;
   /** Ref set by ServerTree so external code can trigger an immediate refresh. */
   refreshRef?: MutableRefObject<(() => void) | null>;
@@ -323,18 +323,24 @@ export function ServerTree({
   }
 
   const handleClick = useCallback(
-    (row: TreeRow) => {
-      const navigatePaneId = row.navigatePaneId ?? row.paneId;
-      if (row.type === "pane-tab" && row.slotKey != null && row.tabIndex != null) {
+    async (row: TreeRow) => {
+      if (
+        row.type === "pane-tab" &&
+        row.slotKey != null &&
+        row.tabIndex != null &&
+        row.sessionName &&
+        row.windowId &&
+        row.paneId
+      ) {
         // Pane-tab child rows represent tabs that may currently live in a
-        // hidden staging window. Navigate via the visible host pane, then
-        // switch tabs inside the slot.
-        if (row.sessionName && row.windowId && navigatePaneId) {
-          onNavigate(row.sessionName, row.windowId, navigatePaneId);
-        }
-        onSwitchPaneTab?.(row.slotKey, row.tabIndex);
-      } else if (row.type === "pane" && row.sessionName && row.windowId && navigatePaneId) {
-        onNavigate(row.sessionName, row.windowId, navigatePaneId);
+        // hidden staging window. Swap the target tab into the visible slot
+        // first, then navigate to the tab's pane id — which is now the
+        // pane sitting in the visible slot. Navigating first would briefly
+        // show the previously-active tab before the swap lands.
+        await onSwitchPaneTab?.(row.slotKey, row.tabIndex);
+        onNavigate(row.sessionName, row.windowId, row.paneId);
+      } else if (row.type === "pane" && row.sessionName && row.windowId && row.paneId) {
+        onNavigate(row.sessionName, row.windowId, row.paneId);
       } else if (row.type === "window" && row.sessionName && row.windowId) {
         // Navigate to the first pane in this window
         const windowPanes =

@@ -325,15 +325,20 @@ export async function materializePaneTabs({
     } catch {}
   }
 
-  await client.swapPane(visiblePaneId, incomingPaneId);
-
   if (refreshBorderLines) {
     try {
       borderLinesRef.current = await client.getPaneBorderLines();
     } catch {}
   }
 
+  // Set the per-pane border format on incomingPaneId before the swap so it
+  // arrives in the visible slot already showing the right active-tab
+  // marker. pane-border-format is a per-pane (-p) option so it follows the
+  // pane through the swap; pane-border-status is per-window (-w) so it
+  // must wait until incomingPaneId is in the visible window.
   await setPaneFormatForTabs(client, incomingPaneId, tabs, tabActiveIndex, resizeWidth ?? 80, borderLinesRef.current);
+
+  await client.swapPane(visiblePaneId, incomingPaneId);
 
   if (setTopBorder) {
     try {

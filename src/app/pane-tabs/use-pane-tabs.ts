@@ -353,9 +353,7 @@ export function usePaneTabs({
     movePaneTab: queueMovePaneTab,
     moveToUngroupedPane: queueMoveToUngroupedPane,
     reorderPaneTab: queueReorderPaneTab,
-    switchPaneTab: (slotKey: string, tabIndex: number) => {
-      void handleSwitchPaneTab(slotKey, tabIndex);
-    },
+    switchPaneTab: handleSwitchPaneTab,
   });
 
   // validateTabGroups: triggered by tmux events, the pane_dead subscription,

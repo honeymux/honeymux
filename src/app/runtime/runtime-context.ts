@@ -102,7 +102,15 @@ export interface SetupTmuxRuntimeInputContext {
   matchZoomCodeRef: MutableRefObject<((code: number) => import("../../util/keybindings.ts").KeyAction | null) | null>;
   muxotronFocusActiveRef: MutableRefObject<boolean>;
   paneTabBorderClickRef: MutableRefObject<
-    ((paneId: string, xOffset: number, paneWidth: number, screenX: number, screenY: number) => boolean) | null
+    | ((
+        paneId: string,
+        xOffset: number,
+        paneWidth: number,
+        screenX: number,
+        screenY: number,
+        active: boolean,
+      ) => boolean)
+    | null
   >;
   reEncodeActiveRef: MutableRefObject<boolean>;
   reviewLatchedRef: MutableRefObject<boolean>;
