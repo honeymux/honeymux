@@ -795,14 +795,6 @@ export class TmuxControlClient extends EventEmitter {
   }
 
   /**
-   * Select a pane for a specific session target.
-   */
-  async selectPaneInSession(sessionName: string, paneId: string): Promise<void> {
-    assertPaneId(paneId);
-    await this.sendCommand(`select-pane -t ${quoteSessionScopedTarget("paneTarget", sessionName, paneId)}`);
-  }
-
-  /**
    * Switch to a window by its ID (e.g. "@1").
    */
   async selectWindow(windowId: string): Promise<void> {

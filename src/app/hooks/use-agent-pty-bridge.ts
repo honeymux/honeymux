@@ -162,7 +162,7 @@ export function useAgentPtyBridge({
             await client.selectWindowInSession(overlayName, targetWindowId);
           }
           if (targetPaneId) {
-            await client.selectPaneInSession(overlayName, targetPaneId);
+            await client.selectPane(targetPaneId);
           }
         }
       } catch {

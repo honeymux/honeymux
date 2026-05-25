@@ -25,6 +25,17 @@ describe("TmuxControlClient connection guards", () => {
     );
   });
 
+  test("selects panes by global pane id", async () => {
+    const client = new TmuxControlClient();
+    const sendCommand = mock(async (_command: string) => "");
+
+    (client as unknown as { sendCommand: typeof sendCommand }).sendCommand = sendCommand;
+
+    await client.selectPane("%5");
+
+    expect(sendCommand).toHaveBeenCalledWith(`select-pane -t ${quoteTmuxArg("paneId", "%5")}`);
+  });
+
   test("emits tmux-exit (and exit) when the parser delivers an onExit notification", () => {
     const client = new TmuxControlClient();
     // Construct the parser via the same path connect() uses — even without
