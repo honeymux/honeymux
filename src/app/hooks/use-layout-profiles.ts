@@ -4,6 +4,7 @@ import type { LayoutProfile } from "../../tmux/types.ts";
 import type { AppRuntimeRefs } from "./use-app-runtime-refs.ts";
 import type { TmuxSessionState, UiChromeState } from "./use-app-state-groups.ts";
 
+import { quoteTmuxArg } from "../../tmux/escape.ts";
 import { formatArgv } from "../../util/argv.ts";
 import { reattachSessionPty } from "../runtime/tmux-client-resync.ts";
 import { loadLayoutProfiles, saveLayoutProfiles } from "../services/session-persistence.ts";
@@ -65,11 +66,15 @@ export function useLayoutProfiles({
       const client = clientRef.current;
       if (!client) return;
       try {
-        await client.killAllPanesExceptActive();
-        if (profile.paneCount > 1) {
-          await client.createPanes(profile.paneCount - 1);
+        // Chain new-window + splits + layout into a single tmux command block
+        // so every shell (including the first pane) is spawned and sized to
+        // its final geometry in one atomic step.
+        const cmds: string[] = ["new-window -a -t '{end}' -c '#{pane_current_path}'"];
+        for (let i = 0; i < profile.paneCount - 1; i++) {
+          cmds.push("split-window -fh -c '#{pane_current_path}'");
         }
-        await client.applyLayout(profile.layout);
+        cmds.push(`select-layout ${quoteTmuxArg("layout", profile.layout)}`);
+        await client.runCommandChain(cmds);
 
         // Send per-pane commands as keystrokes to the shells
         if (profile.commands && profile.commands.some((cmd) => cmd.length > 0)) {
@@ -146,7 +151,6 @@ export function useLayoutProfiles({
       if (!client) return;
 
       try {
-        await client.newWindow();
         await applyLayoutProfile(profile);
         if (shouldReattachSessionPty(profile)) {
           resyncProfileSessionPty();
