@@ -25,7 +25,6 @@
 - Switch agent hook forwarding from Unix sockets to authenticated TCP (thanks @tfriedel)
 - Upgrade opentui to 0.2.12
 
-
 ## v0.107.0 - 2026-05-12
 
 - Auto-refresh remote hook scripts on connect (thanks @tfriedel)
