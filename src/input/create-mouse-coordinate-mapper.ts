@@ -100,6 +100,7 @@ export function createMouseCoordinateMapper({
   // pending — so a bare click moves the cursor and a drag selects text.
   let pendingClickToMove: { ptyX: number; ptyY: number } | null = null;
   let paneTabPressOrigin: {
+    active: boolean;
     paneId: string;
     paneWidth: number;
     screenX: number;
@@ -162,16 +163,20 @@ export function createMouseCoordinateMapper({
       for (const p of rects) {
         if (p.id && ptyY === p.top - 1 && ptyX >= p.left && ptyX < p.left + p.width) {
           if (paneTabBorderHitTestRef.current?.(p.id, ptyX - p.left)) {
-            paneTabPressOrigin = { paneId: p.id, paneWidth: p.width, screenX, screenY, xOffset: ptyX - p.left };
+            paneTabPressOrigin = {
+              active: p.active === true,
+              paneId: p.id,
+              paneWidth: p.width,
+              screenX,
+              screenY,
+              xOffset: ptyX - p.left,
+            };
             return "consume";
           }
-          if (p.active) {
-            paneTabBorderClickRef.current?.(p.id, ptyX - p.left, p.width, screenX, screenY);
-            // Always consume left-clicks on the active pane's border row
-            // so they don't leak into the PTY gesture tracker.
-            return "consume";
-          }
-          break;
+          paneTabBorderClickRef.current?.(p.id, ptyX - p.left, p.width, screenX, screenY, p.active === true);
+          // Always consume left-clicks on a pane's border row so they don't
+          // leak into the PTY gesture tracker.
+          return "consume";
         }
       }
     }
@@ -295,6 +300,7 @@ export function createMouseCoordinateMapper({
           origin.paneWidth,
           origin.screenX,
           origin.screenY,
+          origin.active,
         );
         return "consume";
       }

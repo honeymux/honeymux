@@ -28,9 +28,17 @@ export interface PaneTabInteractionsApi {
   closePaneTabOverflow: () => void;
   /** Callback for when the ≡ menu button is clicked. Set by the app to open the pane border menu. */
   onMenuButtonClickRef: MutableRefObject<((paneId: string, screenX: number, screenY: number) => void) | null>;
-  /** Handle click on a pane border row. Args: (paneId, xOffset, screenX, screenY). Returns true if consumed. */
+  /** Handle click on a pane border row. Args: (paneId, xOffset, screenX, screenY, active). Returns true if consumed. */
   paneTabBorderClickRef: MutableRefObject<
-    ((paneId: string, xOffset: number, paneWidth: number, screenX: number, screenY: number) => boolean) | null
+    | ((
+        paneId: string,
+        xOffset: number,
+        paneWidth: number,
+        screenX: number,
+        screenY: number,
+        active: boolean,
+      ) => boolean)
+    | null
   >;
   /** Pure hit-test: returns true if (paneId, xOffset) is on a draggable tab. No side effects. */
   paneTabBorderHitTestRef: MutableRefObject<((paneId: string, xOffset: number) => boolean) | null>;
@@ -92,7 +100,7 @@ interface UsePaneTabInteractionsOptions {
   movePaneTab: (fromSlotKey: string, fromTabIndex: number, toSlotKey: string, toInsertIndex: number) => void;
   moveToUngroupedPane: (fromSlotKey: string, fromTabIndex: number, targetPaneId: string, insertIndex: number) => void;
   reorderPaneTab: (slotKey: string, fromIndex: number, toIndex: number) => void;
-  switchPaneTab: (slotKey: string, tabIndex: number) => void;
+  switchPaneTab: (slotKey: string, tabIndex: number) => Promise<void>;
 }
 
 export function usePaneTabInteractions({
@@ -157,7 +165,15 @@ export function usePaneTabInteractions({
 
   const onMenuButtonClickRef = useRef<((paneId: string, screenX: number, screenY: number) => void) | null>(null);
   const paneTabBorderClickRef = useRef<
-    ((paneId: string, xOffset: number, paneWidth: number, screenX: number, screenY: number) => boolean) | null
+    | ((
+        paneId: string,
+        xOffset: number,
+        paneWidth: number,
+        screenX: number,
+        screenY: number,
+        active: boolean,
+      ) => boolean)
+    | null
   >(null);
   paneTabBorderClickRef.current = (
     paneId: string,
@@ -165,33 +181,57 @@ export function usePaneTabInteractions({
     paneWidth: number,
     screenX: number,
     screenY: number,
+    active: boolean,
   ): boolean => {
     const group = enabled ? getPaneTabGroup(paneId) : undefined;
+
+    // Focus the pane on any border click; selectPane is idempotent for the
+    // already-active pane.
+    const focusPane = () => {
+      if (!active) clientRef.current?.selectPane(paneId).catch(() => {});
+    };
 
     if (!group || group.tabs.length <= 1) {
       // Widen the zone to cover tmux < 3.6 where a 2-column right border
       // suffix shifts #[align=right] content left (see BORDER_SUFFIX_COMPAT).
-      if (xOffset >= paneWidth - MENU_BUTTON_WIDTH - BORDER_PREFIX && xOffset <= paneWidth - 1) {
+      const onMenuButton = xOffset >= paneWidth - MENU_BUTTON_WIDTH - BORDER_PREFIX && xOffset <= paneWidth - 1;
+      // The menu glyph only renders on the active pane (see
+      // buildBorderFormat). On a non-active pane the click in that region
+      // hits empty dashes — focus only.
+      if (active && onMenuButton) {
         onMenuButtonClickRef.current?.(paneId, screenX, screenY);
-        return true;
+      } else {
+        focusPane();
       }
-      return false;
+      return true;
     }
 
     const maxWidth = borderMaxWidth(group.slotWidth);
     const hit = hitTestPaneTab(group.tabs, xOffset, maxWidth, group.activeIndex);
     if (hit === -3) {
-      onMenuButtonClickRef.current?.(paneId, screenX, screenY);
+      // Menu glyph only renders on the active pane.
+      if (active) onMenuButtonClickRef.current?.(paneId, screenX, screenY);
+      else focusPane();
       return true;
     }
     if (hit === -2) {
+      focusPane();
       const visibleCount = computePaneTabVisible(group.tabs, maxWidth);
       setPaneTabOverflow({ screenX, screenY, slotKey: group.slotKey, visibleCount });
       return true;
     }
-    if (hit >= 0 && hit !== group.activeIndex) {
-      switchPaneTab(group.slotKey, hit);
+    if (hit >= 0) {
+      if (hit !== group.activeIndex) {
+        // swap-pane (without -d) already sets the active pane to the one
+        // that ends up in the visible slot, so the switch implicitly
+        // focuses the target tab's pane. No separate select-pane needed.
+        void switchPaneTab(group.slotKey, hit);
+      } else {
+        focusPane();
+      }
+      return true;
     }
+    focusPane();
     return true;
   };
 
