@@ -1130,6 +1130,48 @@ describe("pane tab ops", () => {
     expect(emitLayoutChange).toHaveBeenCalledTimes(1);
   });
 
+  test("doValidate does not join a hidden left tab into remote-backed siblings after swap failure", async () => {
+    const groups = new Map<string, PaneTabGroup>([
+      [
+        "left-slot",
+        {
+          activeIndex: 0,
+          slotHeight: 92,
+          slotKey: "left-slot",
+          slotWidth: 108,
+          tabs: [
+            { label: "dead-left", paneId: "%30" },
+            { label: "live-left", paneId: "%29" },
+          ],
+          windowId: "@4",
+        },
+      ],
+    ]);
+    const { client, emitLayoutChange, groupsRef, ops } = createHarness({ groups });
+    client.respondSequence(
+      "list-panes -a -F ' #{session_name}\t#{pane_id}\t#{pane_dead}\t#{window_id}\t#{pane_width}\t#{pane_height}\t#{pane_active}\t#{@hmx-remote-host}'",
+      [
+        " alpha\t%30\t1\t@4\t108\t92\t1\t\n alpha\t%29\t0\t@9\t108\t92\t1\t\n alpha\t%8\t0\t@4\t108\t45\t0\ths-p8-04\n alpha\t%9\t0\t@4\t108\t46\t0\ths-p8-04",
+        " alpha\t%29\t0\t@9\t108\t92\t1\t\n alpha\t%8\t0\t@4\t108\t45\t0\ths-p8-04\n alpha\t%9\t0\t@4\t108\t46\t0\ths-p8-04",
+      ],
+    );
+    client.respond("break-pane -P -F '#{window_id}' -s %29", "@9");
+    client.listPanesByWindow.set("@4", [
+      { active: true, height: 92, id: "%30", width: 108 },
+      { active: false, height: 45, id: "%8", width: 108 },
+      { active: false, height: 46, id: "%9", width: 108 },
+    ]);
+    client.listPanesByWindow.set("@9", [{ active: true, height: 92, id: "%29", width: 108 }]);
+    client.forceSwapPaneError = new Error("can't find pane: %30");
+
+    await ops.doValidate();
+
+    expect(client.sentCommands).not.toContain("join-pane -h -s %29 -t %9 -l 108");
+    expect(client.sentCommands).toContain("break-pane -P -F '#{window_id}' -s %29");
+    expect(groupsRef.current.get("left-slot")?.windowId).toBe("@9");
+    expect(emitLayoutChange).toHaveBeenCalledTimes(1);
+  });
+
   test("doBootstrapUngroupedPanes only bootstraps panes from the current session", async () => {
     const { client, groupsRef, ops } = createHarness({ currentSessionName: "alpha" });
     client.respond(

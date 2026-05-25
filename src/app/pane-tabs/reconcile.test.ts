@@ -151,4 +151,54 @@ describe("pane tab reconcile", () => {
       });
     }
   });
+
+  test("planValidateGroup does not choose remote-backed siblings as dead-tab join targets", () => {
+    const group: PaneTabGroup = {
+      activeIndex: 0,
+      slotHeight: 92,
+      slotKey: "left-slot",
+      slotWidth: 108,
+      tabs: [
+        { label: "dead-left", paneId: "%30" },
+        { label: "live-left", paneId: "%29" },
+      ],
+      windowId: "@4",
+    };
+    const paneStateById = new Map<string, PaneSnapshot>([
+      ["%29", createPaneSnapshot("%29", "@9", { height: 92, width: 108 })],
+      ["%30", createPaneSnapshot("%30", "@4", { dead: true, height: 92, width: 108 })],
+      ["%8", createPaneSnapshot("%8", "@4", { height: 45, remoteHost: "hs-p8-04", width: 108 })],
+      ["%9", createPaneSnapshot("%9", "@4", { height: 46, remoteHost: "hs-p8-04", width: 108 })],
+    ]);
+    const paneState = buildPaneStateSummary(paneStateById);
+    const windowPanesByWindowId = new Map<string, WindowPaneSnapshot[]>([
+      [
+        "@4",
+        [
+          { active: true, height: 92, id: "%30", width: 108 },
+          { active: false, height: 45, id: "%8", width: 108 },
+          { active: false, height: 46, id: "%9", width: 108 },
+        ],
+      ],
+      ["@9", [{ active: true, height: 92, id: "%29", width: 108 }]],
+    ]);
+
+    const plan = planValidateGroup(group.slotKey, group, paneStateById, paneState, windowPanesByWindowId);
+
+    expect(plan).toMatchObject({
+      activeIndex: 0,
+      changed: true,
+      kind: "apply_tabs",
+      slotKey: "left-slot",
+      tabs: [{ label: "live-left", paneId: "%29" }],
+      windowId: "@4",
+    });
+    if (plan.kind === "apply_tabs") {
+      expect(plan.materialization).toMatchObject({
+        incomingPaneId: "%29",
+        joinTargetPaneId: null,
+        targetWindowId: "@4",
+      });
+    }
+  });
 });
