@@ -10,8 +10,13 @@
  */
 import type { Socket } from "bun";
 
+import type { SocketWriteQueue } from "./socket-write-queue.ts";
+
 import { getRemoteProxySocketPath } from "./proxy-server.ts";
 import { TmuxQueryStripper } from "./query-stripper.ts";
+import { createSocketWriteQueue } from "./socket-write-queue.ts";
+
+const MAX_PROXY_INPUT_QUEUE_BYTES = 1024 * 1024;
 
 export async function runRemoteProxyProcess(localPaneId: string, proxyToken: string): Promise<void> {
   // The proxy's pty is in canonical mode with echo by default. Raw mode
@@ -34,12 +39,13 @@ export async function runRemoteProxyProcess(localPaneId: string, proxyToken: str
   const socketPath = getRemoteProxySocketPath();
   const queryStripper = new TmuxQueryStripper();
   let activeSocket: Socket<unknown> | null = null;
+  let activeSocketWriter: SocketWriteQueue | null = null;
   let retry = 0;
 
   const onStdinData = (chunk: Buffer): void => {
-    const sock = activeSocket;
-    if (!sock) return; // dropped while disconnected — kernel buffer keeps draining via resume()
-    sock.write(chunk);
+    const writer = activeSocketWriter;
+    if (!writer) return; // dropped while disconnected — kernel buffer keeps draining via resume()
+    writer.write(chunk);
   };
   stdin.on("data", onStdinData);
 
@@ -49,24 +55,32 @@ export async function runRemoteProxyProcess(localPaneId: string, proxyToken: str
         socket: {
           close() {
             activeSocket = null;
+            activeSocketWriter = null;
             resolve();
           },
           connectError(_sock, error) {
             activeSocket = null;
+            activeSocketWriter = null;
             reject(error);
           },
           data(_sock, data) {
             const filtered = queryStripper.filter(data);
             if (filtered.length > 0) process.stdout.write(filtered);
           },
+          drain(sock) {
+            if (sock === activeSocket) activeSocketWriter?.flush();
+          },
           error() {
             activeSocket = null;
+            activeSocketWriter = null;
             resolve();
           },
           open(sock) {
-            sock.write(JSON.stringify({ paneId: localPaneId, token: proxyToken }) + "\n");
+            const writer = createSocketWriteQueue(sock, { maxQueuedBytes: MAX_PROXY_INPUT_QUEUE_BYTES });
             activeSocket = sock;
+            activeSocketWriter = writer;
             retry = 0;
+            writer.write(Buffer.from(JSON.stringify({ paneId: localPaneId, token: proxyToken }) + "\n"));
           },
         },
         unix: socketPath,
