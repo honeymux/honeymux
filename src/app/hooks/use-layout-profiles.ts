@@ -74,6 +74,7 @@ export function useLayoutProfiles({
           cmds.push("split-window -fh -c '#{pane_current_path}'");
         }
         cmds.push(`select-layout ${quoteTmuxArg("layout", profile.layout)}`);
+        cmds.push("select-pane -t '{top-left}'");
         await client.runCommandChain(cmds);
 
         // Send per-pane commands as keystrokes to the shells
