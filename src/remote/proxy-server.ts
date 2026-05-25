@@ -2,16 +2,21 @@ import type { Socket } from "bun";
 
 import { chmodSync, unlinkSync } from "node:fs";
 
+import type { SocketWriteQueue } from "./socket-write-queue.ts";
+
 import { EventEmitter } from "../util/event-emitter.ts";
 import { getPrivateSocketPath } from "../util/runtime-paths.ts";
+import { createSocketWriteQueue } from "./socket-write-queue.ts";
 
 interface ProxySocketData {
   buffer: Uint8Array;
+  output: SocketWriteQueue;
   paneId: null | string;
 }
 
-const MAX_PROXY_REGISTRATION_LINE_BYTES = 8 * 1024;
+const MAX_CONNECTED_PROXY_OUTPUT_QUEUE_BYTES = 32 * 1024 * 1024;
 const MAX_PENDING_PROXY_OUTPUT_BYTES = 256 * 1024;
+const MAX_PROXY_REGISTRATION_LINE_BYTES = 8 * 1024;
 const NEWLINE = 0x0a;
 
 /**
@@ -58,7 +63,7 @@ export class RemoteProxyServer extends EventEmitter {
   sendOutput(localPaneId: string, data: Uint8Array): void {
     const socket = this.proxyConnections.get(localPaneId);
     if (socket) {
-      socket.write(data);
+      socket.data.output.write(data);
       return;
     }
 
@@ -133,9 +138,7 @@ export class RemoteProxyServer extends EventEmitter {
             socket.data.paneId = msg.paneId;
             this.proxyConnections.set(msg.paneId, socket);
             const pendingOutput = this.pendingOutput.get(msg.paneId);
-            if (pendingOutput && pendingOutput.byteLength > 0) {
-              socket.write(pendingOutput);
-            }
+            if (pendingOutput && pendingOutput.byteLength > 0) socket.data.output.write(pendingOutput);
             this.pendingOutput.delete(msg.paneId);
             this.emit("proxy-registered", msg.paneId);
           } catch {
@@ -149,9 +152,16 @@ export class RemoteProxyServer extends EventEmitter {
             this.emit("proxy-input", socket.data.paneId, data.subarray(nlIdx + 1));
           }
         },
+        drain: (socket) => {
+          socket.data.output.flush();
+        },
         error: () => {},
         open: (socket) => {
-          socket.data = { buffer: EMPTY_BUFFER, paneId: null };
+          socket.data = {
+            buffer: EMPTY_BUFFER,
+            output: createProxyOutputQueue(socket),
+            paneId: null,
+          };
         },
       },
       unix: this.socketPath,
@@ -206,6 +216,10 @@ function appendUntilLimit(prefix: Uint8Array, chunk: Uint8Array, maxBytes: numbe
   out.set(prefix, 0);
   out.set(chunk, prefix.byteLength);
   return out;
+}
+
+function createProxyOutputQueue(socket: Socket<ProxySocketData>): SocketWriteQueue {
+  return createSocketWriteQueue(socket, { maxQueuedBytes: MAX_CONNECTED_PROXY_OUTPUT_QUEUE_BYTES });
 }
 
 function indexOfByte(buf: Uint8Array, byte: number): number {
