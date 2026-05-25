@@ -140,7 +140,7 @@ export function useMainPaneModel({
         if (!client) return;
         await client.selectWindowInSession(sessionName, windowId).catch(() => {});
         const paneSelected = await client
-          .selectPaneInSession(sessionName, paneId)
+          .selectPane(paneId)
           .then(() => true)
           .catch(() => false);
         if (paneSelected) {

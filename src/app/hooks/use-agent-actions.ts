@@ -188,9 +188,7 @@ export function useAgentActions({
         }
         if (session.paneId) {
           await switchToTab(session.paneId);
-          const select = targetSession
-            ? client.selectPaneInSession(targetSession, session.paneId)
-            : client.selectPane(session.paneId);
+          const select = client.selectPane(session.paneId);
           if (await select.then(() => true).catch(() => false)) {
             setActivePaneId(session.paneId);
           }
