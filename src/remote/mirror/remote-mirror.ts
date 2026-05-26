@@ -160,6 +160,10 @@ export class RemoteMirror {
         "remote",
         `mirror ${this.options.serverName}: remote snapshot failed: ${err instanceof Error ? err.message : String(err)}`,
       );
+      // Remote unreachable — treat the next successful pass as a first
+      // sync so a freshly recreated session's default window is gated
+      // out of the untagged-window warning.
+      this.hasReconciledBefore = false;
       return false;
     }
     return true;
