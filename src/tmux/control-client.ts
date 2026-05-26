@@ -1131,7 +1131,6 @@ export class TmuxControlClient extends EventEmitter {
       this.unsubscribeTransport();
       throw err;
     }
-    this.started = true;
 
     try {
       await handshake;
@@ -1139,6 +1138,11 @@ export class TmuxControlClient extends EventEmitter {
       this.unsubscribeTransport();
       throw err;
     }
+    // Mark started only AFTER the handshake's %end has been consumed.
+    // Setting it earlier opens a window where sendCommand would queue a
+    // command that the handshake's %end then shifts off the queue,
+    // silently resolving that command with the empty handshake body.
+    this.started = true;
   }
 
   private unsubscribeTransport(): void {

@@ -45,7 +45,7 @@ export class RemoteControlClient extends EventEmitter {
     return this.hookForwardingFailed;
   }
   get isConnected(): boolean {
-    return !this.closed && this.client !== null;
+    return !this.closed && this.client !== null && this.bootstrapped;
   }
   /** Remote loopback TCP port that forwards back to the local agent ingress. */
   get remoteHookTcpPort(): number | undefined {
@@ -55,6 +55,13 @@ export class RemoteControlClient extends EventEmitter {
     return this.activeTransport?.sshPid;
   }
   private activeTransport: SshTransport | null = null;
+  /**
+   * Set true once attemptConnect has finished its post-attach bootstrap.
+   * Gates `sendCommand` and `isConnected` so external callers (mirror,
+   * proxy input, hook config) can't share the underlying pendingQueue with
+   * in-flight bootstrap traffic and risk response misalignment.
+   */
+  private bootstrapped = false;
   private client: TmuxControlClient | null = null;
   private closed = false;
   private hookForwardingFailed = false;
@@ -77,6 +84,7 @@ export class RemoteControlClient extends EventEmitter {
     this.client?.destroy();
     this.client = null;
     this.activeTransport = null;
+    this.bootstrapped = false;
   }
 
   /**
@@ -92,7 +100,7 @@ export class RemoteControlClient extends EventEmitter {
 
   /** Send a tmux command and await the response. */
   sendCommand(cmd: string): Promise<string> {
-    if (this.closed || !this.client) {
+    if (this.closed || !this.client || !this.bootstrapped) {
       return Promise.reject(new Error("Client closed"));
     }
     return this.client.runCommand(cmd);
@@ -123,6 +131,7 @@ export class RemoteControlClient extends EventEmitter {
 
         this.client = null;
         this.activeTransport = null;
+        this.bootstrapped = false;
 
         if (this.intentionallyClosed) break;
         this.emit("status-change", "disconnected" as RemoteConnectionStatus, undefined, sshPid);
@@ -132,6 +141,7 @@ export class RemoteControlClient extends EventEmitter {
         const detail = stderrSummary ? `${msg}: ${stderrSummary}` : msg;
         this.client = null;
         this.activeTransport = null;
+        this.bootstrapped = false;
         this.emit("status-change", "error" as RemoteConnectionStatus, detail, sshPid);
       }
 
@@ -209,6 +219,11 @@ export class RemoteControlClient extends EventEmitter {
       await client.runCommand("set-option status off");
       await client.runCommand("set-option -g pane-border-status top");
       await client.runCommand(`refresh-client -C ${MIN_CONTROL_CLIENT_SIZE.cols},${MIN_CONTROL_CLIENT_SIZE.rows}`);
+
+      // Bootstrap finished cleanly. Flip the gate so external callers
+      // (mirror reconcile, proxy input, hook config) can now reach the
+      // shared pendingQueue.
+      this.bootstrapped = true;
     } catch (err) {
       // Partial connection state must be torn down explicitly. Without this,
       // a failure in the post-connect bootstrap commands would leave the SSH
