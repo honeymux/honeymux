@@ -3,12 +3,7 @@ import type { RemoteConnectionStatus, RemoteServerConfig } from "./types.ts";
 import { MIN_CONTROL_CLIENT_SIZE } from "../tmux/control-client-bootstrap.ts";
 import { TmuxControlClient } from "../tmux/control-client.ts";
 import { EventEmitter } from "../util/event-emitter.ts";
-import { appendSshDestination } from "./ssh.ts";
-import {
-  SshTransport,
-  buildSshConnectionArgs,
-  runRemoteShellCommand as runShellOverSsh,
-} from "./transport/ssh-transport.ts";
+import { SshTransport, runRemoteShellCommand as runShellOverSsh } from "./transport/ssh-transport.ts";
 
 export interface RemoteHookForwardConfig {
   /** Per-server shared secret hooks must include with every event. */
@@ -191,14 +186,9 @@ export class RemoteControlClient extends EventEmitter {
     client.on("exit", () => this.emit("exit"));
 
     try {
-      // Decide between attach-session and new-session via a one-shot probe over
-      // the same auth/destination settings the control-mode connection uses.
-      // Anything else risks the probe succeeding on a different host alias or
-      // pointing at the wrong tmux server.
-      const exists = await this.probeRemoteSession();
-      const tmuxArgs = exists
-        ? ["-C", "attach-session", "-t", this.mirrorSession]
-        : ["-C", "new-session", "-s", this.mirrorSession];
+      // `new-session -A` atomically attaches to the mirror session if it
+      // exists, or creates and attaches if it does not.
+      const tmuxArgs = ["-C", "new-session", "-A", "-s", this.mirrorSession];
 
       // attachWithArgs intentionally does NOT apply the local-client bootstrap
       // (mouse, theme colors, cursor style, cwd-aware split bindings) — those
@@ -241,20 +231,6 @@ export class RemoteControlClient extends EventEmitter {
     // `-R` while still completing the rest of the session (the design point
     // of dropping ExitOnForwardFailure). Future attempts must remember this.
     if (transport.hookForwardingRejected) this.hookForwardingFailed = true;
-  }
-
-  /**
-   * Cheap one-shot probe via `tmux has-session`. Returns true if the mirror
-   * session exists on the remote, false otherwise. Uses the same connection
-   * args as the control-mode session so it cannot diverge in auth, port, or
-   * destination validation.
-   */
-  private async probeRemoteSession(): Promise<boolean> {
-    const sshArgs = buildSshConnectionArgs(this.config, { includeKeepalive: false });
-    appendSshDestination(sshArgs, this.config.host);
-    const argv = ["ssh", ...sshArgs, "tmux", "-L", this.mirrorServerName, "has-session", "-t", this.mirrorSession];
-    const proc = Bun.spawn(argv, { stderr: "ignore", stdout: "ignore" });
-    return (await proc.exited) === 0;
   }
 }
 
