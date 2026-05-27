@@ -13,6 +13,7 @@ export interface TmuxPaneAgentsDialogProps {
   height: number;
   onClose: () => void;
   onSelect: (session: AgentSession) => void;
+  onZoom?: (session: AgentSession) => void;
   registryRef?: MutableRefObject<AgentProviderRegistry | null>;
   sessions: AgentSession[];
   width: number;
@@ -27,6 +28,7 @@ interface UsePaneAgentsDialogOptions {
   height: number;
   onAgentsDialogClose: TmuxPaneAgentProps["onAgentsDialogClose"];
   onAgentsDialogSelect: TmuxPaneAgentProps["onAgentsDialogSelect"];
+  onAgentsDialogZoom: TmuxPaneAgentProps["onAgentsDialogZoom"];
   onGoToPane: TmuxPaneAgentProps["onGoToPane"];
   onPermissionRespond: TmuxPaneAgentProps["onPermissionRespond"];
   registryRef: TmuxPaneAgentProps["registryRef"];
@@ -43,6 +45,7 @@ export function buildAgentsDialogProps({
   height,
   onAgentsDialogClose,
   onAgentsDialogSelect,
+  onAgentsDialogZoom,
   registryRef,
   width,
 }: {
@@ -54,6 +57,7 @@ export function buildAgentsDialogProps({
   height: number;
   onAgentsDialogClose: TmuxPaneAgentProps["onAgentsDialogClose"];
   onAgentsDialogSelect: TmuxPaneAgentProps["onAgentsDialogSelect"];
+  onAgentsDialogZoom?: TmuxPaneAgentProps["onAgentsDialogZoom"];
   registryRef: TmuxPaneAgentProps["registryRef"];
   width: number;
 }): TmuxPaneAgentsDialogProps | null {
@@ -73,6 +77,7 @@ export function buildAgentsDialogProps({
     height,
     onClose: onAgentsDialogClose,
     onSelect: onAgentsDialogSelect,
+    onZoom: onAgentsDialogZoom,
     registryRef,
     sessions: agentSessionsForDialog,
     width,
@@ -88,6 +93,7 @@ export function usePaneAgentsDialog({
   height,
   onAgentsDialogClose,
   onAgentsDialogSelect,
+  onAgentsDialogZoom,
   registryRef,
   width,
 }: UsePaneAgentsDialogOptions): TmuxPaneAgentsDialogProps | null {
@@ -102,6 +108,7 @@ export function usePaneAgentsDialog({
         height,
         onAgentsDialogClose,
         onAgentsDialogSelect,
+        onAgentsDialogZoom,
         registryRef,
         width,
       }),
@@ -110,6 +117,7 @@ export function usePaneAgentsDialog({
       agentSessionsForDialog,
       onAgentsDialogSelect,
       onAgentsDialogClose,
+      onAgentsDialogZoom,
       dropdownInputRef,
       width,
       height,

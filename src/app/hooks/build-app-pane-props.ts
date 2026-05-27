@@ -316,6 +316,7 @@ export function buildAppPaneProps({
     onAgentLatchToggle: () => refs.handleAgentLatchRef.current(),
     onAgentsDialogClose: handleAgentsDialogClose,
     onAgentsDialogSelect: agentActions.handleGoToPane,
+    onAgentsDialogZoom: agentActions.handleAgentsDialogSelect,
     onApprove: () => refs.handleQuickApproveRef.current(),
     onDeny: () => refs.handleQuickDenyRef.current(),
     onDismiss: () => refs.handleDismissRef.current(),
