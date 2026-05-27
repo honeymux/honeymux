@@ -60,6 +60,7 @@ interface UseMuxotronFocusAndAgentSelectionOptions {
     | "clientRef"
     | "handleMuxotronDismissRef"
     | "handleReviewAgentRef"
+    | "handleSidebarFocusRef"
     | "handleZoomEndRef"
     | "handleZoomStartRef"
     | "interactiveAgentRef"
@@ -68,6 +69,7 @@ interface UseMuxotronFocusAndAgentSelectionOptions {
     | "muxotronFocusActiveRef"
     | "reEncodeActiveRef"
     | "reviewLatchedRef"
+    | "sidebarFocusedRef"
     | "toggleReviewLatchRef"
     | "treeAgentSelectRef"
     | "zoomActionRef"
@@ -183,6 +185,7 @@ export function useMuxotronFocusAndAgentSelection({
     clientRef,
     handleMuxotronDismissRef,
     handleReviewAgentRef,
+    handleSidebarFocusRef,
     handleZoomEndRef,
     handleZoomStartRef,
     interactiveAgentRef,
@@ -191,6 +194,7 @@ export function useMuxotronFocusAndAgentSelection({
     muxotronFocusActiveRef,
     reEncodeActiveRef,
     reviewLatchedRef,
+    sidebarFocusedRef,
     toggleReviewLatchRef,
     treeAgentSelectRef,
     zoomActionRef,
@@ -291,7 +295,11 @@ export function useMuxotronFocusAndAgentSelection({
 
   handleReviewAgentRef.current = () => {
     const first = pickFirstReviewAgent(agentSessions);
-    if (first) handleTreeAgentSelect(first);
+    if (!first) return;
+    handleTreeAgentSelect(first);
+    if (!sidebarFocusedRef.current) {
+      handleSidebarFocusRef.current();
+    }
   };
 
   muxotronExpandedRef.current = computeMuxotronExpanded(
