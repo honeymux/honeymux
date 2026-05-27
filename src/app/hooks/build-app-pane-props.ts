@@ -61,7 +61,7 @@ interface BuildAppPanePropsOptions {
   onSidebarViewChange: (view: "agents" | "hook-sniffer" | "server") => void;
   /** Handles explicit agent selection from the tree while mux-o-tron is focused. */
   onTreeAgentSelect?: (session: import("../../agents/types.ts").AgentSession) => void;
-  onTreeNavigate?: (sessionName: string, windowId: string, paneId: string) => void;
+  onTreeNavigate?: (sessionName: string, paneId: string) => void;
   optionsWorkflow: OptionsWorkflowApi;
   paneTabsApi: PaneTabsApi;
   refs: AppRuntimeRefs;
@@ -433,7 +433,7 @@ export function buildMainPaneToolbarProps({
   handleOpenMainMenu: () => void;
   handleSplitHorizontal: () => void;
   handleSplitVertical: () => void;
-  handleTreeNavigate?: (sessionName: string, windowId: string, paneId: string) => void;
+  handleTreeNavigate?: (sessionName: string, paneId: string) => void;
   handleTreeSwitchPaneTab?: (slotKey: string, tabIndex: number) => void;
   mainMenuBindingLabel?: string;
   muxotronFocusActive?: boolean;

@@ -36,6 +36,32 @@ describe("TmuxControlClient connection guards", () => {
     expect(sendCommand).toHaveBeenCalledWith(`select-pane -t ${quoteTmuxArg("paneId", "%5")}`);
   });
 
+  test("scopes switchPtyClientToPane to the requested session so grouped overlays can't capture the switch", async () => {
+    // When the muxotron review bridge spawns a grouped overlay session, the
+    // target pane is reachable from both the user's session and the overlay.
+    // A bare `-t %paneId` target leaves tmux free to resolve the switch to the
+    // overlay session; when that overlay is later killed, the PTY client gets
+    // detached with it and honeymux silently exits. Forcing `session:.%paneId`
+    // disambiguates so the switch lands on the user's session. The leading
+    // `.` after the colon is required because tmux parses anything between
+    // `:` and `.` as a window target and `%N` is not a window identifier.
+    const client = new TmuxControlClient();
+    const sendCommand = mock(async (_command: string) => "");
+    const listClients = mock(async () => [
+      { controlMode: true, name: "client-1" },
+      { controlMode: false, name: "/dev/pts/5" },
+    ]);
+
+    (client as unknown as { sendCommand: typeof sendCommand }).sendCommand = sendCommand;
+    (client as unknown as { listClients: typeof listClients }).listClients = listClients;
+
+    await client.switchPtyClientToPane("honeymux", "%0");
+
+    expect(sendCommand).toHaveBeenCalledWith(
+      `switch-client -c ${quoteTmuxArg("client", "/dev/pts/5")} -t ${quoteTmuxArg("paneTarget", "honeymux:.%0")}`,
+    );
+  });
+
   test("emits tmux-exit (and exit) when the parser delivers an onExit notification", () => {
     const client = new TmuxControlClient();
     // Construct the parser via the same path connect() uses — even without

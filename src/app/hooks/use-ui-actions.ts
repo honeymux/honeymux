@@ -39,7 +39,7 @@ export interface UiActionsApi {
   handleSessionClick: () => Promise<void>;
   handleSessionNext: () => void;
   handleSessionPrev: () => void;
-  handleSessionSelect: (newSessionName: string) => Promise<void>;
+  handleSessionSelect: (newSessionName: string, paneId?: string) => Promise<void>;
   handleSetSessionColor: (sessionName: string, color: null | string) => Promise<void>;
   handleSplitHorizontal: () => void;
   handleSplitVertical: () => void;
@@ -188,7 +188,7 @@ export function useUiActions({
   // Rapid keypresses that arrive while a switch is running are coalesced:
   // only the most recent target is kept and executed after the current switch.
   const switchActiveRef = useRef(false);
-  const pendingSessionRef = useRef<null | string>(null);
+  const pendingSessionRef = useRef<{ paneId?: string; sessionName: string } | null>(null);
 
   // Session switch handler (serialized + throttled).
   // Switches BOTH the control client and the PTY client to the new session
@@ -196,16 +196,20 @@ export function useUiActions({
   // alive avoids tmux server races from rapid attach/detach cycles and
   // prevents ghostty VT parser state corruption from interrupted data streams.
   //
+  // When `paneId` is provided, the PTY client lands directly on that pane
+  // via `switch-client -t %paneId`, so there is no intermediate frame
+  // showing the target session's previously-active window/pane.
+  //
   // A cooldown between consecutive switches prevents rapid-fire tmux
   // commands that can crash the tmux server.
   const handleSessionSelect = useCallback(
-    async (newSessionName: string) => {
+    async (newSessionName: string, paneId?: string) => {
       dropdownInputRef.current = null;
       setDropdownOpen(false);
 
       if (switchActiveRef.current) {
         // A switch is already running — queue the latest target
-        pendingSessionRef.current = newSessionName;
+        pendingSessionRef.current = { paneId, sessionName: newSessionName };
         return;
       }
 
@@ -214,30 +218,42 @@ export function useUiActions({
         // Track the effective current session across loop iterations since
         // currentSessionName (React state) won't update within this async call.
         let effectiveSession = currentSessionName;
-        let target: null | string = newSessionName;
+        let target: { paneId?: string; sessionName: string } | null = { paneId, sessionName: newSessionName };
 
         while (target !== null) {
-          if (target === effectiveSession) break;
+          const sessionChanges = target.sessionName !== effectiveSession;
+          if (!sessionChanges && !target.paneId) break;
           const client = clientRef.current;
           if (!client) break;
 
           pendingSessionRef.current = null;
 
           // Flag intentional switch so session-changed handler doesn't exit.
-          switchingRef.current.add(target);
+          if (sessionChanges) {
+            switchingRef.current.add(target.sessionName);
+          }
 
           try {
-            // Switch control client to the new session
-            await client.switchSession(target);
-            // Switch the PTY client to the same session in-place — tmux
-            // redraws the new session content without dropping the connection.
-            await client.switchPtyClient(target);
+            // Move the PTY first. When a paneId is supplied, this also
+            // updates the target session's current window and active pane,
+            // so the control client's session-changed handler observes the
+            // settled state instead of the session's previous focus.
+            if (target.paneId) {
+              await client.switchPtyClientToPane(target.sessionName, target.paneId);
+            } else {
+              await client.switchPtyClient(target.sessionName);
+            }
+            if (sessionChanges) {
+              await client.switchSession(target.sessionName);
+            }
           } catch {
-            switchingRef.current.delete(target);
+            if (sessionChanges) {
+              switchingRef.current.delete(target.sessionName);
+            }
             break;
           }
 
-          effectiveSession = target;
+          effectiveSession = target.sessionName;
 
           // Pick up the latest pending target (last-write-wins)
           target = pendingSessionRef.current;

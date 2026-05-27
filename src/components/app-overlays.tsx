@@ -71,7 +71,7 @@ interface AppOverlaysZoomState {
   agentsStickyKey: boolean;
   effectiveUIMode: UIMode;
   onToggleSticky: (action: "zoomAgentsView" | "zoomServerView") => void;
-  onTreeNavigate: (sessionName: string, windowId: string, paneId: string) => void;
+  onTreeNavigate: (sessionName: string, paneId: string) => void;
   panesStickyKey: boolean;
 }
 

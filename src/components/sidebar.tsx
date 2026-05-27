@@ -42,7 +42,7 @@ interface SideBarProps {
   onSessionSelect?: (session: AgentSession) => void;
   /** Space handler on an agent row — enters the muxotron-focus workflow. */
   onSessionZoom?: (session: AgentSession) => void;
-  onTreeNavigate?: (sessionName: string, windowId: string, paneId: string) => void;
+  onTreeNavigate?: (sessionName: string, paneId: string) => void;
   onTreeSwitchPaneTab?: (slotKey: string, tabIndex: number) => void;
   onViewChange: (view: SideBarView) => void;
   paneTabGroups?: Map<string, PaneTabGroup>;

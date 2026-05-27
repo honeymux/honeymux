@@ -1017,6 +1017,31 @@ export class TmuxControlClient extends EventEmitter {
   }
 
   /**
+   * Switch the PTY client (non-control-mode) directly to a pane by its
+   * global ID, scoped to the given session. tmux treats a pane target to
+   * `switch-client` as a special case that updates session, window, and
+   * active pane atomically, so the resulting tree refresh sees consistent
+   * state and the sidebar highlight does not flash through an intermediate
+   * window/pane pair.
+   *
+   * The session scope is required because an agent's pane may also live in
+   * a grouped overlay session created by the muxotron's review-mode PTY
+   * bridge. A bare `-t %paneId` target is ambiguous and tmux may resolve
+   * it to the overlay session — when that overlay is then killed during
+   * review-mode teardown, the PTY client is detached with it.
+   */
+  async switchPtyClientToPane(sessionName: string, paneId: string): Promise<void> {
+    assertPaneId(paneId);
+    const clients = await this.listClients();
+    const ptyClient = clients.find((c) => !c.controlMode);
+    if (ptyClient) {
+      await this.sendCommand(
+        `switch-client -c ${quoteTmuxArg("client", ptyClient.name)} -t ${quoteSessionScopedTarget("paneTarget", sessionName, paneId)}`,
+      );
+    }
+  }
+
+  /**
    * Switch the control client to a different session.
    */
   async switchSession(sessionName: string): Promise<void> {
@@ -1286,7 +1311,12 @@ function formatCommandArgs(args: string[]): string {
 }
 
 function quoteSessionScopedTarget(label: string, sessionName: string, targetId: string): string {
-  return quoteTmuxArg(label, `${sessionName}:${targetId}`);
+  // Pane ids (`%N`) must be preceded by `.` after the session prefix; tmux
+  // parses everything between `:` and `.` as a window target, and pane ids
+  // are not valid window identifiers (windows use `@N`). Window ids slot in
+  // directly after the colon.
+  const scoped = targetId.startsWith("%") ? `${sessionName}:.${targetId}` : `${sessionName}:${targetId}`;
+  return quoteTmuxArg(label, scoped);
 }
 
 async function readProcessStdout(stdout: ReadableStream<Uint8Array> | null | undefined): Promise<string> {

@@ -39,7 +39,7 @@ interface AppOverlayZoomState {
   agentsStickyKey: boolean;
   effectiveUIMode: UIMode;
   onToggleSticky: (action: "zoomAgentsView" | "zoomServerView") => void;
-  onTreeNavigate: (sessionName: string, windowId: string, paneId: string) => void;
+  onTreeNavigate: (sessionName: string, paneId: string) => void;
   panesStickyKey: boolean;
 }
 
@@ -65,7 +65,7 @@ interface UseAppOverlayModelOptions {
   layoutProfiles: LayoutProfile[];
   muxotronFocusActive: boolean;
   onToggleZoomSticky: (action: "zoomAgentsView" | "zoomServerView") => void;
-  onTreeNavigate: (sessionName: string, windowId: string, paneId: string) => void;
+  onTreeNavigate: (sessionName: string, paneId: string) => void;
   optionsDialogOpen: boolean;
   optionsDialogRow: Parameters<typeof isQuickTerminalSizePreviewFocused>[2];
   optionsDialogTab: Parameters<typeof isQuickTerminalSizePreviewFocused>[1];
