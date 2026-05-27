@@ -315,7 +315,7 @@ export function buildAppPaneProps({
     muxotronFocusActive,
     onAgentLatchToggle: () => refs.handleAgentLatchRef.current(),
     onAgentsDialogClose: handleAgentsDialogClose,
-    onAgentsDialogSelect: agentActions.handleAgentsDialogSelect,
+    onAgentsDialogSelect: agentActions.handleGoToPane,
     onApprove: () => refs.handleQuickApproveRef.current(),
     onDeny: () => refs.handleQuickDenyRef.current(),
     onDismiss: () => refs.handleDismissRef.current(),
