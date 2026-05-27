@@ -157,16 +157,16 @@ export function useAgentActions({
 
   const handleGoToPane = useCallback(
     (session: AgentSession) => {
-      if (!session.paneId) return;
+      const paneId = session.paneId;
+      if (!paneId) return;
       dropdownInputRef.current = null;
       setAgentsDialogOpen(false);
 
-      // If the agent's pane is in a non-active tab, switch to that tab first
-      // so the pane moves from the staging window into the visible window.
-      // We must do this BEFORE selectPane — selecting a pane that lives in the
-      // staging window would cause tmux to redirect PTY output there, showing
-      // stale/wrong content.
-      const switchToTab = async (paneId: string) => {
+      void (async () => {
+        // If the agent's pane is in a non-active tab, swap it into the
+        // visible slot before navigating. Landing on a pane that still
+        // lives in the staging window would redirect PTY output there
+        // and surface stale content.
         const group = getPaneTabGroup(paneId);
         if (group) {
           const tabIndex = group.tabs.findIndex((t) => t.paneId === paneId);
@@ -174,32 +174,24 @@ export function useAgentActions({
             await handleSwitchPaneTab(group.slotKey, tabIndex);
           }
         }
-      };
 
-      const targetSession = session.sessionName;
-      const selectTarget = async () => {
+        const targetSession = session.sessionName;
+        if (targetSession && targetSession !== currentSessionName) {
+          await handleSessionSelect(targetSession, paneId);
+          setActivePaneId(paneId);
+          return;
+        }
+
         const client = clientRef.current;
-        if (!client) return;
-        if (session.windowId) {
-          const select = targetSession
-            ? client.selectWindowInSession(targetSession, session.windowId)
-            : client.selectWindow(session.windowId);
-          await select.catch(() => {});
+        if (!client || !targetSession) return;
+        const switched = await client
+          .switchPtyClientToPane(targetSession, paneId)
+          .then(() => true)
+          .catch(() => false);
+        if (switched) {
+          setActivePaneId(paneId);
         }
-        if (session.paneId) {
-          await switchToTab(session.paneId);
-          const select = client.selectPane(session.paneId);
-          if (await select.then(() => true).catch(() => false)) {
-            setActivePaneId(session.paneId);
-          }
-        }
-      };
-
-      if (targetSession && targetSession !== currentSessionName) {
-        handleSessionSelect(targetSession).then(() => void selectTarget());
-      } else {
-        void selectTarget();
-      }
+      })();
     },
     [
       clientRef,

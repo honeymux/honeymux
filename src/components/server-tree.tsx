@@ -48,7 +48,7 @@ interface ServerTreeProps {
   height: number;
   /** Callback fired when tree counts change (sessions, windows, panes, paneTabsEnabled). */
   onCountsChange?: (counts: { paneTabsEnabled: number; panes: number; sessions: number; windows: number }) => void;
-  onNavigate: (sessionName: string, windowId: string, paneId: string) => void;
+  onNavigate: (sessionName: string, paneId: string) => void;
   onSwitchPaneTab?: (slotKey: string, tabIndex: number) => Promise<void> | void;
   paneTabGroups: Map<string, PaneTabGroup>;
   /** Ref set by ServerTree so external code can trigger an immediate refresh. */
@@ -338,9 +338,9 @@ export function ServerTree({
         // pane sitting in the visible slot. Navigating first would briefly
         // show the previously-active tab before the swap lands.
         await onSwitchPaneTab?.(row.slotKey, row.tabIndex);
-        onNavigate(row.sessionName, row.windowId, row.paneId);
-      } else if (row.type === "pane" && row.sessionName && row.windowId && row.paneId) {
-        onNavigate(row.sessionName, row.windowId, row.paneId);
+        onNavigate(row.sessionName, row.paneId);
+      } else if (row.type === "pane" && row.sessionName && row.paneId) {
+        onNavigate(row.sessionName, row.paneId);
       } else if (row.type === "window" && row.sessionName && row.windowId) {
         // Navigate to the first pane in this window
         const windowPanes =
@@ -349,7 +349,7 @@ export function ServerTree({
             .sort((a, b) => a.index - b.index) ?? [];
         const firstPane = windowPanes[0];
         if (firstPane) {
-          onNavigate(row.sessionName!, row.windowId!, firstPane.id);
+          onNavigate(row.sessionName!, firstPane.id);
         }
       } else if (row.type === "session" && row.sessionName) {
         // Navigate to the first window/pane in this session
@@ -363,7 +363,7 @@ export function ServerTree({
               .sort((a, b) => a.index - b.index) ?? [];
           const firstPane = winPanes[0];
           if (firstPane) {
-            onNavigate(row.sessionName!, firstWin.id, firstPane.id);
+            onNavigate(row.sessionName!, firstPane.id);
           }
         }
       }

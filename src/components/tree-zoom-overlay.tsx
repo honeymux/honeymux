@@ -19,7 +19,7 @@ interface TreeZoomOverlayProps {
   clientRef: MutableRefObject<TmuxControlClient | null>;
   currentSessionName: string;
   height: number;
-  onNavigate: (sessionName: string, windowId: string, paneId: string) => void;
+  onNavigate: (sessionName: string, paneId: string) => void;
   onSwitchPaneTab?: (slotKey: string, tabIndex: number) => void;
   paneTabGroups: Map<string, PaneTabGroup>;
   /** Rows reserved at the top for the tab bar (3 for adaptive/marquee-top, 0 for raw/marquee-bottom). */

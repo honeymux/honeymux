@@ -187,7 +187,7 @@ export interface TmuxPaneToolbarProps {
   sidebarFocused?: boolean;
   sidebarFocusedIndex?: number;
   sidebarItemCountRef?: React.MutableRefObject<number>;
-  sidebarOnTreeNavigate?: (sessionName: string, windowId: string, paneId: string) => void;
+  sidebarOnTreeNavigate?: (sessionName: string, paneId: string) => void;
   sidebarOnTreeSwitchPaneTab?: (slotKey: string, tabIndex: number) => void;
   sidebarOpen?: boolean;
   sidebarPaneTabGroups?: Map<string, PaneTabGroup>;

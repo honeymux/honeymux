@@ -22,7 +22,7 @@ import { formatBinding } from "../../util/keybindings.ts";
 import { buildAppPaneProps } from "./build-app-pane-props.ts";
 
 interface MainPaneModelApi {
-  handleTreeNavigate: (sessionName: string, windowId: string, paneId: string) => void;
+  handleTreeNavigate: (sessionName: string, paneId: string) => void;
   mainPaneProps: ReturnType<typeof buildAppPaneProps>;
 }
 
@@ -134,28 +134,25 @@ export function useMainPaneModel({
   width,
 }: UseMainPaneModelOptions): MainPaneModelApi {
   const handleTreeNavigate = useCallback(
-    (sessionName: string, windowId: string, paneId: string) => {
-      const selectTargetPane = async () => {
-        const client = refs.clientRef.current;
-        if (!client) return;
-        await client.selectWindowInSession(sessionName, windowId).catch(() => {});
-        const paneSelected = await client
-          .selectPane(paneId)
-          .then(() => true)
-          .catch(() => false);
-        if (paneSelected) {
-          refs.setActivePaneId(paneId);
-        }
-      };
-
+    (sessionName: string, paneId: string) => {
       if (shouldSwitchTreeSession(tmuxSessionState.currentSessionName, sessionName)) {
-        uiActions.handleSessionSelect(sessionName).then(() => {
-          void selectTargetPane();
+        uiActions.handleSessionSelect(sessionName, paneId).then(() => {
+          refs.setActivePaneId(paneId);
         });
         return;
       }
 
-      void selectTargetPane();
+      void (async () => {
+        const client = refs.clientRef.current;
+        if (!client) return;
+        const switched = await client
+          .switchPtyClientToPane(sessionName, paneId)
+          .then(() => true)
+          .catch(() => false);
+        if (switched) {
+          refs.setActivePaneId(paneId);
+        }
+      })();
     },
     [refs.clientRef, refs.setActivePaneId, tmuxSessionState.currentSessionName, uiActions.handleSessionSelect],
   );
