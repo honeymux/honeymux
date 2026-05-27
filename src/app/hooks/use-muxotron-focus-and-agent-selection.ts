@@ -226,25 +226,35 @@ export function useMuxotronFocusAndAgentSelection({
   sidebarOpenRef.current = sidebarOpen;
   const sidebarViewRef = useRef(sidebarView);
   sidebarViewRef.current = sidebarView;
-  const priorSidebarStateRef = useRef<{ open: boolean; view: SidebarView } | null>(null);
+  const priorSidebarStateRef = useRef<{ focused: boolean; open: boolean; view: SidebarView } | null>(null);
 
   useEffect(() => {
     if (treeSelectedSession) {
       if (priorSidebarStateRef.current == null) {
         priorSidebarStateRef.current = {
+          focused: sidebarFocusedRef.current,
           open: sidebarOpenRef.current,
           view: sidebarViewRef.current,
         };
       }
       setSidebarOpen(true);
       setSidebarView("agents");
+      // Highlight the reviewed agent's row by focusing the sidebar; exit
+      // restores prior focus so only sidebar-initiated reviews leave it
+      // focused after Esc.
+      if (!sidebarFocusedRef.current) {
+        handleSidebarFocusRef.current();
+      }
     } else if (priorSidebarStateRef.current) {
       const prior = priorSidebarStateRef.current;
       priorSidebarStateRef.current = null;
       setSidebarOpen(prior.open);
       setSidebarView(prior.view);
+      if (sidebarFocusedRef.current && !prior.focused) {
+        handleSidebarFocusRef.current();
+      }
     }
-  }, [treeSelectedSession, setSidebarOpen, setSidebarView]);
+  }, [handleSidebarFocusRef, sidebarFocusedRef, treeSelectedSession, setSidebarOpen, setSidebarView]);
 
   const zoomAgentsViewBinding = keybindingConfig.zoomAgentsView;
   const zoomServerViewBinding = keybindingConfig.zoomServerView;
@@ -295,11 +305,7 @@ export function useMuxotronFocusAndAgentSelection({
 
   handleReviewAgentRef.current = () => {
     const first = pickFirstReviewAgent(agentSessions);
-    if (!first) return;
-    handleTreeAgentSelect(first);
-    if (!sidebarFocusedRef.current) {
-      handleSidebarFocusRef.current();
-    }
+    if (first) handleTreeAgentSelect(first);
   };
 
   muxotronExpandedRef.current = computeMuxotronExpanded(
