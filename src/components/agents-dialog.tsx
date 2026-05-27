@@ -17,6 +17,8 @@ interface AgentsDialogProps {
   height: number;
   onClose: () => void;
   onSelect: (session: AgentSession) => void;
+  /** Secondary activation (spacebar) — enters the review/preview workflow. */
+  onZoom?: (session: AgentSession) => void;
   registryRef?: React.MutableRefObject<AgentProviderRegistry | null>;
   sessions: AgentSession[];
   width: number;
@@ -32,6 +34,7 @@ export function AgentsDialog({
   height,
   onClose,
   onSelect,
+  onZoom,
   registryRef,
   sessions,
   width,
@@ -41,6 +44,7 @@ export function AgentsDialog({
   const [focusIndex, setFocusIndex] = useState(1); // skip root node at index 0
   const rowCountRef = useRef(0);
   const activateRef = useRef<((index: number) => void) | null>(null);
+  const zoomRef = useRef<((index: number) => void) | null>(null);
 
   // Keyboard handler
   const onSelectRef = useRef(onSelect);
@@ -79,6 +83,10 @@ export function AgentsDialog({
 
       if (data === "\r" || data === "\n") {
         activateRef.current?.(focusIndexRef.current);
+        return true;
+      }
+      if (data === " ") {
+        zoomRef.current?.(focusIndexRef.current);
         return true;
       }
       return true;
@@ -185,10 +193,12 @@ export function AgentsDialog({
               focusedRow={focusIndex}
               height={treeHeight}
               onSelect={onSelect}
+              onZoom={onZoom}
               registryRef={registryRef}
               rowCountRef={rowCountRef}
               sessions={activeSessions}
               width={contentWidth}
+              zoomRef={zoomRef}
             />
           </box>
         )}
@@ -202,10 +212,13 @@ export function AgentsDialog({
         {/* Hint */}
         <box flexDirection="row" gap={1} height={1} justifyContent="center" paddingLeft={1}>
           <text content="↑↓" fg={theme.accent} selectable={false} />
-          <text content="navigate" fg={theme.textDim} selectable={false} />
+          <text content="nav" fg={theme.textDim} selectable={false} />
           <text content=" " selectable={false} />
-          <text content="enter" fg={theme.accent} selectable={false} />
-          <text content="select" fg={theme.textDim} selectable={false} />
+          <text content="↵" fg={theme.accent} selectable={false} />
+          <text content="goto" fg={theme.textDim} selectable={false} />
+          <text content=" " selectable={false} />
+          <text content="sp" fg={theme.accent} selectable={false} />
+          <text content="review" fg={theme.textDim} selectable={false} />
           <text content=" " selectable={false} />
           <text content="esc" fg={theme.accent} selectable={false} />
           <text content="close" fg={theme.textDim} selectable={false} />

@@ -58,6 +58,7 @@ export interface TmuxPaneAgentProps {
   onAgentLatchToggle?: () => void;
   onAgentsDialogClose?: () => void;
   onAgentsDialogSelect?: (session: AgentSession) => void;
+  onAgentsDialogZoom?: (session: AgentSession) => void;
   onApprove?: () => void;
   onDeny?: () => void;
   onDismiss?: () => void;
