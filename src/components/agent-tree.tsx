@@ -337,10 +337,12 @@ export function AgentTree({
         const leftContent = isFocused ? "\u25B8" + l.left.slice(1) : l.left;
         const leftFg = isFocused ? theme.textBright : l.fg;
         const rowBg = isFocused ? theme.bgFocused : undefined;
-        // A row is spinner-eligible when it's alive and connected to a
-        // pane — that's when pane output can signal activity.  The paint
-        // callback decides tick-by-tick whether the sample is recent.
-        const spinnerEligible = !!l.row.aliveColor && !!l.row.paneId;
+        // A row is spinner-eligible when it's alive, connected to a pane,
+        // and the parent supplied the activity-sample ref the spinner reads.
+        // Without that ref there's nothing to animate, so the row renders
+        // statically rather than spinning an imperative 20 Hz repaint that
+        // can only ever draw the same frame.
+        const spinnerEligible = !!l.row.aliveColor && !!l.row.paneId && !!lastOutputByPaneRef;
 
         // Focused and non-animatable rows render statically via React.
         // Animatable rows delegate to AgentTreeRowLeft which repaints itself
