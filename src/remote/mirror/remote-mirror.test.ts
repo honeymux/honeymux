@@ -115,8 +115,8 @@ describe("RemoteMirror", () => {
   test("creates remote windows + tags + panes for every local window on first reconcile", async () => {
     const fixture = createServerStub({
       panesByWindow: new Map([
-        ["@1", [{ id: "%10", index: 0 }]],
-        ["@2", [{ id: "%20", index: 0 }]],
+        ["@1", [{ id: "%10", index: 0, tags: { "@hmx-remote-host": "test" } }]],
+        ["@2", [{ id: "%20", index: 0, tags: { "@hmx-remote-host": "test" } }]],
       ]),
       windows: [
         { id: "@1", index: 0, layout: "layout1,80x24,0,0,10" },
@@ -146,7 +146,7 @@ describe("RemoteMirror", () => {
 
   test("exposes remotePaneFor() after a reconcile so callers can look up paired ids", async () => {
     const fixture = createServerStub({
-      panesByWindow: new Map([["@1", [{ id: "%10", index: 0 }]]]),
+      panesByWindow: new Map([["@1", [{ id: "%10", index: 0, tags: { "@hmx-remote-host": "test" } }]]]),
       windows: [{ id: "@1", index: 0, layout: "layout,80x24,0,0,10" }],
     });
 
@@ -162,6 +162,42 @@ describe("RemoteMirror", () => {
 
     expect(mirror.remotePaneFor("%10")).toBeDefined();
     expect(mirror.remoteWindowFor("@1")).toBeDefined();
+  });
+
+  test("resolves remotePaneFor() for an un-converted (untagged-phantom) pane across reconciles", async () => {
+    // %10 is a normal local pane — NOT remote-backed for this server. The
+    // mirror still pre-creates an untagged remote phantom for it so the pane
+    // can be converted. Regression (81d8b4b): the phantom was left untagged
+    // AND the pairing wasn't surfaced, so remotePaneFor() returned undefined
+    // and the pane was stuck on "Convert to remote (please wait)" forever.
+    const fixture = createServerStub({
+      panesByWindow: new Map([["@1", [{ id: "%10", index: 0 }]]]), // no @hmx-remote-host
+      windows: [{ id: "@1", index: 0, layout: "layout,80x24,0,0,10" }],
+    });
+
+    const mirror = new RemoteMirror({
+      activeBindings: () => new Map(),
+      runLocal: fixture.runLocal,
+      runRemote: fixture.runRemote,
+      serverName: "test",
+    });
+
+    // First pass creates the phantom; readiness must hold immediately via the
+    // executor's applied splits...
+    mirror.request();
+    await mirror.whenIdle();
+    const firstPass = mirror.remotePaneFor("%10");
+    expect(firstPass).toBeDefined();
+
+    // ...and a second reconcile (no new splits) must keep resolving it from
+    // the reconciler's positional pairing, not just the just-applied splits.
+    mirror.request();
+    await mirror.whenIdle();
+    expect(mirror.remotePaneFor("%10")).toBe(firstPass);
+
+    // The phantom carries no routing tag — tagging it would churn the mirror.
+    const phantom = [...fixture.state.remote.panesByWindow.values()].flat().find((p) => p.id === firstPass);
+    expect(phantom?.tags["@hmx-local-pane-id"]).toBeUndefined();
   });
 
   test("invokes onReconciled with the latest remote snapshot", async () => {
@@ -402,5 +438,38 @@ describe("RemoteMirror", () => {
     await mirror.whenIdle();
 
     expect(mirror.remotePaneFor("%10")).toBe("%300");
+  });
+
+  test("does not re-arm the queue when a failing pass applies nothing (no livelock)", async () => {
+    // A permanent mutation failure (e.g. tmux "no space for new pane") must
+    // not busy-loop the reconcile queue at the debounce floor. With no forward
+    // progress the pass settles and waits for the next external event; if it
+    // re-armed, whenIdle() below would never resolve and the attempt count
+    // would climb without bound.
+    let newWindowAttempts = 0;
+    const runLocal = async (cmd: string): Promise<string> => {
+      if (cmd.startsWith("list-windows -a")) return "@1\t0\tlayout,80x24,0,0,0\n";
+      if (cmd.startsWith("list-panes")) return "%10\t0\t\t\n";
+      return "";
+    };
+    const runRemote = async (cmd: string): Promise<string> => {
+      if (cmd.startsWith("new-window")) {
+        newWindowAttempts++;
+        throw new Error("no space for new pane");
+      }
+      return ""; // empty remote: list-windows/list-panes return nothing
+    };
+
+    const mirror = new RemoteMirror({
+      activeBindings: () => new Map(),
+      runLocal,
+      runRemote,
+      serverName: "test",
+    });
+
+    mirror.request();
+    await mirror.whenIdle();
+
+    expect(newWindowAttempts).toBe(1);
   });
 });

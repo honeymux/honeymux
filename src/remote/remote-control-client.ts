@@ -129,12 +129,17 @@ export class RemoteControlClient extends EventEmitter {
           this.client?.on("exit", onExit);
         });
 
+        // Capture any SSH stderr BEFORE clearing the transport, so a
+        // connection that dies after a clean connect reports why (the detail
+        // becomes the server's `error`, surfaced to the UI) instead of a bare
+        // "disconnected".
+        const disconnectDetail = this.activeTransport?.stderrSummary || undefined;
         this.client = null;
         this.activeTransport = null;
         this.bootstrapped = false;
 
         if (this.intentionallyClosed) break;
-        this.emit("status-change", "disconnected" as RemoteConnectionStatus, undefined, sshPid);
+        this.emit("status-change", "disconnected" as RemoteConnectionStatus, disconnectDetail, sshPid);
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         const stderrSummary = this.activeTransport?.stderrSummary ?? "";

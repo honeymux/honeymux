@@ -5,6 +5,7 @@ import { chmodSync, unlinkSync } from "node:fs";
 import type { SocketWriteQueue } from "./socket-write-queue.ts";
 
 import { EventEmitter } from "../util/event-emitter.ts";
+import { log } from "../util/log.ts";
 import { getPrivateSocketPath } from "../util/runtime-paths.ts";
 import { createSocketWriteQueue } from "./socket-write-queue.ts";
 
@@ -219,7 +220,19 @@ function appendUntilLimit(prefix: Uint8Array, chunk: Uint8Array, maxBytes: numbe
 }
 
 function createProxyOutputQueue(socket: Socket<ProxySocketData>): SocketWriteQueue {
-  return createSocketWriteQueue(socket, { maxQueuedBytes: MAX_CONNECTED_PROXY_OUTPUT_QUEUE_BYTES });
+  // On overflow/error the queue closes itself and ends the socket (Bun's
+  // close handler then drops the connection). Log it so a wedged pane that
+  // stops draining output isn't an invisible black hole.
+  const describe = (): string => `proxy ${socket.data.paneId ?? "<unregistered>"}`;
+  return createSocketWriteQueue(socket, {
+    maxQueuedBytes: MAX_CONNECTED_PROXY_OUTPUT_QUEUE_BYTES,
+    onWriteError: () => log("remote", `${describe()}: output socket write error; dropping connection`),
+    onWriteOverflow: () =>
+      log(
+        "remote",
+        `${describe()}: output queue exceeded ${MAX_CONNECTED_PROXY_OUTPUT_QUEUE_BYTES} bytes; dropping connection`,
+      ),
+  });
 }
 
 function indexOfByte(buf: Uint8Array, byte: number): number {

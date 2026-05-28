@@ -42,8 +42,10 @@ export interface ExecutorResult {
   /** Remote window ids whose layout was successfully applied. */
   appliedLayouts: ReadonlyMap<string, string>;
   /**
-   * Local-pane id → remote-pane id pairings created via split-window.
-   * Same role as `appliedCreateWindows`.
+   * Local-pane id → remote-pane id pairings for every pane created this pass
+   * via split-window or a create-window's initial pane — including untagged
+   * phantoms, which still mirror a local pane and must be resolvable via
+   * `remotePaneFor()`. Same role as `appliedCreateWindows`.
    */
   appliedSplits: ReadonlyMap<string, string>;
   failures: ReadonlyArray<{ error: string; mutation: Mutation }>;
@@ -79,8 +81,11 @@ export async function applyMutations(
         }
         case "create-window": {
           // Create the remote window AND its initial pane, capture both
-          // ids, then tag both before any subsequent reconcile can race
-          // in and classify the new artifacts as orphans.
+          // ids, then tag the window before any subsequent reconcile can
+          // race in and classify it as an orphan. The initial pane only
+          // gets `@hmx-local-pane-id` when it actually mirrors a
+          // remote-backed local pane; layout-only phantoms stay untagged so
+          // swap-pane between local windows doesn't churn the mirror.
           const output = await options.runRemote(`new-window -d -P -F '#{window_id} #{pane_id}'`);
           const trimmed = output.trim();
           const parts = trimmed.split(/\s+/);
@@ -92,11 +97,16 @@ export async function applyMutations(
           await options.runRemote(
             `set-option -w -t ${quoteTmuxArg("remoteWindowId", remoteWindowId)} ${LOCAL_WINDOW_ID_TAG} ${quoteTmuxArg("localWindowId", mutation.localWindowId)}`,
           );
-          await options.runRemote(
-            `set-option -p -t ${quoteTmuxArg("remotePaneId", remotePaneId)} ${LOCAL_PANE_ID_TAG} ${quoteTmuxArg("localPaneId", mutation.initialLocalPaneId)}`,
-          );
-          appliedCreateWindows.set(mutation.localWindowId, remoteWindowId);
+          if (mutation.initialPaneIsRemoteBacked) {
+            await options.runRemote(
+              `set-option -p -t ${quoteTmuxArg("remotePaneId", remotePaneId)} ${LOCAL_PANE_ID_TAG} ${quoteTmuxArg("localPaneId", mutation.initialLocalPaneId)}`,
+            );
+          }
+          // Record the pairing whether or not the pane carries a routing tag:
+          // an untagged phantom still mirrors a local pane and must resolve
+          // via `remotePaneFor()` so that pane can be converted.
           appliedSplits.set(mutation.initialLocalPaneId, remotePaneId);
+          appliedCreateWindows.set(mutation.localWindowId, remoteWindowId);
           break;
         }
         case "kill-pane": {
@@ -115,9 +125,11 @@ export async function applyMutations(
           if (!remotePaneId) {
             throw new Error("split-window returned an empty pane id");
           }
-          await options.runRemote(
-            `set-option -p -t ${quoteTmuxArg("remotePaneId", remotePaneId)} ${LOCAL_PANE_ID_TAG} ${quoteTmuxArg("localPaneId", mutation.localPaneId)}`,
-          );
+          if (mutation.isRemoteBacked) {
+            await options.runRemote(
+              `set-option -p -t ${quoteTmuxArg("remotePaneId", remotePaneId)} ${LOCAL_PANE_ID_TAG} ${quoteTmuxArg("localPaneId", mutation.localPaneId)}`,
+            );
+          }
           appliedSplits.set(mutation.localPaneId, remotePaneId);
           break;
         }

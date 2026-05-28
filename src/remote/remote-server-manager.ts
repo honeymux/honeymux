@@ -25,7 +25,7 @@ import { ForwardedRemoteAgentIngressFactory } from "./agent-transport.ts";
 import { resolveMirrorTmuxServerName } from "./mirror-server-name.ts";
 import { RemoteMirror } from "./mirror/remote-mirror.ts";
 import { RoutingCache } from "./mirror/routing-cache.ts";
-import { type MirrorSnapshot } from "./mirror/snapshot.ts";
+import { LOCAL_PANE_ID_TAG, type MirrorSnapshot } from "./mirror/snapshot.ts";
 import { extractBracketedPastePayload, pasteTextIntoRemotePane } from "./paste.ts";
 import { buildRemoteProxyProcessArgv } from "./proxy-command.ts";
 import { RemoteProxyServer } from "./proxy-server.ts";
@@ -186,6 +186,19 @@ export class RemoteServerManager extends EventEmitter {
       // Respawn the remote pane with a shell
       await client.sendCommand(`respawn-pane -k -t ${quoteTmuxArg("remotePaneId", remotePaneId)}`);
 
+      // Claim the phantom for this local pane with a durable identity tag.
+      // Un-converted phantoms are paired positionally and stay untagged (so
+      // pane-tabs swaps don't churn the mirror), but a converted pane carries
+      // routing identity: subsequent reconciles must pair it by
+      // @hmx-local-pane-id, or the now-remote-backed local pane reads as
+      // unpaired and the reconciler splits a second remote pane while
+      // orphaning the one the proxy is bound to. Committed before the local
+      // pane is marked remote-backed below, so no reconcile ever observes a
+      // converted-but-unclaimed pane.
+      await client.sendCommand(
+        `set-option -p -t ${quoteTmuxArg("remotePaneId", remotePaneId)} ${LOCAL_PANE_ID_TAG} ${quoteTmuxArg("localPaneId", localPaneId)}`,
+      );
+
       // The remote pane's content was just reset by `respawn-pane`. Drop
       // the mirror's cached layout assertion for the enclosing window so
       // the next syncWindowPanes (triggered by the local respawn below)
@@ -218,10 +231,7 @@ export class RemoteServerManager extends EventEmitter {
       releaseRouting();
       this.routing.delete(localPaneId);
       this.pendingRegistrations.delete(localPaneId);
-      await this.clearLocalPaneOption(localPaneId, "@hmx-remote-host").catch(() => {});
-      await this.clearLocalPaneOption(localPaneId, "@hmx-remote-pane").catch(() => {});
-      await this.clearLocalPaneOption(localPaneId, "@hmx-remote-token").catch(() => {});
-      await this.resetPaneBorder(localPaneId).catch(() => {});
+      await this.clearLocalRemotePaneState(localPaneId);
       throw error;
     }
 
@@ -335,10 +345,7 @@ export class RemoteServerManager extends EventEmitter {
       const remotePaneId = mirror.remotePaneFor(localPaneId);
       if (!remotePaneId) {
         log("remote", `recover: no mirror mapping for ${localPaneId}, clearing metadata`);
-        await this.clearLocalPaneOption(localPaneId, "@hmx-remote-host").catch(() => {});
-        await this.clearLocalPaneOption(localPaneId, "@hmx-remote-pane").catch(() => {});
-        await this.clearLocalPaneOption(localPaneId, "@hmx-remote-token").catch(() => {});
-        await this.resetPaneBorder(localPaneId).catch(() => {});
+        await this.clearLocalRemotePaneState(localPaneId);
         continue;
       }
 
@@ -461,6 +468,7 @@ export class RemoteServerManager extends EventEmitter {
    * Public so tests can drive a single pass without the interval timer.
    */
   async runRemoteLivenessCheckOnce(): Promise<void> {
+    if (!this.started) return;
     for (const [serverName, sessions] of this.remoteSessions) {
       if (sessions.size === 0) continue;
       const client = this.clients.get(serverName);
@@ -486,6 +494,10 @@ export class RemoteServerManager extends EventEmitter {
         continue;
       }
       if (result.exitCode !== 0) continue;
+      // stopAll() may have run during the SSH round-trip above; bail before
+      // emitting ended events into a torn-down manager (double-emit with
+      // clearRemoteAgentState).
+      if (!this.started) return;
 
       const alivePids = new Set<number>();
       for (const line of result.stdout.split("\n")) {
@@ -606,9 +618,18 @@ export class RemoteServerManager extends EventEmitter {
       // Single reconcile request per remote-driven event. The queue inside
       // RemoteMirror coalesces bursts (a typical session-window-changed
       // can fan to many layout-change/window-add/window-close emits).
-      client.on("window-close", () => mirror.request());
-      client.on("window-add", () => mirror.request());
-      client.on("layout-change", () => mirror.request());
+      //
+      // Gate on isConnected: `new-session -A` attaching to a populated mirror
+      // emits layout/window events during the pre-bootstrap window, when
+      // sendCommand still rejects with "Client closed". Acting on those would
+      // spam the log and reset the first-sync gate; the authoritative
+      // post-connect mirror.request() below performs the initial sync.
+      const requestReconcileIfReady = (): void => {
+        if (client.isConnected) mirror.request();
+      };
+      client.on("window-close", requestReconcileIfReady);
+      client.on("window-add", requestReconcileIfReady);
+      client.on("layout-change", requestReconcileIfReady);
       client.on("tmux-exit", () => {
         this.handleRemoteTmuxExit(config.name);
       });
@@ -763,6 +784,22 @@ export class RemoteServerManager extends EventEmitter {
 
   private async clearLocalPaneOption(paneId: string, key: string): Promise<void> {
     await this.localClient.runCommandArgs(["set-option", "-pu", "-t", paneId, key]);
+  }
+
+  /**
+   * Best-effort teardown of a local pane's remote-conversion state: drop the
+   * `@hmx-remote-*` options and reset the pane border. Shared by the convert
+   * failure path, restart recovery, and remote-pane-exit revert.
+   */
+  private async clearLocalRemotePaneState(localPaneId: string): Promise<void> {
+    // Independent, order-free best-effort clears — dispatched together so the
+    // synchronous fire-and-forget caller (revert) issues them all at once.
+    await Promise.all([
+      this.clearLocalPaneOption(localPaneId, "@hmx-remote-host").catch(() => {}),
+      this.clearLocalPaneOption(localPaneId, "@hmx-remote-pane").catch(() => {}),
+      this.clearLocalPaneOption(localPaneId, "@hmx-remote-token").catch(() => {}),
+      this.resetPaneBorder(localPaneId).catch(() => {}),
+    ]);
   }
 
   private clearPermissionState(serverName: string, sessionId: string): void {
@@ -1108,10 +1145,7 @@ export class RemoteServerManager extends EventEmitter {
     this.pendingRegistrations.delete(localPaneId);
     this.routing.delete(localPaneId);
     this.proxyServer.forgetProxy(localPaneId);
-    this.clearLocalPaneOption(localPaneId, "@hmx-remote-host").catch(() => {});
-    this.clearLocalPaneOption(localPaneId, "@hmx-remote-pane").catch(() => {});
-    this.clearLocalPaneOption(localPaneId, "@hmx-remote-token").catch(() => {});
-    this.resetPaneBorder(localPaneId).catch(() => {});
+    void this.clearLocalRemotePaneState(localPaneId);
     // An explicit shell-command is REQUIRED here. `respawn-pane` without one
     // re-runs whatever was last spawned in the pane — which is the bun proxy
     // installed by convertPane. The user would see the proxy come right back.

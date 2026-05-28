@@ -1,5 +1,5 @@
 const CONTROL_MODE_ARG_RE = /[\0\r\n]/;
-const FORMAT_CONTROL_CHAR_RE = /[\0-\x1f\x7f]/g;
+const FORMAT_CONTROL_CHAR_RE = /[\0-\x1f\x7f-\x9f]/g;
 
 /**
  * Encode an arbitrary byte string as a tmux double-quoted argument carrying

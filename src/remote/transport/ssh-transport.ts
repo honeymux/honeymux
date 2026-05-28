@@ -152,7 +152,13 @@ export class SshTransport implements ControlModeTransport {
     });
     trackChildPid(proc.pid);
     void proc.exited.then(
-      () => untrackChildPid(proc.pid),
+      (code) => {
+        // Surface the exit code: a connection that dies after a clean connect
+        // exits via this path (not the connect-failure path that logs stderr),
+        // so without this a flapping remote is invisible in the log.
+        log("remote", `ssh exited (${this.config.name}): code=${code}`);
+        untrackChildPid(proc.pid);
+      },
       () => untrackChildPid(proc.pid),
     );
 
@@ -387,7 +393,14 @@ export function buildSshConnectionArgs(
   config: RemoteServerConfig,
   { includeKeepalive }: { includeKeepalive: boolean },
 ): string[] {
-  const args: string[] = ["-o", "BatchMode=yes"];
+  // Force a dedicated connection. honeymux spawns several independent ssh
+  // processes per host (the long-lived control-mode session plus short-lived
+  // one-shots for hook install and the liveness probe). Inheriting a user's
+  // `ControlMaster auto` would multiplex them onto one channel, so a one-shot's
+  // exit could tear the control-mode session down with it. ControlPath=none
+  // also ignores any configured master socket. This does not weaken a security
+  // default — it removes a sharing dependency for determinism.
+  const args: string[] = ["-o", "BatchMode=yes", "-o", "ControlMaster=no", "-o", "ControlPath=none"];
   if (includeKeepalive) {
     args.push("-o", "ServerAliveInterval=15", "-o", "ServerAliveCountMax=3");
   }

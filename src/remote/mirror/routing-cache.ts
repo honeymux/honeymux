@@ -1,8 +1,6 @@
 import type { RemotePaneMapping } from "../types.ts";
 import type { MirrorSnapshot } from "./snapshot.ts";
 
-import { REMOTE_HOST_TAG, REMOTE_PANE_TAG } from "./snapshot.ts";
-
 /**
  * Derived view of the local-side mirror bindings: which local pane is the
  * proxy peer of which remote pane on which server.
@@ -226,6 +224,3 @@ export class RoutingCache {
 function remoteKey(serverName: string, remotePaneId: string): string {
   return `${serverName}:${remotePaneId}`;
 }
-
-// Re-export tag constants for callers that consume the snapshot's tag schema.
-export { REMOTE_HOST_TAG, REMOTE_PANE_TAG };

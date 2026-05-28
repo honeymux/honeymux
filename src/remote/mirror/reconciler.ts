@@ -5,7 +5,24 @@ export type KillPaneReason = "orphan" | "stale-tag";
 
 export interface MirrorPlan {
   readonly mutations: ReadonlyArray<Mutation>;
+  /**
+   * Local-pane id → remote-pane id for every pane already paired in this
+   * snapshot: tagged (converted) panes by identity, untagged phantom panes
+   * positionally. The mirror feeds this straight into its pane index so
+   * `remotePaneFor()` resolves un-converted panes — the convert-to-remote
+   * readiness signal — without the executor having to tag phantoms (tagging
+   * them churns the mirror when local-only panes swap windows).
+   */
+  readonly panePairs: ReadonlyMap<string, string>;
   readonly warnings: ReadonlyArray<MirrorWarning>;
+  /**
+   * Local-window id → remote-window id for every window paired in this
+   * snapshot. The mirror feeds this into its window index so
+   * `remoteWindowFor()` agrees with the reconciler's first-wins pairing — an
+   * index that re-derived this from `@hmx-local-window-id` tags independently
+   * could pick a different (last-wins) duplicate the reconciler is killing.
+   */
+  readonly windowPairs: ReadonlyMap<string, string>;
 }
 
 export interface MirrorWarning {
@@ -22,11 +39,28 @@ export interface MirrorWarning {
  * array order. Do not topologically sort externally.
  */
 export type Mutation =
-  | { initialLocalPaneId: string; kind: "create-window"; localWindowId: string }
+  | {
+      /** See {@link Mutation} create-window's `initialPaneIsRemoteBacked`. */
+      isRemoteBacked: boolean;
+      kind: "split-window";
+      localPaneId: string;
+      remoteWindowId: string;
+    }
+  | {
+      initialLocalPaneId: string;
+      /**
+       * True when the initial pane should be tagged with `@hmx-local-pane-id`.
+       * False for layout-only phantom panes mirroring a local-only pane —
+       * those carry no routing identity and don't need (and shouldn't have) a
+       * tag that would invalidate when local-only panes swap windows.
+       */
+      initialPaneIsRemoteBacked: boolean;
+      kind: "create-window";
+      localWindowId: string;
+    }
   | { kind: "apply-layout"; layout: string; remoteWindowId: string }
   | { kind: "kill-pane"; reason: KillPaneReason; remotePaneId: string }
-  | { kind: "kill-window"; remoteWindowId: string }
-  | { kind: "split-window"; localPaneId: string; remoteWindowId: string };
+  | { kind: "kill-window"; remoteWindowId: string };
 
 export interface ReconcileInput {
   /**
@@ -79,6 +113,8 @@ export interface ReconcileInput {
 interface PanePairing {
   /** Remote panes that have no matching local pane (untagged or stale-tagged). */
   orphanRemote: ReadonlyArray<{ localPaneId?: string; remotePaneId: string }>;
+  /** Local-pane id → remote-pane id for every pane paired in this window. */
+  pairs: ReadonlyMap<string, string>;
   /** Local panes that have no matching remote pane → need a split. */
   unpairedLocal: ReadonlyArray<string>;
 }
@@ -108,6 +144,11 @@ interface PanePairing {
 export function reconcile(input: ReconcileInput): MirrorPlan {
   const mutations: Mutation[] = [];
   const warnings: MirrorWarning[] = [];
+  // Local-pane id → remote-pane id, accumulated across all paired windows.
+  // A local pane lives in exactly one window, so per-window merges never
+  // collide. Surfaced on the plan so the mirror's pane index agrees with the
+  // reconciler's pairing instead of re-deriving it from snapshot tags.
+  const panePairs = new Map<string, string>();
 
   const localWindowIds = new Set(input.local.windows.map((w) => w.id));
 
@@ -127,10 +168,11 @@ export function reconcile(input: ReconcileInput): MirrorPlan {
   for (const localWindow of input.local.windows) {
     if (remoteWindowByLocalId.has(localWindow.id)) continue;
     const localPanes = input.local.panesByWindow.get(localWindow.id) ?? [];
-    const initialLocalPaneId = localPanes[0]?.id;
-    if (!initialLocalPaneId) continue;
+    const initial = localPanes[0];
+    if (!initial) continue;
     mutations.push({
-      initialLocalPaneId,
+      initialLocalPaneId: initial.id,
+      initialPaneIsRemoteBacked: initial.tags.remoteHost === input.serverName,
       kind: "create-window",
       localWindowId: localWindow.id,
     });
@@ -150,7 +192,10 @@ export function reconcile(input: ReconcileInput): MirrorPlan {
 
     const localPanes = input.local.panesByWindow.get(localWindow.id) ?? [];
     const remotePanes = input.remote.panesByWindow.get(remoteWindow.id) ?? [];
-    const pairing = pairPanes(localPanes, remotePanes, input.pending);
+    const pairing = pairPanes(localPanes, remotePanes, input.pending, input.serverName);
+    for (const [localId, remoteId] of pairing.pairs) {
+      panePairs.set(localId, remoteId);
+    }
 
     // Stale-tag warnings fire ALWAYS, including first sync: a stale tag is
     // evidence of an interrupted prior session, never benign bootstrap noise.
@@ -175,8 +220,14 @@ export function reconcile(input: ReconcileInput): MirrorPlan {
       }
     }
 
+    const localById = new Map(localPanes.map((p) => [p.id, p]));
     for (const localId of pairing.unpairedLocal) {
-      splits.push({ kind: "split-window", localPaneId: localId, remoteWindowId: remoteWindow.id });
+      splits.push({
+        isRemoteBacked: localById.get(localId)?.tags.remoteHost === input.serverName,
+        kind: "split-window",
+        localPaneId: localId,
+        remoteWindowId: remoteWindow.id,
+      });
     }
 
     const localIds = new Set(localPanes.map((p) => p.id));
@@ -234,17 +285,25 @@ export function reconcile(input: ReconcileInput): MirrorPlan {
     mutations.push({ kind: "kill-window", remoteWindowId: remoteWindow.id });
   }
 
-  return { mutations, warnings };
+  const windowPairs = new Map<string, string>();
+  for (const [localWindowId, remoteWindow] of remoteWindowByLocalId) {
+    windowPairs.set(localWindowId, remoteWindow.id);
+  }
+
+  return { mutations, panePairs, warnings, windowPairs };
 }
 
 function pairPanes(
   localPanes: ReadonlyArray<SnapshotPane>,
   remotePanes: ReadonlyArray<SnapshotPane>,
   pending: PendingView,
+  serverName: string,
 ): PanePairing {
   const localIds = new Set(localPanes.map((p) => p.id));
   const matchedLocalIds = new Set<string>();
-  const orphanRemote: { localPaneId?: string; remotePaneId: string }[] = [];
+  const pairs = new Map<string, string>();
+  const taggedOrphans: { localPaneId: string; remotePaneId: string }[] = [];
+  const untaggedRemotes: string[] = [];
 
   // Pair remote → local by @hmx-local-pane-id tag. The pending overlay
   // fills in only when the tag is absent — that's the mid-mutation window
@@ -258,27 +317,44 @@ function pairPanes(
     if (tag) {
       if (localIds.has(tag) && !matchedLocalIds.has(tag)) {
         matchedLocalIds.add(tag);
+        pairs.set(tag, remote.id);
         continue;
       }
       // Stale (points at a vanished local) or duplicate (some other remote
       // already paired with this local). Either way, an orphan.
-      orphanRemote.push({ localPaneId: tag, remotePaneId: remote.id });
+      taggedOrphans.push({ localPaneId: tag, remotePaneId: remote.id });
       continue;
     }
 
     const pendingPaired = pending.remoteToLocal.get(remote.id);
     if (pendingPaired && localIds.has(pendingPaired) && !matchedLocalIds.has(pendingPaired)) {
       matchedLocalIds.add(pendingPaired);
+      pairs.set(pendingPaired, remote.id);
       continue;
     }
 
-    // Untagged with no pending fallback — orphan.
-    orphanRemote.push({ remotePaneId: remote.id });
+    untaggedRemotes.push(remote.id);
   }
 
+  // Phantom pairing: an untagged remote pane in a paired mirror window is
+  // a layout-only placeholder for some local-only pane (one without
+  // @hmx-remote-host pointing at this server). Match by order against
+  // unpaired local-only panes so swap-pane between local windows — used
+  // by pane-tabs — doesn't churn the mirror with split/kill cycles.
+  const localOnlyUnpaired = localPanes.filter((p) => !matchedLocalIds.has(p.id) && p.tags.remoteHost !== serverName);
+  const phantomPairs = Math.min(untaggedRemotes.length, localOnlyUnpaired.length);
+  for (let i = 0; i < phantomPairs; i++) {
+    matchedLocalIds.add(localOnlyUnpaired[i]!.id);
+    pairs.set(localOnlyUnpaired[i]!.id, untaggedRemotes[i]!);
+  }
+
+  const orphanRemote: { localPaneId?: string; remotePaneId: string }[] = [
+    ...taggedOrphans,
+    ...untaggedRemotes.slice(phantomPairs).map((remotePaneId) => ({ remotePaneId })),
+  ];
   const unpairedLocal = localPanes.filter((p) => !matchedLocalIds.has(p.id)).map((p) => p.id);
 
-  return { orphanRemote, unpairedLocal };
+  return { orphanRemote, pairs, unpairedLocal };
 }
 
 function tagDisplay(name: "local-pane-id" | "local-window-id", value: string): string {
