@@ -97,10 +97,14 @@ type ZoomHoldAction = "zoomAgentsView" | "zoomServerView";
  * an interactive PTY surface. Returns null in peek (held-key) mode and
  * when no candidate has the metadata required to attach.
  *
- * `zoomAction` is `null` when the zoom was auto-triggered by the muxotron
- * already being expanded in adaptive mode (see `handleZoomStartRef`). We
- * still honor the agents-view sticky latch in that case — the muxotron is
- * the interactive surface regardless of how it expanded.
+ * The sticky agents-view latch only engages while the muxotron is expanded
+ * inline (`zoomAction === null`, auto-triggered by the muxotron already being
+ * expanded in adaptive mode — see `handleZoomStartRef`), where the agent's PTY
+ * is actually visible. The fullscreen agents-tree overlay
+ * (`zoomAction === "zoomAgentsView"`) is a pure viewer: it never auto-bridges,
+ * since its render hides any bridged PTY and attaching would only mutate the
+ * origin tmux layout. Interaction from the tree is via explicit selection
+ * (`treeSelectedSession`).
  */
 export function computeInteractiveAgent(inputs: InteractiveAgentInputs): AgentSession | null {
   const {
@@ -118,11 +122,7 @@ export function computeInteractiveAgent(inputs: InteractiveAgentInputs): AgentSe
     // must press Enter to latch before keystrokes reach the agent's PTY.
     if (!reviewLatched) return null;
     candidate = treeSelectedSession;
-  } else if (
-    muxotronFocusActive &&
-    zoomSticky.zoomAgentsView &&
-    (zoomAction === "zoomAgentsView" || zoomAction === null)
-  ) {
+  } else if (muxotronFocusActive && zoomSticky.zoomAgentsView && zoomAction === null) {
     // Prefer the oldest unanswered agent (so sticky-zoom targets pending
     // permission prompts), falling back to any live non-dismissed agent in
     // another pane so the user can still type into idle agents.

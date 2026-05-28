@@ -138,7 +138,7 @@ describe("muxotron focus and agent selection helpers", () => {
           muxotronFocusActive: true,
           reviewLatched: false,
           treeSelectedSession: null,
-          zoomAction: "zoomAgentsView",
+          zoomAction: null,
           zoomSticky: stickyOn,
         })?.sessionId,
       ).toBe("older");
@@ -168,7 +168,7 @@ describe("muxotron focus and agent selection helpers", () => {
           muxotronFocusActive: true,
           reviewLatched: false,
           treeSelectedSession: null,
-          zoomAction: "zoomAgentsView",
+          zoomAction: null,
           zoomSticky: stickyOn,
         })?.sessionId,
       ).toBe("alive");
@@ -184,10 +184,25 @@ describe("muxotron focus and agent selection helpers", () => {
           muxotronFocusActive: true,
           reviewLatched: false,
           treeSelectedSession: null,
-          zoomAction: "zoomAgentsView",
+          zoomAction: null,
           zoomSticky: stickyOn,
         })?.sessionId,
       ).toBe("waiting");
+    });
+
+    test("fullscreen agents-tree zoom (zoomAgentsView) is a pure viewer — never auto-bridges", () => {
+      const unanswered = makeAgent({ paneId: "%5", sessionId: "waiting", startedAt: 10 });
+      expect(
+        computeInteractiveAgent({
+          activePaneId: "%2",
+          agentSessions: [unanswered],
+          muxotronFocusActive: true,
+          reviewLatched: false,
+          treeSelectedSession: null,
+          zoomAction: "zoomAgentsView",
+          zoomSticky: stickyOn,
+        }),
+      ).toBeNull();
     });
 
     test("sticky-latched zoom on the server view never goes interactive", () => {
