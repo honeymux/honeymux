@@ -111,6 +111,9 @@ describe("RemoteServerManager remote hook ingress", () => {
     } as any;
 
     const manager = new RemoteServerManager(localClient, [{ host: "dev-box", name: "dev-box" }]);
+    // Liveness only runs on a started manager; model that (the guard against
+    // emitting ended events after stopAll() keys off this flag).
+    (manager as any).started = true;
     (manager as any).servers.set("dev-box", {
       config: { host: "dev-box", name: "dev-box" },
       mirrorSession: "mirror-alpha",

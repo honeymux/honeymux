@@ -6,6 +6,7 @@ import type { Base16Palette, Base16SchemeName, ThemeMode } from "../themes/theme
 import { validateSshDestination } from "../remote/ssh.ts";
 import { BASE16_SCHEME_NAMES, DEFAULT_SCHEME, THEME_MODES } from "../themes/theme.ts";
 import { MODIFIER_KEY_NAMES } from "./keybindings.ts";
+import { stripNonPrintingControlChars } from "./text.ts";
 
 export type CursorAlertBlink = "default" | "off" | "on";
 export type CursorAlertShape = "bar" | "block" | "default" | "underline";
@@ -239,6 +240,13 @@ export function validateConfig(config: HoneymuxConfig): null | string {
       }
       if (typeof server.name !== "string" || server.name.trim().length === 0) {
         return `Invalid remote[${i}].name in ${CONFIG_FILE}\n  Remote server names must be non-empty strings`;
+      }
+      // The name is rendered into UI labels and a tmux pane-border format.
+      // Reject control characters at the boundary (before provenance is lost)
+      // so no consumer can leak a raw ESC/CR/DEL into a label or escape
+      // stream, and cap the length.
+      if (stripNonPrintingControlChars(server.name) !== server.name || server.name.length > 256) {
+        return `Invalid remote[${i}].name in ${CONFIG_FILE}\n  Remote server names must not contain control characters and must be at most 256 characters`;
       }
       if (typeof server.host !== "string") {
         return `Invalid remote[${i}].host in ${CONFIG_FILE}\n  Remote server hosts must be strings`;

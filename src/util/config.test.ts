@@ -80,6 +80,18 @@ describe("config", () => {
     expect(keys).toEqual([...keys].sort((a, b) => a.localeCompare(b)));
   });
 
+  test("rejects remote server names with control characters or excess length", () => {
+    expect(validateConfig({ ...defaultConfig(), remote: [{ host: "dev-box", name: "dev" }] })).toBeNull();
+    // ESC injected via fromCharCode so the test source stays printable.
+    const withEsc = `dev${String.fromCharCode(27)}x`;
+    expect(validateConfig({ ...defaultConfig(), remote: [{ host: "dev-box", name: withEsc }] })).toContain(
+      "control characters",
+    );
+    expect(validateConfig({ ...defaultConfig(), remote: [{ host: "dev-box", name: "a".repeat(257) }] })).toContain(
+      "control characters",
+    );
+  });
+
   test("rejects invalid local OSC52 passthrough values", () => {
     expect(validateConfig({ ...defaultConfig(), policyLocalOsc52Passthrough: "maybe" as any })).toContain(
       "Invalid policyLocalOsc52Passthrough",

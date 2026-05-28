@@ -1,6 +1,6 @@
 import { log } from "../../util/log.ts";
 import { applyMutations } from "./mirror-executor.ts";
-import { PendingMappings } from "./pending-mappings.ts";
+import { EMPTY_PENDING_VIEW } from "./pending-mappings.ts";
 import { ReconcileQueue } from "./reconcile-queue.ts";
 import { type MirrorPlan, type MirrorWarning, reconcile } from "./reconciler.ts";
 import {
@@ -57,7 +57,6 @@ export interface RemoteMirrorOptions {
  * Replaces `MirrorLayoutManager` from the pre-refactor design.
  */
 export class RemoteMirror {
-  readonly pending = new PendingMappings();
   private hasReconciledBefore = false;
   /**
    * Last `cols,rows` we pushed to the remote control client via
@@ -105,10 +104,10 @@ export class RemoteMirror {
   /**
    * Remote pane id currently paired with the given local pane, derived
    * from the most recent reconcile pass. Returns undefined when no
-   * pairing exists. Pending mid-mutation pairings are included.
+   * pairing exists.
    */
   remotePaneFor(localPaneId: string): string | undefined {
-    return this.paneIndex.get(localPaneId) ?? this.pending.view().localToRemote.get(localPaneId);
+    return this.paneIndex.get(localPaneId);
   }
 
   /** Remote window id currently paired with the given local window. */
@@ -183,63 +182,30 @@ export class RemoteMirror {
       appliedSplits: ReadonlyMap<string, string>;
     },
   ): void {
-    // windowIndex only includes pairings where the local-window id named
-    // by `@hmx-local-window-id` actually exists locally. A remote window
-    // whose tag points at a vanished local window is stale — the
-    // reconciler will kill it on this pass — and must NOT be a valid
-    // mirror destination. Otherwise mirror.remoteWindowFor() would name
-    // a soon-to-be-dead window.
-    const localWindowIds = new Set(this.latestLocal.windows.map((w) => w.id));
+    // windowIndex and paneIndex both consume the reconciler's pairing for
+    // artifacts present in the snapshot it saw, plus the executor's
+    // just-created ones (which postdate that snapshot). Deriving both from the
+    // same pairing the planner used keeps remoteWindowFor()/remotePaneFor() in
+    // agreement with the reconciler — re-deriving from `@hmx-*` tags here could
+    // pick a different (last-wins) duplicate the reconciler is about to kill,
+    // naming a soon-to-be-dead window/pane.
     const newWindowIndex = new Map<string, string>();
-    for (const remoteWindow of this.latestRemote.windows) {
-      if (remoteWindow.localWindowId && localWindowIds.has(remoteWindow.localWindowId)) {
-        newWindowIndex.set(remoteWindow.localWindowId, remoteWindow.id);
-      }
+    for (const [localId, remoteId] of plan.windowPairs) {
+      newWindowIndex.set(localId, remoteId);
     }
     for (const [localId, remoteId] of applied.appliedCreateWindows) {
       newWindowIndex.set(localId, remoteId);
     }
     this.windowIndex = newWindowIndex;
 
-    // paneIndex must be window-scoped: a remote pane with
-    // `@hmx-local-pane-id=%50` only counts as the peer for local %50
-    // when both are in paired windows. If local %50 has been moved to
-    // a different local window since the tag was set, the old remote
-    // pane is stale and a new remote peer lives in %50's current
-    // window's mirror (created via split-window). Returning the stale
-    // one from `remotePaneFor(%50)` would feed the recovery / convert
-    // paths a doomed pane and prevent the active-proxy guard from ever
-    // unblocking the original mirror window's apply-layout.
-    const localPaneToWindow = new Map<string, string>();
-    for (const [windowId, panes] of this.latestLocal.panesByWindow) {
-      for (const pane of panes) {
-        localPaneToWindow.set(pane.id, windowId);
-      }
-    }
-    const remoteToLocalWindow = new Map<string, string>();
-    for (const remoteWindow of this.latestRemote.windows) {
-      if (remoteWindow.localWindowId && localWindowIds.has(remoteWindow.localWindowId)) {
-        remoteToLocalWindow.set(remoteWindow.id, remoteWindow.localWindowId);
-      }
-    }
-    for (const [localId, remoteId] of applied.appliedCreateWindows) {
-      remoteToLocalWindow.set(remoteId, localId);
-    }
-
+    // Pane pairing is tagged peers by identity + untagged phantoms by order
+    // (see reconciler `pairPanes`); consuming it here is what lets
+    // `remotePaneFor()` resolve un-converted phantom panes — the
+    // convert-to-remote readiness signal — while converted panes keep their
+    // tag-based identity across pane reordering.
     const newPaneIndex = new Map<string, string>();
-    for (const [remoteWindowId, panes] of this.latestRemote.panesByWindow) {
-      const pairedLocalWindowId = remoteToLocalWindow.get(remoteWindowId);
-      if (!pairedLocalWindowId) continue;
-      for (const pane of panes) {
-        const tag = pane.tags.localPaneId;
-        if (!tag) continue;
-        if (localPaneToWindow.get(tag) !== pairedLocalWindowId) continue;
-        // Only the FIRST tag wins (matches reconciler's deterministic
-        // pairing). Subsequent duplicates are orphans, not pairs.
-        if (!newPaneIndex.has(tag)) {
-          newPaneIndex.set(tag, pane.id);
-        }
-      }
+    for (const [localId, remoteId] of plan.panePairs) {
+      newPaneIndex.set(localId, remoteId);
     }
     for (const [localId, remoteId] of applied.appliedSplits) {
       newPaneIndex.set(localId, remoteId);
@@ -283,7 +249,7 @@ export class RemoteMirror {
       hasReconciledBefore: this.hasReconciledBefore,
       lastAppliedLayoutByRemoteWindow: this.lastAppliedLayoutByRemoteWindow,
       local: this.latestLocal,
-      pending: this.pending.view(),
+      pending: EMPTY_PENDING_VIEW,
       remote: this.latestRemote,
       serverName: this.options.serverName,
     });
@@ -320,9 +286,15 @@ export class RemoteMirror {
 
     this.hasReconciledBefore = true;
 
-    // Any per-mutation failure re-arms the queue; the next pass will
-    // observe the partially-applied state and finish the job.
-    if (result.failures.length > 0) {
+    // Re-arm only when the pass made forward progress; the next pass then
+    // observes the partially-applied state and finishes the job. Re-arming on
+    // a failure that applied nothing busy-loops the queue at the debounce
+    // floor when the failure is permanent (e.g. tmux "no space for new pane").
+    // A transient no-progress failure still recovers on the next tmux-driven
+    // reconcile event.
+    const progressMade =
+      result.appliedCreateWindows.size > 0 || result.appliedSplits.size > 0 || result.appliedLayouts.size > 0;
+    if (result.failures.length > 0 && progressMade) {
       this.queue.request();
     }
 

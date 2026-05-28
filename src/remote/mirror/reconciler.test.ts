@@ -74,8 +74,8 @@ describe("reconciler — ported mirror-layout cases", () => {
 
     // Local @1, @2 both need new remote windows.
     expect(mutationsOfKind(plan, "create-window")).toEqual([
-      { initialLocalPaneId: "%10", kind: "create-window", localWindowId: "@1" },
-      { initialLocalPaneId: "%20", kind: "create-window", localWindowId: "@2" },
+      { initialLocalPaneId: "%10", initialPaneIsRemoteBacked: false, kind: "create-window", localWindowId: "@1" },
+      { initialLocalPaneId: "%20", initialPaneIsRemoteBacked: false, kind: "create-window", localWindowId: "@2" },
     ]);
     // The stale untagged remote @100 must be killed.
     expect(mutationsOfKind(plan, "kill-window")).toEqual([{ kind: "kill-window", remoteWindowId: "@100" }]);
@@ -94,7 +94,7 @@ describe("reconciler — ported mirror-layout cases", () => {
     const plan = reconcile(input);
 
     expect(mutationsOfKind(plan, "create-window")).toEqual([
-      { initialLocalPaneId: "%10", kind: "create-window", localWindowId: "@1" },
+      { initialLocalPaneId: "%10", initialPaneIsRemoteBacked: false, kind: "create-window", localWindowId: "@1" },
     ]);
   });
 
@@ -212,6 +212,65 @@ describe("reconciler — ported mirror-layout cases", () => {
     // All locals paired by tag; no splits, no kills.
     expect(mutationsOfKind(plan, "split-window")).toEqual([]);
     expect(mutationsOfKind(plan, "kill-pane")).toEqual([]);
+    // panePairs follows the tags, not snapshot order, so remotePaneFor() can
+    // resolve each local pane to its true remote peer.
+    expect(plan.panePairs.get("%10")).toBe("%200");
+    expect(plan.panePairs.get("%11")).toBe("%201");
+    expect(plan.panePairs.get("%12")).toBe("%202");
+  });
+
+  test("exposes panePairs for an untagged phantom so an un-converted pane resolves to its remote peer", () => {
+    // The mirror pre-creates an untagged remote phantom for every local pane,
+    // including un-converted ones (no @hmx-remote-host for this server). The
+    // convert-to-remote readiness check reads mirror.remotePaneFor(), built
+    // from plan.panePairs — so the phantom MUST be paired here by order even
+    // though it carries no tag. Regression (81d8b4b): phantom tagging was
+    // removed but the pairing was not surfaced, leaving un-converted panes
+    // stuck on "Convert to remote (please wait)" forever.
+    const input = baseInput({
+      hasReconciledBefore: true,
+      local: makeSnapshot({
+        panesByWindow: { "@1": [makePane("%10", 0, "@1")] },
+        windows: [makeWindow("@1", 0)],
+      }),
+      remote: makeSnapshot({
+        panesByWindow: { "@100": [makePane("%200", 0, "@100")] }, // untagged phantom
+        windows: [makeWindow("@100", 0, "x", "@1")],
+      }),
+    });
+
+    const plan = reconcile(input);
+
+    expect(plan.panePairs.get("%10")).toBe("%200");
+    // No churn: the untagged phantom is neither killed nor re-split.
+    expect(mutationsOfKind(plan, "split-window")).toEqual([]);
+    expect(mutationsOfKind(plan, "kill-pane")).toEqual([]);
+  });
+
+  test("a converted (remote-backed) pane pairs by its committed tag, not positionally", () => {
+    // After convertPane claims the phantom (set-option @hmx-local-pane-id) the
+    // local pane becomes remote-backed. Positional phantom pairing covers only
+    // local-only panes, so the converted pane MUST keep pairing to its remote
+    // peer by identity — otherwise the reconciler would read it as unpaired,
+    // split a second remote pane, and orphan the one the proxy is bound to.
+    const input = baseInput({
+      activeBindings: new Map([["%200", "%10"]]),
+      hasReconciledBefore: true,
+      local: makeSnapshot({
+        panesByWindow: { "@1": [makePane("%10", 0, "@1", { remoteHost: "dev-box", remotePaneId: "%200" })] },
+        windows: [makeWindow("@1", 0)],
+      }),
+      remote: makeSnapshot({
+        panesByWindow: { "@100": [makePane("%200", 0, "@100", { localPaneId: "%10" })] },
+        windows: [makeWindow("@100", 0, "x", "@1")],
+      }),
+    });
+
+    const plan = reconcile(input);
+
+    expect(plan.panePairs.get("%10")).toBe("%200");
+    expect(mutationsOfKind(plan, "split-window")).toEqual([]);
+    expect(mutationsOfKind(plan, "kill-pane")).toEqual([]);
   });
 
   test("emits split-window for a new local pane after a local split", () => {
@@ -232,7 +291,7 @@ describe("reconciler — ported mirror-layout cases", () => {
     const plan = reconcile(input);
 
     expect(mutationsOfKind(plan, "split-window")).toEqual([
-      { kind: "split-window", localPaneId: "%11", remoteWindowId: "@100" },
+      { isRemoteBacked: false, kind: "split-window", localPaneId: "%11", remoteWindowId: "@100" },
     ]);
   });
 
@@ -518,6 +577,31 @@ describe("reconciler — additional invariants", () => {
     ]);
     // No splits — %200 paired %10 deterministically; %201 is the dupe.
     expect(mutationsOfKind(plan, "split-window")).toEqual([]);
+  });
+
+  test("windowPairs names the surviving window on duplicate window tags (first-wins)", () => {
+    // Two remote windows both tagged @hmx-local-window-id=@1. The reconciler
+    // pairs the first and kills the second; windowPairs must name the SAME
+    // (surviving) window so remoteWindowFor() can't return the doomed dupe.
+    const input = baseInput({
+      hasReconciledBefore: true,
+      local: makeSnapshot({
+        panesByWindow: { "@1": [makePane("%10", 0, "@1")] },
+        windows: [makeWindow("@1", 0)],
+      }),
+      remote: makeSnapshot({
+        panesByWindow: {
+          "@100": [makePane("%200", 0, "@100", { localPaneId: "%10" })],
+          "@101": [makePane("%201", 0, "@101", { localPaneId: "%10" })],
+        },
+        windows: [makeWindow("@100", 0, "x", "@1"), makeWindow("@101", 1, "y", "@1")],
+      }),
+    });
+
+    const plan = reconcile(input);
+
+    expect(plan.windowPairs.get("@1")).toBe("@100");
+    expect(mutationsOfKind(plan, "kill-window")).toEqual([{ kind: "kill-window", remoteWindowId: "@101" }]);
   });
 
   test("treats stale tags pointing at vanished local panes as orphans", () => {
