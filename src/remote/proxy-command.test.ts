@@ -3,19 +3,14 @@ import { describe, expect, test } from "bun:test";
 import { buildRemoteProxyProcessArgv, isBundledEntryPath } from "./proxy-command.ts";
 
 describe("buildRemoteProxyProcessArgv", () => {
-  test("re-enters the current Bun script in source mode", () => {
+  test("spawns the dedicated JSX-free proxy entrypoint in source mode (cwd-independent)", () => {
     expect(
       buildRemoteProxyProcessArgv("%10", "token-123", {
         execPath: "/home/aaron/.bun/bin/bun",
         mainPath: "/home/aaron/src/honeymux/src/index.tsx",
+        proxyScriptPath: "/home/aaron/src/honeymux/src/remote/proxy.ts",
       }),
-    ).toEqual([
-      "/home/aaron/.bun/bin/bun",
-      "/home/aaron/src/honeymux/src/index.tsx",
-      "--internal-remote-proxy",
-      "%10",
-      "token-123",
-    ]);
+    ).toEqual(["/home/aaron/.bun/bin/bun", "/home/aaron/src/honeymux/src/remote/proxy.ts", "%10", "token-123"]);
   });
 
   test("re-enters the installed executable in bundled mode", () => {
@@ -23,6 +18,7 @@ describe("buildRemoteProxyProcessArgv", () => {
       buildRemoteProxyProcessArgv("%10", "token-123", {
         execPath: "/home/aaron/bin/hmx",
         mainPath: "/$bunfs/root/hmx-linux-x64",
+        proxyScriptPath: "/$bunfs/root/proxy.ts",
       }),
     ).toEqual(["/home/aaron/bin/hmx", "--internal-remote-proxy", "%10", "token-123"]);
   });
