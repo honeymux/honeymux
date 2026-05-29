@@ -257,6 +257,11 @@ export function App({ sessionName }: AppProps) {
     if (!client) return;
     const handler = (windowId: string, paneId: string) => {
       if (windowId !== activeWindowIdRef.current) return;
+      // Ignore the muxotron bridge's own select-pane echo: when it latches an
+      // agent sharing the active window, honoring the echo would move focus
+      // onto that agent, dropping it from the "outside the active pane" filter
+      // and tearing the bridge down. Cross-window latches never reach here.
+      if (paneId === appRuntimeRefs.interactiveAgentRef.current?.paneId) return;
       appRuntimeRefs.setActivePaneId(paneId);
     };
     client.on("window-pane-changed", handler);

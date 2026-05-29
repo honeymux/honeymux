@@ -73,6 +73,11 @@ export function useAgentPtyBridge({
   const overlaySessionRef = useRef<null | string>(null);
   /** True if this hook toggled tmux pane zoom and should toggle it back. */
   const didZoomRef = useRef(false);
+  /** The origin window's active pane before the overlay stole focus to the
+   *  agent, so cleanup can restore it. The overlay's select-pane mutates the
+   *  shared origin window, which is visible when the agent shares the
+   *  currently-viewed window. */
+  const originalActivePaneRef = useRef<null | string>(null);
   const onExitRef = useRef(onExit);
   onExitRef.current = onExit;
   const onAgentInputRef = useRef(onAgentInput);
@@ -162,6 +167,14 @@ export function useAgentPtyBridge({
             await client.selectWindowInSession(overlayName, targetWindowId);
           }
           if (targetPaneId) {
+            if (targetWindowId) {
+              try {
+                const panes = await client.listPanesInWindow(targetWindowId);
+                originalActivePaneRef.current = panes.find((pane) => pane.active)?.id ?? null;
+              } catch {
+                originalActivePaneRef.current = null;
+              }
+            }
             await client.selectPane(targetPaneId);
           }
         }
@@ -180,9 +193,12 @@ export function useAgentPtyBridge({
       if (client && targetPaneId) {
         try {
           const alreadyZoomed = await client.isPaneWindowZoomed(targetPaneId);
-          if (!alreadyZoomed) {
-            await client.togglePaneZoom(targetPaneId);
+          if (!cancelled && !alreadyZoomed) {
+            // Mark intent before the toggle: once the command is queued the
+            // pane will zoom, so cleanup must revert it even if it runs
+            // before this await resolves.
             didZoomRef.current = true;
+            await client.togglePaneZoom(targetPaneId);
           }
         } catch {
           // Best effort.
@@ -237,6 +253,14 @@ export function useAgentPtyBridge({
       if (didZoomRef.current && targetPaneId && liveClient) {
         didZoomRef.current = false;
         liveClient.togglePaneZoom(targetPaneId).catch(() => {});
+      }
+      // Restore focus to the pane that was active before we latched. Must run
+      // after the un-zoom above: selecting a different pane while a pane is
+      // zoomed un-zooms as a side effect, which would fight the toggle.
+      const originalActivePaneId = originalActivePaneRef.current;
+      originalActivePaneRef.current = null;
+      if (originalActivePaneId && originalActivePaneId !== targetPaneId && liveClient) {
+        liveClient.selectPane(originalActivePaneId).catch(() => {});
       }
       if (targetPaneId && liveClient) {
         liveClient.setPaneBorderStatus(targetPaneId, "top").catch(() => {});
