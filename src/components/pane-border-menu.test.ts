@@ -12,6 +12,7 @@ describe("buildPaneBorderMainMenuItems", () => {
       buildPaneBorderMainMenuItems({
         hasReadyRemoteServers: false,
         hasRemoteServers: true,
+        paneInMultiTabGroup: false,
         paneTabsEnabled: true,
       }),
     ).toEqual([
@@ -25,6 +26,7 @@ describe("buildPaneBorderMainMenuItems", () => {
       buildPaneBorderMainMenuItems({
         hasReadyRemoteServers: false,
         hasRemoteServers: true,
+        paneInMultiTabGroup: false,
         paneTabsEnabled: true,
       }),
     ).toEqual([
@@ -38,11 +40,26 @@ describe("buildPaneBorderMainMenuItems", () => {
       buildPaneBorderMainMenuItems({
         hasReadyRemoteServers: true,
         hasRemoteServers: true,
+        paneInMultiTabGroup: false,
         paneTabsEnabled: true,
       }),
     ).toEqual([
       { disabled: false, key: "new-tab", label: "New tab" },
       { disabled: false, key: "convert-to-remote", label: "Convert to remote  ▸" },
+    ]);
+  });
+
+  test("disables convert-to-remote for a multi-tab pane even when a server is ready", () => {
+    expect(
+      buildPaneBorderMainMenuItems({
+        hasReadyRemoteServers: true,
+        hasRemoteServers: true,
+        paneInMultiTabGroup: true,
+        paneTabsEnabled: true,
+      }),
+    ).toEqual([
+      { disabled: false, key: "new-tab", label: "New tab" },
+      { disabled: true, key: "convert-to-remote", label: "Convert to remote (untab first) " },
     ]);
   });
 });

@@ -16,6 +16,7 @@ export interface PaneBorderMenuState {
 interface BuildPaneBorderMainMenuItemsOptions {
   hasReadyRemoteServers: boolean;
   hasRemoteServers: boolean;
+  paneInMultiTabGroup: boolean;
   paneTabsEnabled: boolean;
 }
 
@@ -27,6 +28,7 @@ interface MainMenuProps {
   onAddPaneTab: () => void;
   onClose: () => void;
   onConvertToRemote: () => void;
+  paneInMultiTabGroup: boolean;
   paneTabsEnabled: boolean;
 }
 
@@ -44,6 +46,7 @@ interface PaneBorderMenuProps {
   onAddPaneTab: (paneId: string) => void;
   onClose: () => void;
   onConvertToRemote: (paneId: string, serverName: string) => void;
+  paneInMultiTabGroup: boolean;
   paneTabsEnabled: boolean;
   remoteServers: PaneBorderRemoteServer[];
 }
@@ -78,6 +81,7 @@ export function PaneBorderMenu({
   onAddPaneTab,
   onClose,
   onConvertToRemote,
+  paneInMultiTabGroup,
   paneTabsEnabled,
   remoteServers,
 }: PaneBorderMenuProps) {
@@ -118,6 +122,7 @@ export function PaneBorderMenu({
       }}
       onClose={onClose}
       onConvertToRemote={() => setMode("server-select")}
+      paneInMultiTabGroup={paneInMultiTabGroup}
       paneTabsEnabled={paneTabsEnabled}
     />
   );
@@ -126,8 +131,19 @@ export function PaneBorderMenu({
 export function buildPaneBorderMainMenuItems({
   hasReadyRemoteServers,
   hasRemoteServers,
+  paneInMultiTabGroup,
   paneTabsEnabled,
 }: BuildPaneBorderMainMenuItemsOptions): PaneBorderMainMenuItem[] {
+  // A multi-tab pane can't be safely converted: pane-tabs switches tabs with a
+  // cross-window swap-pane, which moves the pane between windows; the
+  // window-scoped mirror reconciles that move by killing and re-splitting the
+  // remote peer, silently destroying the converted tab's remote shell. Require
+  // the user to untab the pane first.
+  const convertLabel = paneInMultiTabGroup
+    ? "Convert to remote (untab first) "
+    : hasRemoteServers && !hasReadyRemoteServers
+      ? "Convert to remote (please wait) "
+      : "Convert to remote  \u25b8";
   return [
     {
       disabled: !paneTabsEnabled,
@@ -135,10 +151,9 @@ export function buildPaneBorderMainMenuItems({
       label: "New tab",
     },
     {
-      disabled: !hasReadyRemoteServers,
+      disabled: paneInMultiTabGroup || !hasReadyRemoteServers,
       key: "convert-to-remote",
-      label:
-        hasRemoteServers && !hasReadyRemoteServers ? "Convert to remote (please wait) " : "Convert to remote  \u25b8",
+      label: convertLabel,
     },
   ];
 }
@@ -168,11 +183,13 @@ function MainMenu({
   onAddPaneTab,
   onClose,
   onConvertToRemote,
+  paneInMultiTabGroup,
   paneTabsEnabled,
 }: MainMenuProps) {
   const items = buildPaneBorderMainMenuItems({
     hasReadyRemoteServers,
     hasRemoteServers,
+    paneInMultiTabGroup,
     paneTabsEnabled,
   });
 

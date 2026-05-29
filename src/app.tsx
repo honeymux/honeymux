@@ -957,6 +957,9 @@ export function App({ sessionName }: AppProps) {
             }
           })();
         }}
+        paneInMultiTabGroup={
+          paneBorderMenu ? (paneTabsApi.getPaneTabGroup(paneBorderMenu.paneId)?.tabs.length ?? 0) > 1 : false
+        }
         paneTabsEnabled={paneTabsEnabled}
         remoteServers={paneBorderRemoteServers}
       />
