@@ -1,4 +1,4 @@
-import { join } from "node:path";
+import { basename, join } from "node:path";
 
 import type { InstallHost } from "../install-host.ts";
 
@@ -116,7 +116,10 @@ function buildGeminiHookCommand(
 ): null | string {
   const interpreter = resolveGeminiHookPython(resolveExecutable);
   if (!interpreter) return null;
-  return formatArgv([interpreter, scriptPath]);
+  // Store the interpreter by name (python3/python), not its absolute path, so
+  // the command stays identical across hosts and shells that resolve it to
+  // different paths — an absolute path would otherwise read as a stale install.
+  return formatArgv([basename(interpreter), scriptPath]);
 }
 
 async function buildHostResolver(host: InstallHost): Promise<ResolveExecutable> {
