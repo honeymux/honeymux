@@ -60,7 +60,7 @@ export function buildAppRuntimeContext({
       setToolbarOpen: uiChromeState.setToolbarOpen,
     },
     dialogs: {
-      agentInstallDialogRef: refs.agentInstallDialogRef,
+      anyDialogOpenRef: refs.anyDialogOpenRef,
       dialogInputRef: refs.dialogInputRef,
       dialogMenuToggleRef: refs.dialogMenuToggleRef,
       dropdownInputRef: refs.dropdownInputRef,

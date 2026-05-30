@@ -510,7 +510,7 @@ export function App({ sessionName }: AppProps) {
   );
 
   const rootPanes = detectedRootPanes;
-  const agentInstallDialogOpen =
+  const anyDialogOpen =
     claudeDialogPending ||
     openCodeDialogPending ||
     geminiDialogPending ||
@@ -533,7 +533,7 @@ export function App({ sessionName }: AppProps) {
     tmuxSessionState.statusBarInfo?.position === "bottom" ? tmuxSessionState.statusBarInfo.lines : 0;
 
   syncAppRuntimeRefs(appRuntimeRefs, {
-    agentInstallDialogOpen,
+    anyDialogOpen,
     dims: { cols: termCols, height, rows: termRows, width },
     ignoreMouseInput: configIgnoreMouseInput,
     layoutDropdownOpen,
@@ -729,13 +729,13 @@ export function App({ sessionName }: AppProps) {
       terminalRef.current = terminal;
       prepareGhosttyTerminalForTmux(terminal, { activePaneRectRef });
       applyTerminalCursorVisibility(terminal, {
-        dialogOpen: agentInstallDialogOpen,
+        dialogOpen: anyDialogOpen,
         interactiveAgent: attachedAgent,
         muxotronFocusActive,
         tooSmallForUse,
       });
     },
-    [agentInstallDialogOpen, attachedAgent, terminalRef, tooSmallForUse, muxotronFocusActive],
+    [anyDialogOpen, attachedAgent, terminalRef, tooSmallForUse, muxotronFocusActive],
   );
 
   // Hide the terminal cursor whenever a dropdown is open.  Dropdown open/close
@@ -764,7 +764,7 @@ export function App({ sessionName }: AppProps) {
         const tooSmall = dims.width < 80 || dims.height < 24;
         terminal.showCursor =
           !tooSmall &&
-          !appRuntimeRefs.agentInstallDialogRef.current &&
+          !appRuntimeRefs.anyDialogOpenRef.current &&
           !agentDialogState.overlayOpenRef.current &&
           !uiChromeState.muxotronFocusActiveRef.current;
         cursorHiddenByDropdownRef.current = false;
@@ -863,8 +863,8 @@ export function App({ sessionName }: AppProps) {
 
   const overlayModel = useAppOverlayModel({
     activePaneId,
-    agentInstallDialogOpen,
     agentSessions,
+    anyDialogOpen,
     config,
     configAgentAlertWatermark,
     configQuickTerminalSize,

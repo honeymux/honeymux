@@ -17,7 +17,7 @@ interface GhosttyTerminalInternal {
 export function setupInputLayer(ctx: SetupTmuxRuntimeContext): () => void {
   const {
     dialogs: {
-      agentInstallDialogRef,
+      anyDialogOpenRef,
       dialogInputRef,
       dialogMenuToggleRef,
       dropdownInputRef,
@@ -134,7 +134,7 @@ export function setupInputLayer(ctx: SetupTmuxRuntimeContext): () => void {
         hasDialogHamburger: () => dialogMenuToggleRef.current !== null,
         isAgentPreview: () => agentPreviewRef.current,
         isDialogCapturing: () => mainMenuCapturingRef.current || optionsDialogCapturingRef.current,
-        isDialogOpen: () => agentInstallDialogRef.current,
+        isDialogOpen: () => anyDialogOpenRef.current,
         isDropdownOpen: () => dropdownInputRef.current !== null,
         isExtendedKeysActive: () => extendedKeysActiveRef.current,
         isInteractiveAgent: () => interactiveAgentRef.current !== null,
@@ -376,7 +376,7 @@ export function setupInputLayer(ctx: SetupTmuxRuntimeContext): () => void {
       // terminal) retarget mouse output to their own PTY, matching keyboard.
       writeUserInputToPane,
       {
-        isDialogOpen: () => agentInstallDialogRef.current,
+        isDialogOpen: () => anyDialogOpenRef.current,
         isDropdownOpen: () => dropdownInputRef.current !== null,
         isTextInputActive: () => textInputActive.current,
         isZoomActive: () => muxotronFocusActiveRef.current,

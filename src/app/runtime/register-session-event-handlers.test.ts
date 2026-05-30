@@ -107,7 +107,7 @@ function createContext(): {
       setToolbarOpen: (_value: unknown) => {},
     },
     dialogs: {
-      agentInstallDialogRef: { current: false },
+      anyDialogOpenRef: { current: false },
       dialogInputRef: { current: (_data: string) => {} },
       dialogMenuToggleRef: { current: null },
       dropdownInputRef: { current: null },

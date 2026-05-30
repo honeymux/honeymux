@@ -27,10 +27,10 @@ export function allowsGlobalModifierBindings(owner: InputOwner): boolean {
 }
 
 export function resolveInputOwner(state: InputOwnerState): InputOwner {
-  if (state.quickTerminalOpen) return "quickTerminal";
   if (state.textInputActive) return "textInput";
   if (state.dialogOpen && state.dialogCapturing) return "dialogCapture";
   if (state.dialogOpen) return "dialog";
+  if (state.quickTerminalOpen) return "quickTerminal";
   // When the agent overlay is latched, keystrokes must reach the PTY — skip
   // the chrome-focus (toolbar/sidebar) and dropdown owners that would
   // otherwise intercept them. The user's focus in the chrome is preserved

@@ -133,6 +133,41 @@ describe("activateMenu in dialog mode", () => {
   });
 });
 
+describe("dialog opened above the quick terminal", () => {
+  test("typed keys route to the dialog, not the quick terminal PTY", () => {
+    const onDialogInput = mock((_data: string) => {});
+    const writeToPty = mock((_data: string) => {});
+    const callbacks = createCallbacks({
+      isDialogOpen: () => true,
+      isQuickTerminalOpen: () => true,
+      onDialogInput,
+    });
+
+    routeKeyboardInput("a", writeToPty, callbacks, new Map());
+
+    expect(onDialogInput).toHaveBeenCalledWith("a");
+    expect(writeToPty).not.toHaveBeenCalled();
+  });
+
+  test("Enter activates the dialog instead of reaching the quick terminal", () => {
+    const onDialogInput = mock((_data: string) => {});
+    const onCloseQuickTerminal = mock(() => {});
+    const writeToPty = mock((_data: string) => {});
+    const callbacks = createCallbacks({
+      isDialogOpen: () => true,
+      isQuickTerminalOpen: () => true,
+      onCloseQuickTerminal,
+      onDialogInput,
+    });
+
+    routeKeyboardInput("\r", writeToPty, callbacks, new Map());
+
+    expect(onDialogInput).toHaveBeenCalledWith("\r");
+    expect(onCloseQuickTerminal).not.toHaveBeenCalled();
+    expect(writeToPty).not.toHaveBeenCalled();
+  });
+});
+
 describe("interactive agent muxotron input", () => {
   test("Esc dismisses the interactive surface instead of leaking to the PTY", () => {
     const onMuxotronDismiss = mock(() => {});

@@ -52,8 +52,8 @@ interface TerminalCursorVisibilityOptions {
 
 interface UseAppOverlayModelOptions {
   activePaneId: null | string;
-  agentInstallDialogOpen: boolean;
   agentSessions: AgentSession[];
+  anyDialogOpen: boolean;
   config: HoneymuxConfig;
   configAgentAlertWatermark: WatermarkShape;
   configQuickTerminalSize: number;
@@ -131,8 +131,8 @@ export function shouldShowTerminalCursor({
 
 export function useAppOverlayModel({
   activePaneId,
-  agentInstallDialogOpen,
   agentSessions,
+  anyDialogOpen,
   config,
   configAgentAlertWatermark,
   configQuickTerminalSize,
@@ -165,12 +165,12 @@ export function useAppOverlayModel({
     const terminal = refs.terminalRef.current;
     if (!terminal) return;
     applyTerminalCursorVisibility(terminal, {
-      dialogOpen: agentInstallDialogOpen,
+      dialogOpen: anyDialogOpen,
       interactiveAgent,
       muxotronFocusActive,
       tooSmallForUse,
     });
-  }, [agentInstallDialogOpen, interactiveAgent, refs.terminalRef, tooSmallForUse, muxotronFocusActive]);
+  }, [anyDialogOpen, interactiveAgent, refs.terminalRef, tooSmallForUse, muxotronFocusActive]);
 
   const unansweredCount = getUnansweredCount(agentSessions, activePaneId);
   const watermarkState = getWatermarkState({
