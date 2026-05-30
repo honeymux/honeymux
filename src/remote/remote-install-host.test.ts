@@ -97,7 +97,7 @@ describe("RemoteInstallHost", () => {
     expect(call!.stdin).toBe("{}\n");
   });
 
-  it("resolveExecutable returns the first absolute path reported by command -v", async () => {
+  it("resolveExecutable probes under a login shell and returns the absolute path", async () => {
     const { exec, recorded } = fakeExec((argv) => {
       if (argv.includes("python3")) return { exitCode: 0, stdout: "/usr/bin/python3\n" };
       return { exitCode: 1, stdout: "" };
@@ -106,6 +106,16 @@ describe("RemoteInstallHost", () => {
     expect(await host.resolveExecutable("python3")).toBe("/usr/bin/python3");
     expect(await host.resolveExecutable("python3")).toBe("/usr/bin/python3"); // cached
     expect(recorded.length).toBe(1);
+    expect(recorded[0]!.argv).toEqual(["sh", "-lc", 'command -v -- "$1" || true', "sh", "python3"]);
+  });
+
+  it("resolveExecutable ignores login-profile banner lines before the path", async () => {
+    const { exec } = fakeExec(() => ({
+      exitCode: 0,
+      stdout: "Welcome to prod-box\nLast login: today\n/home/alice/.pyenv/shims/python3\n",
+    }));
+    const host = new RemoteInstallHost("prod-box", exec);
+    expect(await host.resolveExecutable("python3")).toBe("/home/alice/.pyenv/shims/python3");
   });
 
   it("resolveExecutable returns null when command -v is empty or non-absolute", async () => {
