@@ -9,6 +9,7 @@ import {
   areClaudeHooksInstalled,
   buildClaudeHookCommand,
   installClaudeHooks,
+  isClaudeHookInstallCurrent,
   refreshClaudeHooksIfConsented,
   resolveClaudeHookPython,
   saveClaudeConsent,
@@ -82,10 +83,10 @@ describe("resolveClaudeHookPython", () => {
 });
 
 describe("buildClaudeHookCommand", () => {
-  it("formats an absolute interpreter command safely", () => {
+  it("stores the interpreter by name and quotes the script path safely", () => {
     expect(
       buildClaudeHookCommand("/Users/test user/.claude/hooks/honeymux.py", () => "/opt/homebrew/bin/python3"),
-    ).toBe("/opt/homebrew/bin/python3 '/Users/test user/.claude/hooks/honeymux.py'");
+    ).toBe("python3 '/Users/test user/.claude/hooks/honeymux.py'");
   });
 });
 
@@ -101,7 +102,7 @@ describe("installClaudeHooks (via InstallHost)", () => {
     const settings = JSON.parse(files.get(settingsPath)!);
     expect(Array.isArray(settings.hooks.SessionStart)).toBe(true);
     const sessionStartCommand = settings.hooks.SessionStart.at(-1).hooks[0].command as string;
-    expect(sessionStartCommand).toContain("/usr/bin/python3");
+    expect(sessionStartCommand.startsWith("python3 ")).toBe(true);
     expect(sessionStartCommand).toContain(scriptPath);
   });
 
@@ -114,6 +115,36 @@ describe("installClaudeHooks (via InstallHost)", () => {
     const { host } = makeFakeHost();
     await installClaudeHooks(host);
     expect(await areClaudeHooksInstalled(host)).toBe(true);
+  });
+});
+
+describe("isClaudeHookInstallCurrent", () => {
+  it("is current immediately after install", async () => {
+    const { host } = makeFakeHost();
+    await installClaudeHooks(host);
+    expect(await isClaudeHookInstallCurrent(host)).toBe(true);
+  });
+
+  it("stays current when python3 resolves to a different absolute path", async () => {
+    const { host } = makeFakeHost();
+    await installClaudeHooks(host);
+    // Same on-disk files, but this host resolves python3 to a different path
+    // (e.g. a login shell exposing a pyenv shim). The stored command is by
+    // name, so the install is not stale.
+    const movedHost: InstallHost = {
+      ...host,
+      async resolveExecutable(name) {
+        return name === "python3" ? "/home/test/.pyenv/shims/python3" : null;
+      },
+    };
+    expect(await isClaudeHookInstallCurrent(movedHost)).toBe(true);
+  });
+
+  it("reports stale when the on-disk script differs from the bundled version", async () => {
+    const { files, host } = makeFakeHost();
+    await installClaudeHooks(host);
+    files.set("/home/test/.claude/hooks/honeymux.py", "# old\n");
+    expect(await isClaudeHookInstallCurrent(host)).toBe(false);
   });
 });
 

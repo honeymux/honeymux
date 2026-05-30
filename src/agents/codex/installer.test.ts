@@ -27,9 +27,9 @@ describe("resolveCodexHookPython", () => {
 });
 
 describe("buildCodexHookCommand", () => {
-  it("formats an absolute interpreter command safely", () => {
+  it("stores the interpreter by name and quotes the script path safely", () => {
     expect(buildCodexHookCommand("/home/test user/.codex/hooks/honeymux.py", () => "/usr/bin/python3")).toBe(
-      "/usr/bin/python3 '/home/test user/.codex/hooks/honeymux.py'",
+      "python3 '/home/test user/.codex/hooks/honeymux.py'",
     );
   });
 });
