@@ -23,7 +23,7 @@ function createMapperHarness(
   const mapper = createMouseCoordinateMapper({
     clickToMoveRef: { current: clickToMove },
     dialogs: {
-      agentInstallDialogRef: { current: false },
+      anyDialogOpenRef: { current: false },
       dropdownInputRef: { current: null },
     } as any,
     input: {
@@ -198,7 +198,7 @@ describe("createMouseCoordinateMapper", () => {
     const mapper = createMouseCoordinateMapper({
       clickToMoveRef: { current: null },
       dialogs: {
-        agentInstallDialogRef: { current: false },
+        anyDialogOpenRef: { current: false },
         dropdownInputRef: { current: null },
       } as any,
       input: {
@@ -316,7 +316,7 @@ describe("createMouseCoordinateMapper", () => {
     const mapper = createMouseCoordinateMapper({
       clickToMoveRef: { current: null },
       dialogs: {
-        agentInstallDialogRef: { current: false },
+        anyDialogOpenRef: { current: false },
         dropdownInputRef: { current: null },
       } as any,
       input: {
@@ -381,10 +381,11 @@ describe("createMouseCoordinateMapper", () => {
     function createQtHarness() {
       const qtResizeDraggingRef = { current: false };
       const quickTerminalMenuOpenRef = { current: false };
+      const anyDialogOpenRef = { current: false };
       const mapper = createMouseCoordinateMapper({
         clickToMoveRef: { current: null },
         dialogs: {
-          agentInstallDialogRef: { current: false },
+          anyDialogOpenRef,
           dropdownInputRef: { current: null },
         } as any,
         input: {
@@ -439,7 +440,7 @@ describe("createMouseCoordinateMapper", () => {
           dimsRef: { current: { height: 40, width: 120 } },
         } as any,
       });
-      return { mapper, qtResizeDraggingRef, quickTerminalMenuOpenRef };
+      return { anyDialogOpenRef, mapper, qtResizeDraggingRef, quickTerminalMenuOpenRef };
     }
 
     test("forwards body-interior press to QT PTY with local coordinates", () => {
@@ -490,6 +491,14 @@ describe("createMouseCoordinateMapper", () => {
       const { mapper, quickTerminalMenuOpenRef } = createQtHarness();
       quickTerminalMenuOpenRef.current = true;
       // Even an in-body press goes to OpenTUI so menu item clicks fire
+      expect(mapper(20, 10, 0, "M")).toBeNull();
+    });
+
+    test("dialog open above the overlay → in-body press passes through to OpenTUI", () => {
+      const { anyDialogOpenRef, mapper } = createQtHarness();
+      anyDialogOpenRef.current = true;
+      // A dialog (e.g. "Claude Code detected") renders above the quick
+      // terminal, so its clicks must reach OpenTUI rather than the QT PTY.
       expect(mapper(20, 10, 0, "M")).toBeNull();
     });
   });

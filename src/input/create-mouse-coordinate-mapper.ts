@@ -33,7 +33,7 @@ export function createMouseCoordinateMapper({
   button: number,
   suffix: string,
 ) => "consume" | { x: number; y: number } | null {
-  const { agentInstallDialogRef, dropdownInputRef } = dialogs;
+  const { anyDialogOpenRef, dropdownInputRef } = dialogs;
   const { dimsRef } = sessionRuntime;
   const {
     handleMuxotronDismissRef,
@@ -352,9 +352,10 @@ export function createMouseCoordinateMapper({
     // Quick terminal: forward body-interior events to the QT PTY so tmux mouse
     // selection, clicks, scroll, and drag gestures work inside the overlay.
     // Border clicks (hamburger, close hint, resize corner) and backdrop clicks
-    // fall through to OpenTUI. When the QT's own hamburger menu is open, keep
-    // the blanket pass-through so its OpenTUI click handlers still fire.
-    if (overlayOpenRef.current && !quickTerminalMenuOpenRef.current) {
+    // fall through to OpenTUI. When the QT's own hamburger menu is open, or a
+    // dialog is open above the overlay, keep the blanket pass-through so the
+    // OpenTUI click handlers still fire.
+    if (overlayOpenRef.current && !quickTerminalMenuOpenRef.current && !anyDialogOpenRef.current) {
       const { height: H, width: W } = dimsRef.current;
       const pct = qtResizeSizeRef.current / 100;
       const ow = Math.max(20, Math.floor(W * pct));
@@ -402,7 +403,7 @@ export function createMouseCoordinateMapper({
       agentsDialogOpenRef.current ||
       overlayOpenRef.current ||
       mainMenuDialogOpenRef.current ||
-      agentInstallDialogRef.current ||
+      anyDialogOpenRef.current ||
       dropdownInputRef.current !== null
     ) {
       tabPressOriginRef.current = null;

@@ -22,12 +22,12 @@ export interface AppRuntimeRefs {
   /** Adds a persistent info item to the notifications queue. Assigned by
    * useNotificationsReview so earlier hooks can enqueue notifications. */
   addInfoRef: MutableRefObject<((id: string, message: string | string[]) => void) | null>;
-  agentInstallDialogRef: MutableRefObject<boolean>;
   /** Installed by the agents dialog for dialog-local next/prev navigation. */
   agentNavNextRef: MutableRefObject<(() => void) | null>;
   agentNavPrevRef: MutableRefObject<(() => void) | null>;
   /** True when a tree-selected agent is being previewed (not yet latched). */
   agentPreviewRef: MutableRefObject<boolean>;
+  anyDialogOpenRef: MutableRefObject<boolean>;
   clientRef: MutableRefObject<TmuxControlClient | null>;
   deferredSessionRef: MutableRefObject<null | string>;
   dialogInputRef: MutableRefObject<(data: string) => void>;
@@ -165,7 +165,7 @@ export interface AppRuntimeRefs {
 }
 
 interface RuntimeRefSyncValues {
-  agentInstallDialogOpen: boolean;
+  anyDialogOpen: boolean;
   dims: RuntimeDims;
   ignoreMouseInput: boolean;
   layoutDropdownOpen: boolean;
@@ -193,7 +193,7 @@ export function syncAppRuntimeRefs(refs: AppRuntimeRefs, values: RuntimeRefSyncV
   refs.statusBarBottomOffsetRef.current = values.statusBarBottomOffset;
   refs.tooNarrowRef.current = values.tooNarrow;
   refs.layoutDropdownOpenRef.current = values.layoutDropdownOpen;
-  refs.agentInstallDialogRef.current = values.agentInstallDialogOpen;
+  refs.anyDialogOpenRef.current = values.anyDialogOpen;
 }
 
 export function useAppRuntimeRefs({ sequenceMap }: UseAppRuntimeRefsOptions): AppRuntimeRefs {
@@ -261,7 +261,7 @@ export function useAppRuntimeRefs({ sequenceMap }: UseAppRuntimeRefsOptions): Ap
   const layoutDropdownOpenRef = useRef(false);
   const mainMenuCapturingRef = useRef(false);
   const optionsDialogCapturingRef = useRef(false);
-  const agentInstallDialogRef = useRef(false);
+  const anyDialogOpenRef = useRef(false);
   const dialogInputRef = useRef<(data: string) => void>(() => {});
   const overflowOpenRef = useRef(false);
   const handleToolbarDismissRef = useRef<() => void>(() => {});
@@ -330,10 +330,10 @@ export function useAppRuntimeRefs({ sequenceMap }: UseAppRuntimeRefsOptions): Ap
   return {
     activePaneIdRef,
     addInfoRef,
-    agentInstallDialogRef,
     agentNavNextRef,
     agentNavPrevRef,
     agentPreviewRef,
+    anyDialogOpenRef,
     clientRef,
     deferredSessionRef,
     dialogInputRef,
