@@ -352,6 +352,57 @@ describe("RemoteMirror", () => {
     expect(refresh).toBe("refresh-client -C 90,30");
   });
 
+  test("invalidateAppliedState forces the next reconcile to re-push size + re-apply layout", async () => {
+    // Reconnect scenario: the control client re-attaches at the minimum size,
+    // shrinking the mirror window under `window-size smallest`. The local dims
+    // are unchanged, so the size/layout dedups would normally skip correction.
+    // invalidateAppliedState must drop those caches so the window is restored.
+    const fixture = createServerStub({
+      panesByWindow: new Map([["@mirrored", [{ id: "%10", index: 0, tags: { "@hmx-remote-host": "test" } }]]]),
+      windows: [{ id: "@mirrored", index: 0, layout: "bbbb,90x30,0,0,10" }],
+    });
+
+    const remoteCommands: string[] = [];
+    const wrappedRunRemote = async (cmd: string) => {
+      remoteCommands.push(cmd);
+      return fixture.runRemote(cmd);
+    };
+
+    const mirror = new RemoteMirror({
+      activeBindings: () => new Map(),
+      runLocal: fixture.runLocal,
+      runRemote: wrappedRunRemote,
+      serverName: "test",
+    });
+
+    const countRefresh = () => remoteCommands.filter((c) => c.startsWith("refresh-client -C 90,30")).length;
+    const countLayout = () => remoteCommands.filter((c) => c.startsWith("select-layout")).length;
+
+    // Settle: the window is created on the first pass and its layout applied on
+    // the next, so reconcile until the mirror reaches a deduped steady state.
+    for (let i = 0; i < 3; i++) {
+      mirror.request();
+      await mirror.whenIdle();
+    }
+    const refreshBaseline = countRefresh();
+    const layoutBaseline = countLayout();
+    expect(refreshBaseline).toBeGreaterThanOrEqual(1);
+    expect(layoutBaseline).toBeGreaterThanOrEqual(1);
+
+    // A further reconcile with no local change is deduped to a no-op.
+    mirror.request();
+    await mirror.whenIdle();
+    expect(countRefresh()).toBe(refreshBaseline);
+    expect(countLayout()).toBe(layoutBaseline);
+
+    // After a reconnect invalidation, the same unchanged dims/layout re-fire.
+    mirror.invalidateAppliedState();
+    mirror.request();
+    await mirror.whenIdle();
+    expect(countRefresh()).toBe(refreshBaseline + 1);
+    expect(countLayout()).toBe(layoutBaseline + 1);
+  });
+
   test("syncRemoteClientSize skips the push when no local pane is mirrored to this server yet", async () => {
     const fixture = createServerStub({
       panesByWindow: new Map([["@1", [{ id: "%10", index: 0 }]]]),

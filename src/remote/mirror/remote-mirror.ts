@@ -86,6 +86,22 @@ export class RemoteMirror {
   }
 
   /**
+   * Drop the write-through caches that assume the remote still reflects
+   * what we last pushed — the applied client size and every window's
+   * applied layout. Call after the remote control client re-attaches on
+   * reconnect: it re-attaches at the minimum control-client size, and
+   * under `window-size smallest` that shrinks every mirror window. With
+   * the caches stale, the next reconcile would dedup away both the
+   * `refresh-client -C` size push and the `select-layout` re-apply,
+   * leaving the mirror windows stuck at the bootstrap size until the user
+   * manually resizes a pane.
+   */
+  invalidateAppliedState(): void {
+    this.lastAppliedClientSize = null;
+    this.lastAppliedLayoutByRemoteWindow.clear();
+  }
+
+  /**
    * Drop the cached last-applied layout for the remote window paired
    * with the given local window. The next reconcile will then re-apply
    * the layout, kicking tmux to flush updated content to subscribers.
