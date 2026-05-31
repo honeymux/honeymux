@@ -673,6 +673,12 @@ export class RemoteServerManager extends EventEmitter {
           this.refreshRemoteHooksIfConsented(config.name).catch(() => {
             // best-effort — refresh* helpers swallow per-agent errors internally
           });
+          // The control client just re-attached at the minimum size, which
+          // (window-size smallest) shrank every mirror window. Drop the mirror's
+          // applied-size/layout caches so the reconcile below re-pushes the local
+          // dimensions and re-pins each window layout instead of deduping them
+          // away and leaving the windows stuck at the bootstrap size.
+          mirror.invalidateAppliedState();
           mirror.request();
           mirror
             .whenIdle()
