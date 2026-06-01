@@ -99,6 +99,43 @@ describe("applyMutations", () => {
     expect(result.appliedLayouts.get("@100")).toBe("aaaa,80x24,0,0,200");
   });
 
+  test("apply-layout: resizes the window to the layout's dimensions before laying it out", async () => {
+    // `select-layout` under `window-size smallest` can't shrink a window below
+    // the control-client width, so the window must be `resize-window`d to the
+    // local layout's exact size first — and that resize must precede the layout.
+    const calls: string[] = [];
+    const runRemote = mock(async (cmd: string) => {
+      calls.push(cmd);
+      return "";
+    });
+    const runLocal = mock(async () => "");
+
+    const mutations: Mutation[] = [{ kind: "apply-layout", layout: "aaaa,121x30,0,0,200", remoteWindowId: "@100" }];
+    const result = await applyMutations(mutations, { label: "test", runLocal, runRemote });
+
+    expect(result.failures).toHaveLength(0);
+    const resizeIdx = calls.findIndex((c) => c.startsWith("resize-window"));
+    const layoutIdx = calls.findIndex((c) => c.startsWith("select-layout"));
+    expect(calls[resizeIdx]).toBe("resize-window -t '@100' -x 121 -y 30");
+    expect(resizeIdx).toBeLessThan(layoutIdx);
+  });
+
+  test("apply-layout: skips the resize when the layout carries no parseable dimensions", async () => {
+    const calls: string[] = [];
+    const runRemote = mock(async (cmd: string) => {
+      calls.push(cmd);
+      return "";
+    });
+    const runLocal = mock(async () => "");
+
+    const mutations: Mutation[] = [{ kind: "apply-layout", layout: "x", remoteWindowId: "@100" }];
+    const result = await applyMutations(mutations, { label: "test", runLocal, runRemote });
+
+    expect(result.failures).toHaveLength(0);
+    expect(calls.some((c) => c.startsWith("resize-window"))).toBe(false);
+    expect(calls.some((c) => c.startsWith("select-layout"))).toBe(true);
+  });
+
   test("collects per-mutation failures without aborting subsequent ones", async () => {
     const runRemote = mock(async (cmd: string) => {
       if (cmd.startsWith("kill-pane")) throw new Error("pane already dead");
