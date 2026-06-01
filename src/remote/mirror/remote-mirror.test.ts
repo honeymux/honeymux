@@ -403,6 +403,49 @@ describe("RemoteMirror", () => {
     expect(countLayout()).toBe(layoutBaseline + 1);
   });
 
+  test("resizes each mirror window to its own local window's dimensions, not one global size", async () => {
+    // Two mirrored local windows of DIFFERENT widths (e.g. one per local
+    // session). The remote mirror session is `window-size smallest` with a
+    // single control client, so a single global size would force both remote
+    // windows to one width — leaving the narrower one one column too wide
+    // (the `stty`-reports-122-but-it's-121 bug). Each remote window must be
+    // resize-window'd to its own local counterpart's size.
+    const fixture = createServerStub({
+      panesByWindow: new Map([
+        ["@narrow", [{ id: "%20", index: 0, tags: { "@hmx-remote-host": "test" } }]],
+        ["@wide", [{ id: "%10", index: 0, tags: { "@hmx-remote-host": "test" } }]],
+      ]),
+      windows: [
+        { id: "@wide", index: 0, layout: "aaaa,122x30,0,0,10" },
+        { id: "@narrow", index: 1, layout: "bbbb,121x30,0,0,20" },
+      ],
+    });
+
+    const remoteCommands: string[] = [];
+    const wrappedRunRemote = async (cmd: string) => {
+      remoteCommands.push(cmd);
+      return fixture.runRemote(cmd);
+    };
+
+    const mirror = new RemoteMirror({
+      activeBindings: () => new Map(),
+      runLocal: fixture.runLocal,
+      runRemote: wrappedRunRemote,
+      serverName: "test",
+    });
+
+    // Windows are created on the first pass and laid out on the next; settle.
+    for (let i = 0; i < 3; i++) {
+      mirror.request();
+      await mirror.whenIdle();
+    }
+
+    const resizes = remoteCommands.filter((c) => c.startsWith("resize-window"));
+    // Each window resized to its OWN dimensions — both sizes present.
+    expect(resizes.some((c) => c.endsWith("-x 122 -y 30"))).toBe(true);
+    expect(resizes.some((c) => c.endsWith("-x 121 -y 30"))).toBe(true);
+  });
+
   test("syncRemoteClientSize skips the push when no local pane is mirrored to this server yet", async () => {
     const fixture = createServerStub({
       panesByWindow: new Map([["@1", [{ id: "%10", index: 0 }]]]),

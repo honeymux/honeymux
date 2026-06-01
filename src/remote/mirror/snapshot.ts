@@ -85,6 +85,18 @@ export async function captureRemoteMirrorSnapshot(run: RunTmuxCommand): Promise<
   return { panesByWindow, windows };
 }
 
+/**
+ * Extract the window dimensions encoded at the head of a tmux
+ * `window_layout` string (`<checksum>,<W>x<H>,...`). Returns null for a
+ * string that carries no leading `WxH` — e.g. the empty layout of a
+ * freshly created window before its first `select-layout`.
+ */
+export function parseLayoutSize(layout: string): { cols: number; rows: number } | null {
+  const match = layout.match(/^[^,]*,(\d+)x(\d+),/);
+  if (!match) return null;
+  return { cols: Number(match[1]), rows: Number(match[2]) };
+}
+
 function parsePaneListOutput(output: string, windowId: string, side: "local" | "remote"): ReadonlyArray<SnapshotPane> {
   const panes: SnapshotPane[] = [];
   for (const line of output.split("\n")) {

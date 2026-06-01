@@ -3,7 +3,7 @@ import type { RunTmuxCommand } from "./snapshot.ts";
 
 import { quoteTmuxArg } from "../../tmux/escape.ts";
 import { log } from "../../util/log.ts";
-import { LOCAL_PANE_ID_TAG, LOCAL_WINDOW_ID_TAG } from "./snapshot.ts";
+import { LOCAL_PANE_ID_TAG, LOCAL_WINDOW_ID_TAG, parseLayoutSize } from "./snapshot.ts";
 
 export interface ApplyMutationsOptions {
   /**
@@ -73,6 +73,22 @@ export async function applyMutations(
     try {
       switch (mutation.kind) {
         case "apply-layout": {
+          // Pin the mirror window to the local window's exact dimensions before
+          // laying it out. The mirror session is `window-size smallest` with a
+          // single control client, so every mirror window is otherwise forced to
+          // one shared width; `select-layout` alone can't make a window that
+          // should be narrower — tmux scales the layout to the forced width,
+          // shifting a column onto one pane (a remote `stty` then reports one
+          // column more than the local pane actually has). `resize-window`
+          // switches the window to manual sizing and sticks, so each mirror
+          // window matches its local counterpart even when another mirrored
+          // window — e.g. one in a different local session — is wider.
+          const size = parseLayoutSize(mutation.layout);
+          if (size) {
+            await options.runRemote(
+              `resize-window -t ${quoteTmuxArg("remoteWindowId", mutation.remoteWindowId)} -x ${size.cols} -y ${size.rows}`,
+            );
+          }
           await options.runRemote(
             `select-layout -t ${quoteTmuxArg("remoteWindowId", mutation.remoteWindowId)} ${quoteTmuxArg("layout", mutation.layout)}`,
           );

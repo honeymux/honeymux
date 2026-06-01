@@ -9,6 +9,7 @@ import {
   type SnapshotWindow,
   captureLocalMirrorSnapshot,
   captureRemoteMirrorSnapshot,
+  parseLayoutSize,
 } from "./snapshot.ts";
 
 const RECONCILE_DEBOUNCE_MS = 25;
@@ -352,9 +353,9 @@ export class RemoteMirror {
       }
     }
     if (!mirroredWindow) return;
-    const match = mirroredWindow.layout.match(/^[^,]*,(\d+)x(\d+),/);
-    if (!match) return;
-    const size = `${match[1]},${match[2]}`;
+    const parsed = parseLayoutSize(mirroredWindow.layout);
+    if (!parsed) return;
+    const size = `${parsed.cols},${parsed.rows}`;
     if (size === this.lastAppliedClientSize) return;
     this.lastAppliedClientSize = size;
     try {
