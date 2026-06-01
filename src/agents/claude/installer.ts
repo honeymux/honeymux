@@ -6,6 +6,7 @@ import { formatArgv } from "../../util/argv.ts";
 import { log } from "../../util/log.ts";
 import { type HostConsent, readHostConsent, writeHostConsent } from "../consent-store.ts";
 import { localInstallHost } from "../install-host.ts";
+import { jsonSemanticallyEqual } from "../json-semantics.ts";
 // Embed hook script at build time so it survives `bun build --compile`.
 import HOOK_CONTENT from "./hooks.py" with { type: "text" };
 
@@ -70,9 +71,9 @@ export function isClaudeConsented(hostId: string = "local"): boolean {
 }
 
 /**
- * True when the on-disk hook script and settings.json already match what
- * `installClaudeHooks` would produce — i.e. running sync would be a no-op.
- * Used to suppress the "upgrade" prompt when nothing is actually stale.
+ * True when the on-disk hook script and settings.json semantically match what
+ * `installClaudeHooks` manages. Used to suppress the "upgrade" prompt when
+ * nothing is actually stale.
  */
 export async function isClaudeHookInstallCurrent(host: InstallHost = localInstallHost): Promise<boolean> {
   const scriptPath = join(await getHooksDir(host), HOOK_SCRIPT_NAME);
@@ -84,12 +85,9 @@ export async function isClaudeHookInstallCurrent(host: InstallHost = localInstal
   const settingsFile = await getSettingsFile(host);
   const currentSettingsText = await host.readFile(settingsFile);
   if (currentSettingsText === null) return false;
-  const nextSettingsText = JSON.stringify(
-    upsertClaudeHookSettings(safeParseJson(currentSettingsText), command),
-    null,
-    2,
-  );
-  return currentSettingsText === nextSettingsText;
+  const currentSettings = safeParseJson(currentSettingsText);
+  const nextSettings = upsertClaudeHookSettings(currentSettings, command);
+  return jsonSemanticallyEqual(currentSettings, nextSettings);
 }
 
 export function isClaudeIgnored(hostId: string = "local"): boolean {
