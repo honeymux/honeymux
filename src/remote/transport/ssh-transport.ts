@@ -143,7 +143,12 @@ export class SshTransport implements ControlModeTransport {
     this.resolvedRemoteForwardPort = null;
     this.exitEmitted = false;
 
-    const argv = ["ssh", ...this.buildSshArgs(true), "tmux", "-L", this.mirrorServerName, ...tmuxArgs];
+    const remoteCommand = buildControlModeRemoteCommand(
+      Boolean(this.config.agentForwarding),
+      this.mirrorServerName,
+      tmuxArgs,
+    );
+    const argv = ["ssh", ...this.buildSshArgs(true), remoteCommand];
     const proc = Bun.spawn(argv, {
       env: cleanEnv(),
       stderr: "pipe",
@@ -382,6 +387,31 @@ export function appendBoundedSshText(
     text: combined.slice(combined.length - maxChars),
     wasTruncated: true,
   };
+}
+
+/**
+ * Build the remote command for the control-mode connection.
+ *
+ * With agent forwarding, the live forwarded socket (`$SSH_AUTH_SOCK`, set by
+ * `ssh -A` for this connection) is symlinked to a stable path under the remote
+ * runtime dir and exported before tmux is exec'd. Panes then reference the
+ * symlink, and each reconnect re-points it at that connection's own fresh
+ * socket — so agent auth keeps working after recovery without reading anything
+ * back through tmux. Best-effort: tmux still starts if the symlink can't be
+ * created. Without agent forwarding, tmux is invoked directly.
+ */
+export function buildControlModeRemoteCommand(
+  agentForwarding: boolean,
+  mirrorServerName: string,
+  tmuxArgs: ReadonlyArray<string>,
+): string {
+  const tmux = ["tmux", "-L", mirrorServerName, ...tmuxArgs];
+  if (!agentForwarding) return buildRemoteShellCommand(tmux);
+  const wrapper =
+    'd="${XDG_RUNTIME_DIR:-$HOME/.local/state}/honeymux"; ' +
+    'if [ -n "$SSH_AUTH_SOCK" ] && mkdir -p "$d" && chmod 700 "$d" && ln -sfn "$SSH_AUTH_SOCK" "$d/agent.sock"; then ' +
+    'export SSH_AUTH_SOCK="$d/agent.sock"; fi; exec "$@"';
+  return buildRemoteShellCommand(["sh", "-c", wrapper, "sh", ...tmux]);
 }
 
 /**

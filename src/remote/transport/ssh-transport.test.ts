@@ -3,6 +3,7 @@ import { describe, expect, mock, test } from "bun:test";
 import {
   SshTransport,
   appendBoundedSshText,
+  buildControlModeRemoteCommand,
   finalizeSshText,
   sanitizeSshText,
   truncateSshText,
@@ -238,6 +239,31 @@ describe("SshTransport stderr parsing", () => {
     // We still capture our own allocated port, so the local proxy still works
     // for any process that connects to it before the option is cleared.
     expect(transport.hookTcpPort).toBe(23456);
+  });
+});
+
+describe("buildControlModeRemoteCommand", () => {
+  const TMUX_ARGS = ["-C", "new-session", "-A", "-s", "__hmx-mirror-honeymux"];
+
+  test("invokes tmux directly without agent forwarding", () => {
+    const cmd = buildControlModeRemoteCommand(false, "honeymux-test", TMUX_ARGS);
+    expect(cmd).toContain("tmux");
+    expect(cmd).toContain("honeymux-test");
+    expect(cmd).toContain("__hmx-mirror-honeymux");
+    expect(cmd).not.toContain("SSH_AUTH_SOCK");
+    expect(cmd).not.toContain("ln -sfn");
+  });
+
+  test("symlinks the live socket, exports it, then execs tmux when forwarding", () => {
+    const cmd = buildControlModeRemoteCommand(true, "honeymux-test", TMUX_ARGS);
+    // The symlink is pointed at THIS connection's live socket, captured from the
+    // wrapper's own $SSH_AUTH_SOCK — not read back through tmux.
+    expect(cmd).toContain('ln -sfn "$SSH_AUTH_SOCK" "$d/agent.sock"');
+    expect(cmd).toContain('export SSH_AUTH_SOCK="$d/agent.sock"');
+    expect(cmd).toContain('exec "$@"');
+    // tmux argv is preserved as positional params for `exec "$@"`.
+    expect(cmd).toContain("new-session");
+    expect(cmd).toContain("__hmx-mirror-honeymux");
   });
 });
 
