@@ -50,9 +50,11 @@ export class RemoteInstallHost implements InstallHost {
   async readFile(path: string): Promise<null | string> {
     // Use sh -c so we can surface a distinct exit code for "not found" vs other errors.
     const script = 'if [ -e "$1" ]; then cat -- "$1"; else exit 3; fi';
-    const { exitCode, stdout } = await this.exec.exec(["sh", "-c", script, "sh", path]);
+    const { exitCode, stderr, stdout } = await this.exec.exec(["sh", "-c", script, "sh", path]);
     if (exitCode === 3) return null;
-    if (exitCode !== 0) return null;
+    if (exitCode !== 0) {
+      throw new Error(`remote readFile failed: ${path}${stderr ? ` (${stderr})` : ""}`);
+    }
     return stdout;
   }
 
@@ -60,16 +62,17 @@ export class RemoteInstallHost implements InstallHost {
     if (this.cachedExecutables.has(name)) {
       return this.cachedExecutables.get(name) ?? null;
     }
-    const { exitCode, stdout } = await this.exec.exec(["sh", "-lc", 'command -v -- "$1" || true', "sh", name]);
-    let resolved: null | string = null;
-    if (exitCode === 0) {
-      const last = stdout
-        .split("\n")
-        .map((line) => line.trim())
-        .filter((line) => line.startsWith("/"))
-        .pop();
-      if (last) resolved = last;
+    const { exitCode, stderr, stdout } = await this.exec.exec(["sh", "-lc", 'command -v -- "$1" || true', "sh", name]);
+    if (exitCode !== 0) {
+      throw new Error(`remote resolveExecutable failed: ${name}${stderr ? ` (${stderr})` : ""}`);
     }
+    let resolved: null | string = null;
+    const last = stdout
+      .split("\n")
+      .map((line) => line.trim())
+      .filter((line) => line.startsWith("/"))
+      .pop();
+    if (last) resolved = last;
     this.cachedExecutables.set(name, resolved);
     return resolved;
   }

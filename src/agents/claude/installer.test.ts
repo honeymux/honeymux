@@ -140,6 +140,36 @@ describe("isClaudeHookInstallCurrent", () => {
     expect(await isClaudeHookInstallCurrent(movedHost)).toBe(true);
   });
 
+  it("stays current when settings JSON has equivalent formatting", async () => {
+    const { files, host } = makeFakeHost();
+    await installClaudeHooks(host);
+    const settingsPath = "/home/test/.claude/settings.json";
+    files.set(settingsPath, `${files.get(settingsPath)!}\n`);
+    expect(await isClaudeHookInstallCurrent(host)).toBe(true);
+  });
+
+  it("stays current when settings JSON object keys are ordered differently", async () => {
+    const { files, host } = makeFakeHost();
+    await installClaudeHooks(host);
+    const settingsPath = "/home/test/.claude/settings.json";
+    const settings = JSON.parse(files.get(settingsPath)!) as {
+      hooks: Record<string, Array<{ hooks: Array<Record<string, unknown>> }>>;
+    };
+
+    for (const groups of Object.values(settings.hooks)) {
+      const handler = groups.at(-1)?.hooks[0];
+      if (!handler || handler["async"] === undefined) continue;
+      groups.at(-1)!.hooks[0] = {
+        async: handler["async"],
+        command: handler["command"],
+        type: handler["type"],
+      };
+    }
+
+    files.set(settingsPath, JSON.stringify(settings, null, 2));
+    expect(await isClaudeHookInstallCurrent(host)).toBe(true);
+  });
+
   it("reports stale when the on-disk script differs from the bundled version", async () => {
     const { files, host } = makeFakeHost();
     await installClaudeHooks(host);

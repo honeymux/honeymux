@@ -160,18 +160,22 @@ export function useRemoteAgentBinaryDetection({
       const manager = remoteManagerRef.current;
       const client = manager?.getConnectedClient(hostId);
       if (!client) {
-        setDialogForAgent(agent, hostId);
         return;
       }
       const installHost = new RemoteInstallHost(hostId, {
         exec: (argv, options) => client.runRemoteShellCommand(argv, options),
       });
-      void AGENT_CHECKS[agent]
-        .isInstalled(installHost)
-        .then((installed) => setDialogForAgent(agent, hostId, installed ? "upgrade" : "install"))
-        .catch(() => setDialogForAgent(agent, hostId));
+      void (async () => {
+        const checks = AGENT_CHECKS[agent];
+        const installed = await checks.isInstalled(installHost);
+        if (installed && (await checks.isInstallCurrent(installHost))) {
+          undeferRemoteAgent(agent, hostId);
+          return;
+        }
+        setDialogForAgent(agent, hostId, installed ? "upgrade" : "install");
+      })().catch(() => {});
     },
-    [remoteManagerRef, setDialogForAgent],
+    [remoteManagerRef, setDialogForAgent, undeferRemoteAgent],
   );
 
   useEffect(() => {

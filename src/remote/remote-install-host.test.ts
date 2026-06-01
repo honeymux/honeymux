@@ -72,6 +72,12 @@ describe("RemoteInstallHost", () => {
     expect(await host.readFile("/home/alice/.claude/settings.json")).toBe('{"hooks":{}}');
   });
 
+  it("readFile throws when the remote read fails for reasons other than missing", async () => {
+    const { exec } = fakeExec(() => ({ exitCode: 13, stderr: "permission denied" }));
+    const host = new RemoteInstallHost("prod-box", exec);
+    await expect(host.readFile("/home/alice/.claude/settings.json")).rejects.toThrow(/permission denied/);
+  });
+
   it("writeFile passes content via stdin and mode as a positional arg", async () => {
     const { exec, recorded } = fakeExec(() => ({}));
     const host = new RemoteInstallHost("prod-box", exec);
@@ -122,6 +128,18 @@ describe("RemoteInstallHost", () => {
     const { exec } = fakeExec(() => ({ exitCode: 0, stdout: "" }));
     const host = new RemoteInstallHost("prod-box", exec);
     expect(await host.resolveExecutable("missing")).toBe(null);
+  });
+
+  it("resolveExecutable throws remote command failures without caching them as missing", async () => {
+    let calls = 0;
+    const { exec } = fakeExec(() => {
+      calls += 1;
+      if (calls === 1) return { exitCode: 255, stderr: "ssh failed" };
+      return { exitCode: 0, stdout: "/usr/bin/python3\n" };
+    });
+    const host = new RemoteInstallHost("prod-box", exec);
+    await expect(host.resolveExecutable("python3")).rejects.toThrow(/ssh failed/);
+    expect(await host.resolveExecutable("python3")).toBe("/usr/bin/python3");
   });
 
   it("writeFile surfaces non-zero exit codes as errors", async () => {

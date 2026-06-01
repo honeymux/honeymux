@@ -7,6 +7,7 @@ import { formatArgv } from "../../util/argv.ts";
 import { log } from "../../util/log.ts";
 import { type HostConsent, readHostConsent, writeHostConsent } from "../consent-store.ts";
 import { localInstallHost } from "../install-host.ts";
+import { jsonSemanticallyEqual } from "../json-semantics.ts";
 // Embed hook script at build time so it survives `bun build --compile`.
 import HOOK_CONTENT from "./hooks.py" with { type: "text" };
 
@@ -165,9 +166,9 @@ export function isCodexConsented(hostId: string = "local"): boolean {
 }
 
 /**
- * True when the on-disk hook script, hooks.json, and config.toml already
- * match what `installCodexHooks` would produce — i.e. sync would be a no-op.
- * Used to suppress the "upgrade" prompt when nothing is actually stale.
+ * True when the on-disk hook script, hooks.json, and config.toml semantically
+ * match what `installCodexHooks` manages. Used to suppress the "upgrade"
+ * prompt when nothing is actually stale.
  */
 export async function isCodexHookInstallCurrent(host: InstallHost = localInstallHost): Promise<boolean> {
   const scriptPath = join(await getHooksDir(host), HOOK_SCRIPT_NAME);
@@ -179,18 +180,12 @@ export async function isCodexHookInstallCurrent(host: InstallHost = localInstall
   const hooksFile = await getHooksFile(host);
   const currentHooksText = await host.readFile(hooksFile);
   if (currentHooksText === null) return false;
-  const nextSettings = upsertCodexHookSettings(safeParseJson(currentHooksText), command);
-  const nextHooksText = JSON.stringify(nextSettings, null, 2);
-  if (currentHooksText !== nextHooksText) return false;
+  const currentSettings = safeParseJson(currentHooksText);
+  const nextSettings = upsertCodexHookSettings(currentSettings, command);
+  if (!jsonSemanticallyEqual(currentSettings, nextSettings)) return false;
   const configFile = await getConfigFile(host);
   const currentConfigText = (await host.readFile(configFile)) ?? "";
-  const nextConfigText = ensureCodexHooksTrust(
-    ensureCodexHooksFeature(currentConfigText),
-    hooksFile,
-    command,
-    nextSettings,
-  );
-  return currentConfigText === nextConfigText;
+  return isCodexConfigCurrent(currentConfigText, hooksFile, command, nextSettings);
 }
 
 export function isCodexIgnored(hostId: string = "local"): boolean {
@@ -371,6 +366,60 @@ async function getHooksDir(host: InstallHost): Promise<string> {
 
 async function getHooksFile(host: InstallHost): Promise<string> {
   return `${await host.homeDir()}/.codex/hooks.json`;
+}
+
+function hasCodexHooksFeature(configText: string): boolean {
+  const lines = configText.split(/\r?\n/);
+  let inFeatures = false;
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+      inFeatures = trimmed === "[features]";
+      continue;
+    }
+    if (inFeatures && /^hooks\s*=\s*true(?:\s*#.*)?$/.test(trimmed)) return true;
+  }
+  return false;
+}
+
+function hasCodexTrustSection(
+  configText: string,
+  hooksJsonPath: string,
+  eventKeyLabel: string,
+  groupIndex: number,
+  hookIndex: number,
+  trustedHash: string,
+): boolean {
+  const sectionHeader = `[hooks.state."${hooksJsonPath}:${eventKeyLabel}:${groupIndex}:${hookIndex}"]`;
+  const lines = configText.split(/\r?\n/);
+  let inSection = false;
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+      inSection = trimmed === sectionHeader;
+      continue;
+    }
+    if (!inSection) continue;
+    const match = /^trusted_hash\s*=\s*"([^"]+)"(?:\s*#.*)?$/.exec(trimmed);
+    if (match?.[1] === trustedHash) return true;
+  }
+  return false;
+}
+
+function isCodexConfigCurrent(
+  configText: string,
+  hooksJsonPath: string,
+  command: string,
+  settings: CodexSettings,
+): boolean {
+  if (!hasCodexHooksFeature(configText)) return false;
+  for (const target of findCodexHookTrustTargets(settings, command)) {
+    const label = HOOK_EVENT_KEY_LABEL[target.event];
+    const hash = computeCodexHookTrustHash(label, command);
+    if (!hasCodexTrustSection(configText, hooksJsonPath, label, target.groupIndex, target.hookIndex, hash))
+      return false;
+  }
+  return true;
 }
 
 function isHookMatcherGroup(value: unknown): value is HookMatcherGroup {

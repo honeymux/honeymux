@@ -171,12 +171,16 @@ export function useAgentBinaryDetection({
         setDialogForAgent(agent);
         return;
       }
-      void info
-        .isInstalled()
-        .then((installed) => setDialogForAgent(agent, installed ? "upgrade" : "install"))
-        .catch(() => setDialogForAgent(agent));
+      void (async () => {
+        const installed = await info.isInstalled();
+        if (installed && (await info.isInstallCurrent())) {
+          undeferAgent(agent);
+          return;
+        }
+        setDialogForAgent(agent, installed ? "upgrade" : "install");
+      })().catch(() => {});
     },
-    [setDialogForAgent],
+    [setDialogForAgent, undeferAgent],
   );
 
   useEffect(() => {

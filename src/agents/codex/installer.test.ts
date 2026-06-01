@@ -1,12 +1,68 @@
 import { describe, expect, it } from "bun:test";
 
+import type { InstallHost } from "../install-host.ts";
+
+import HOOK_CONTENT from "./hooks.py" with { type: "text" };
 import {
   buildCodexHookCommand,
   ensureCodexHooksFeature,
   ensureCodexHooksTrust,
+  isCodexHookInstallCurrent,
   resolveCodexHookPython,
   upsertCodexHookSettings,
 } from "./installer.ts";
+
+function makeFakeHost(): {
+  files: Map<string, string>;
+  host: InstallHost;
+} {
+  const files = new Map<string, string>();
+  const dirs = new Set<string>();
+  const host: InstallHost = {
+    async homeDir() {
+      return "/home/test";
+    },
+    hostId: "test",
+    async mkdir(path) {
+      dirs.add(path);
+    },
+    async readFile(path) {
+      return files.has(path) ? files.get(path)! : null;
+    },
+    async resolveExecutable(name) {
+      if (name === "python3") return "/usr/bin/python3";
+      return null;
+    },
+    async writeFile(path, content) {
+      files.set(path, content);
+    },
+  };
+  return { files, host };
+}
+
+function seedCurrentCodexInstall(files: Map<string, string>): {
+  command: string;
+  configPath: string;
+  hooksPath: string;
+  scriptPath: string;
+  settings: ReturnType<typeof upsertCodexHookSettings>;
+} {
+  const scriptPath = "/home/test/.codex/hooks/honeymux.py";
+  const hooksPath = "/home/test/.codex/hooks.json";
+  const configPath = "/home/test/.codex/config.toml";
+  const command = buildCodexHookCommand(scriptPath, () => "/usr/bin/python3")!;
+  const settings = upsertCodexHookSettings({}, command);
+  files.set(scriptPath, HOOK_CONTENT);
+  files.set(hooksPath, JSON.stringify(settings, null, 2));
+  files.set(configPath, ensureCodexHooksTrust(ensureCodexHooksFeature(""), hooksPath, command, settings));
+  return {
+    command,
+    configPath,
+    hooksPath,
+    scriptPath,
+    settings,
+  };
+}
 
 describe("resolveCodexHookPython", () => {
   it("prefers python3 when available", () => {
@@ -31,6 +87,53 @@ describe("buildCodexHookCommand", () => {
     expect(buildCodexHookCommand("/home/test user/.codex/hooks/honeymux.py", () => "/usr/bin/python3")).toBe(
       "python3 '/home/test user/.codex/hooks/honeymux.py'",
     );
+  });
+});
+
+describe("isCodexHookInstallCurrent", () => {
+  it("is current when the managed files match", async () => {
+    const { files, host } = makeFakeHost();
+    seedCurrentCodexInstall(files);
+    expect(await isCodexHookInstallCurrent(host)).toBe(true);
+  });
+
+  it("stays current when hooks.json has equivalent formatting", async () => {
+    const { files, host } = makeFakeHost();
+    const { hooksPath } = seedCurrentCodexInstall(files);
+    files.set(hooksPath, `${files.get(hooksPath)!}\n`);
+    expect(await isCodexHookInstallCurrent(host)).toBe(true);
+  });
+
+  it("stays current when hooks.json object keys are ordered differently", async () => {
+    const { files, host } = makeFakeHost();
+    const { hooksPath, settings } = seedCurrentCodexInstall(files);
+
+    for (const groups of Object.values(settings.hooks ?? {})) {
+      const handler = groups.at(-1)?.hooks[0];
+      if (!handler) continue;
+      groups.at(-1)!.hooks[0] = Object.fromEntries([
+        ["type", handler.type],
+        ["command", handler.command],
+      ]) as typeof handler;
+    }
+
+    files.set(hooksPath, JSON.stringify(settings, null, 2));
+    expect(await isCodexHookInstallCurrent(host)).toBe(true);
+  });
+
+  it("stays current when config.toml has equivalent formatting", async () => {
+    const { files, host } = makeFakeHost();
+    const { configPath } = seedCurrentCodexInstall(files);
+    files.set(configPath, `${files.get(configPath)!.replace("hooks = true", "hooks=true # enabled")}\n\n`);
+    expect(await isCodexHookInstallCurrent(host)).toBe(true);
+  });
+
+  it("reports stale when hooks.json is missing a managed event", async () => {
+    const { files, host } = makeFakeHost();
+    const { hooksPath, settings } = seedCurrentCodexInstall(files);
+    delete settings.hooks?.["PostToolUse"];
+    files.set(hooksPath, JSON.stringify(settings, null, 2));
+    expect(await isCodexHookInstallCurrent(host)).toBe(false);
   });
 });
 
