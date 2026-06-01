@@ -149,6 +149,17 @@ export async function applyMutations(
           appliedSplits.set(mutation.localPaneId, remotePaneId);
           break;
         }
+        case "swap-pane": {
+          // Reorder a mirror pane into its local counterpart's slot so the
+          // following select-layout (which assigns cells to panes by index)
+          // lands it on the right cell. `-d` keeps the active pane unchanged;
+          // the mirror window is never displayed, so the move is invisible.
+          await options.runRemote(
+            `swap-pane -d -s ${quoteTmuxArg("remotePaneId", mutation.sourcePaneId)} -t ${quoteTmuxArg("remotePaneId", mutation.targetPaneId)}`,
+          );
+          log("remote", `DIAG exec/swap-pane ${options.label} ${mutation.sourcePaneId} <-> ${mutation.targetPaneId}`);
+          break;
+        }
       }
     } catch (err) {
       const error = err instanceof Error ? err.message : String(err);

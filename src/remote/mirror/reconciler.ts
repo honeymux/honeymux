@@ -60,7 +60,8 @@ export type Mutation =
     }
   | { kind: "apply-layout"; layout: string; remoteWindowId: string }
   | { kind: "kill-pane"; reason: KillPaneReason; remotePaneId: string }
-  | { kind: "kill-window"; remoteWindowId: string };
+  | { kind: "kill-window"; remoteWindowId: string }
+  | { kind: "swap-pane"; remoteWindowId: string; sourcePaneId: string; targetPaneId: string };
 
 export interface ReconcileInput {
   /**
@@ -186,6 +187,7 @@ export function reconcile(input: ReconcileInput): MirrorPlan {
   const splits: Mutation[] = [];
   const applyLayouts: Mutation[] = [];
   const paneKills: Mutation[] = [];
+  const swaps: Mutation[] = [];
   for (const localWindow of input.local.windows) {
     const remoteWindow = remoteWindowByLocalId.get(localWindow.id);
     if (!remoteWindow) continue;
@@ -238,9 +240,33 @@ export function reconcile(input: ReconcileInput): MirrorPlan {
       const owner = input.activeBindings.get(o.remotePaneId);
       return !owner || !localIds.has(owner);
     });
-    // Apply when: layout changed, OR we mutated the pane set (which
+
+    // Reorder the remote panes to match the local pane order BEFORE the
+    // positional select-layout below. tmux assigns layout cells to panes by
+    // index — it ignores the pane ids in the layout string — so a mirror pane
+    // only lands on its own cell when remote index k holds the pane mirroring
+    // local index k. Panes converted incrementally, or reordered locally via
+    // pane tabs, drift out of that order and scramble pane sizes. Only reorder
+    // once the pane set is settled: while splits/kills are pending this
+    // snapshot can't yet see the final pane set.
+    let swapsHappening = false;
+    if (!splitsHappening && !killsHappening && remotePanes.length > 1) {
+      const currentOrder = [...remotePanes].sort((a, b) => a.index - b.index).map((p) => p.id);
+      const desiredOrder = localPanes
+        .map((p) => pairing.pairs.get(p.id))
+        .filter((id): id is string => id !== undefined);
+      if (desiredOrder.length === currentOrder.length) {
+        const windowSwaps = computePaneSwaps(remoteWindow.id, currentOrder, desiredOrder);
+        if (windowSwaps.length > 0) {
+          swaps.push(...windowSwaps);
+          swapsHappening = true;
+        }
+      }
+    }
+
+    // Apply when: layout changed, OR we mutated/reordered the pane set (which
     // invalidates any cached "no-op" judgment regardless of string equality).
-    if (desiredLayout && (lastApplied !== desiredLayout || splitsHappening || killsHappening)) {
+    if (desiredLayout && (lastApplied !== desiredLayout || splitsHappening || killsHappening || swapsHappening)) {
       applyLayouts.push({ kind: "apply-layout", layout: desiredLayout, remoteWindowId: remoteWindow.id });
     }
 
@@ -260,7 +286,7 @@ export function reconcile(input: ReconcileInput): MirrorPlan {
     }
   }
 
-  mutations.push(...splits, ...paneKills, ...applyLayouts);
+  mutations.push(...splits, ...paneKills, ...swaps, ...applyLayouts);
 
   // Phase 6: kill-window for remote windows with no local pair. Stale-tag
   // warnings fire always (evidence of an interrupted prior session);
@@ -291,6 +317,31 @@ export function reconcile(input: ReconcileInput): MirrorPlan {
   }
 
   return { mutations, panePairs, warnings, windowPairs };
+}
+
+/**
+ * Selection-sort `current` into `desired` with the minimum number of
+ * `swap-pane` mutations. Each step swaps the pane at position k with the pane
+ * that belongs there; the executor applies them in sequence, so the simulated
+ * array tracks the running remote state. `current` and `desired` must be
+ * permutations of the same id set.
+ */
+function computePaneSwaps(
+  remoteWindowId: string,
+  current: ReadonlyArray<string>,
+  desired: ReadonlyArray<string>,
+): Mutation[] {
+  const swaps: Mutation[] = [];
+  const arr = [...current];
+  for (let k = 0; k < desired.length; k++) {
+    const want = desired[k]!;
+    if (arr[k] === want) continue;
+    const j = arr.indexOf(want, k + 1);
+    if (j === -1) continue;
+    swaps.push({ kind: "swap-pane", remoteWindowId, sourcePaneId: arr[k]!, targetPaneId: want });
+    [arr[k], arr[j]] = [arr[j]!, arr[k]!];
+  }
+  return swaps;
 }
 
 function pairPanes(

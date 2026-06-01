@@ -136,6 +136,19 @@ describe("applyMutations", () => {
     expect(calls.some((c) => c.startsWith("select-layout"))).toBe(true);
   });
 
+  test("swap-pane: issues swap-pane -d with both pane ids tmux-quoted", async () => {
+    const runRemote = mock(async () => "");
+    const runLocal = mock(async () => "");
+
+    const mutations: Mutation[] = [
+      { kind: "swap-pane", remoteWindowId: "@100", sourcePaneId: "%200", targetPaneId: "%201" },
+    ];
+    const result = await applyMutations(mutations, { label: "test", runLocal, runRemote });
+
+    expect(result.failures).toHaveLength(0);
+    expect(runRemote).toHaveBeenCalledWith("swap-pane -d -s '%200' -t '%201'");
+  });
+
   test("collects per-mutation failures without aborting subsequent ones", async () => {
     const runRemote = mock(async (cmd: string) => {
       if (cmd.startsWith("kill-pane")) throw new Error("pane already dead");
