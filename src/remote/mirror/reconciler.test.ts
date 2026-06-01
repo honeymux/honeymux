@@ -361,6 +361,101 @@ describe("reconciler — ported mirror-layout cases", () => {
     expect(mutationsOfKind(plan, "apply-layout")).toEqual([{ kind: "apply-layout", layout, remoteWindowId: "@100" }]);
   });
 
+  test("reorders remote panes (and forces apply-layout) when their index order doesn't match local", () => {
+    // tmux assigns layout cells to panes by index, so the remote panes must be
+    // ordered to mirror the local pane order. Here the remote panes mirror the
+    // locals in a rotated order; the reconciler must swap them back into place.
+    const layout = "aaaa,80x24,0,0,10";
+    const input = baseInput({
+      hasReconciledBefore: true,
+      // Layout already applied — so apply-layout fires only because of the swaps.
+      lastAppliedLayoutByRemoteWindow: new Map([["@100", layout]]),
+      local: makeSnapshot({
+        panesByWindow: {
+          "@1": [makePane("%10", 0, "@1"), makePane("%11", 1, "@1"), makePane("%12", 2, "@1")],
+        },
+        windows: [makeWindow("@1", 0, layout)],
+      }),
+      remote: makeSnapshot({
+        panesByWindow: {
+          "@100": [
+            makePane("%200", 0, "@100", { localPaneId: "%12" }),
+            makePane("%201", 1, "@100", { localPaneId: "%10" }),
+            makePane("%202", 2, "@100", { localPaneId: "%11" }),
+          ],
+        },
+        windows: [makeWindow("@100", 0, "x", "@1")],
+      }),
+    });
+
+    const plan = reconcile(input);
+
+    // Desired order [%201, %202, %200] from current [%200, %201, %202].
+    expect(mutationsOfKind(plan, "swap-pane")).toEqual([
+      { kind: "swap-pane", remoteWindowId: "@100", sourcePaneId: "%200", targetPaneId: "%201" },
+      { kind: "swap-pane", remoteWindowId: "@100", sourcePaneId: "%200", targetPaneId: "%202" },
+    ]);
+    // The reorder forces a re-apply so the now-correctly-ordered panes get
+    // their cells, and the swaps must precede the layout.
+    expect(mutationsOfKind(plan, "apply-layout")).toHaveLength(1);
+    const kinds = plan.mutations.map((m) => m.kind);
+    expect(kinds.lastIndexOf("swap-pane")).toBeLessThan(kinds.indexOf("apply-layout"));
+  });
+
+  test("emits no swap-pane when the remote pane order already matches local", () => {
+    const layout = "aaaa,80x24,0,0,10";
+    const input = baseInput({
+      hasReconciledBefore: true,
+      lastAppliedLayoutByRemoteWindow: new Map([["@100", layout]]),
+      local: makeSnapshot({
+        panesByWindow: {
+          "@1": [makePane("%10", 0, "@1"), makePane("%11", 1, "@1"), makePane("%12", 2, "@1")],
+        },
+        windows: [makeWindow("@1", 0, layout)],
+      }),
+      remote: makeSnapshot({
+        panesByWindow: {
+          "@100": [
+            makePane("%200", 0, "@100", { localPaneId: "%10" }),
+            makePane("%201", 1, "@100", { localPaneId: "%11" }),
+            makePane("%202", 2, "@100", { localPaneId: "%12" }),
+          ],
+        },
+        windows: [makeWindow("@100", 0, "x", "@1")],
+      }),
+    });
+
+    const plan = reconcile(input);
+
+    expect(mutationsOfKind(plan, "swap-pane")).toEqual([]);
+    // Order already correct and layout unchanged — nothing to do.
+    expect(mutationsOfKind(plan, "apply-layout")).toEqual([]);
+  });
+
+  test("defers reorder while a split is still pending (pane set not yet settled)", () => {
+    const layout = "aaaa,80x24,0,0,10";
+    const input = baseInput({
+      hasReconciledBefore: true,
+      lastAppliedLayoutByRemoteWindow: new Map([["@100", layout]]),
+      local: makeSnapshot({
+        panesByWindow: {
+          "@1": [makePane("%10", 0, "@1"), makePane("%11", 1, "@1")],
+        },
+        windows: [makeWindow("@1", 0, layout)],
+      }),
+      remote: makeSnapshot({
+        // Only one of the two local panes is mirrored yet — a split is pending.
+        panesByWindow: { "@100": [makePane("%201", 0, "@100", { localPaneId: "%11" })] },
+        windows: [makeWindow("@100", 0, "x", "@1")],
+      }),
+    });
+
+    const plan = reconcile(input);
+
+    expect(mutationsOfKind(plan, "split-window")).toHaveLength(1);
+    expect(mutationsOfKind(plan, "swap-pane")).toEqual([]);
+  });
+
   test("warns on an untagged pane that appears in an established mirror window", () => {
     const input = baseInput({
       hasReconciledBefore: true,
