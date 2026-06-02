@@ -12,7 +12,7 @@ import {
   supportsFadeTransitions,
 } from "./buffer-zoom-fade.ts";
 import { splitSequences } from "./csiu-reencode.ts";
-import { identifyKeySequence, parseRawKeyEvent } from "./keybindings.ts";
+import { parseRawKeyEvent } from "./keybindings.ts";
 import { writeTerminalOutput } from "./terminal-output.ts";
 import {
   ALT_SCREEN_ENTER,
@@ -53,7 +53,7 @@ export function consumeBufferZoomDismissChunk(
       nextPending = sequence;
       break;
     }
-    if (isKeyboardKeypress(sequence)) {
+    if (isEscapeKeypress(sequence)) {
       return { dismiss: true, pending: "" };
     }
   }
@@ -197,10 +197,12 @@ export async function enterBufferZoom({
 
     // Set terminal title to indicate buffer zoom mode. The prior title is
     // stashed in savedTitle above and restored via OSC 2 on exit.
-    writeTerminalOutput("\x1b]2;[[ BUFFER ZOOM ACTIVE ]] · Press any key to dismiss\x07");
+    writeTerminalOutput("\x1b]2;[[ BUFFER ZOOM ACTIVE ]] · Press Esc to dismiss\x07");
 
-    // Re-push Kitty keyboard protocol so modifier-only keypresses (which only
-    // Kitty can encode) still generate stdin data and can dismiss the view.
+    // Re-push the Kitty keyboard protocol while we own the screen. With flag 8
+    // (report all keys as escape codes) active, Escape arrives unambiguously as
+    // \x1b[27u rather than a bare ESC that could also be the prefix of an
+    // arrow/function-key sequence, so the dismiss key is detected cleanly.
     // The renderer's copy was disabled before suspend; this is a standalone
     // push that we pop before resuming.
     writeTerminalOutput(`\x1b[>${kittyKeyboardFlags}u`);
@@ -226,7 +228,7 @@ export async function enterBufferZoom({
     process.stdin.resume();
     stdinAttached = true;
 
-    // Wait for any key-down or mouse-press to dismiss, ignoring release events
+    // Wait for an Escape keypress to dismiss, ignoring release events
     await new Promise<void>((resolve) => {
       let pendingDismissInput = "";
       const onData = (chunk: Buffer) => {
@@ -343,26 +345,21 @@ function isCompleteCsiSequence(sequence: string): boolean {
 }
 
 /**
- * True only for sequences representing a real keyboard keypress.
- * identifyKeySequence is the source of truth for which escape sequences
- * map to recognized keys (arrows, Home/End, F-keys, CSI u, SS3,
- * modifyOtherKeys, ctrl-bytes, Alt+char). Anything it doesn't recognize
- * — terminal query responses (CPR/DA/DSR/XTWINOPS), focus events, mouse
- * events of any kind (click/motion/wheel), bracketed-paste markers — is
- * not a keypress and won't dismiss.
+ * True only for an Escape keypress. Buffer zoom dismisses on Escape alone;
+ * every other input — printable keys, arrows/specials, modified combos,
+ * modifier-only keys, mouse events, focus events, and terminal query replies
+ * (CPR/DA/DSR/XTWINOPS) — is left for the terminal emulator and the
+ * foreground app so the user can read, select, and copy from the zoomed
+ * buffer without it collapsing out from under them.
  *
- * Plain non-escape bytes bypass identifyKeySequence because it
- * intentionally only names "special" keys; printable letters and digits
- * fall through there but are obviously real input. Bare BEL is excluded
- * because Warp/Terminal.app echo it back on stdin when they don't
- * recognize the OSC 12 sequences we emit to glow the cursor.
+ * Escape arrives as a bare ESC byte on legacy terminals, or — under the Kitty
+ * keyboard protocol we push during zoom — as a CSI u sequence with code 27
+ * (e.g. \x1b[27u, \x1b[27;1u, \x1b[27;1:1u). Release events (event type 3)
+ * are ignored so the matching key-up doesn't count as a second dismiss.
  */
-function isKeyboardKeypress(sequence: string): boolean {
-  if (sequence === "\x07") return false;
-  if (!sequence.startsWith("\x1b")) return true;
+function isEscapeKeypress(sequence: string): boolean {
   if (sequence === "\x1b") return true;
   const rawEvent = parseRawKeyEvent(sequence);
-  if (rawEvent?.eventType === 3) return false;
-  if (rawEvent?.isModifierOnly) return false;
-  return identifyKeySequence(sequence) !== null;
+  if (!rawEvent || rawEvent.code !== 27) return false;
+  return rawEvent.eventType !== 3;
 }
