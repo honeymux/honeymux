@@ -16,6 +16,7 @@ describe("summarizeSessionInfo", () => {
         paneTabActive: new Set(),
         paneTabMembers: new Set(),
         paneWindowIds: new Map([["%1", "@1"]]),
+        tabWindows: new Set(),
         windowNames: new Map([["@1", "main"]]),
         windowPanes: new Map([["@1", 1]]),
       },
@@ -46,11 +47,12 @@ describe("summarizeSessionInfo", () => {
           ["%21", "@2"],
           ["%9", "@9"],
         ]),
+        tabWindows: new Set(["@10", "@9"]),
         windowNames: new Map([
           ["@1", "main"],
-          ["@10", "_hmx_tab"],
+          ["@10", "shell"],
           ["@2", "editor"],
-          ["@9", "_hmx_tab"],
+          ["@9", "logs"],
         ]),
         windowPanes: new Map([
           ["@1", 1],
@@ -75,10 +77,11 @@ describe("summarizeSessionInfo", () => {
           ["%2", "@2"],
           ["%9", "@9"],
         ]),
+        tabWindows: new Set(["@2", "@9"]),
         windowNames: new Map([
           ["@1", "main"],
-          ["@2", "_hmx_tab"],
-          ["@9", "_hmx_tab"],
+          ["@2", "logs"],
+          ["@9", "tail"],
         ]),
         windowPanes: new Map([
           ["@1", 1],

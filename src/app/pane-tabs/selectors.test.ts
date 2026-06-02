@@ -10,6 +10,7 @@ import {
   groupOwnsHostWindowName,
   hasRefreshablePaneTabLabels,
   paneNeedsPaneTabLabelRefresh,
+  resolveStagingTabSwitch,
 } from "./selectors.ts";
 
 describe("pane tab selectors", () => {
@@ -107,5 +108,27 @@ describe("pane tab selectors", () => {
 
     expect(hasRefreshablePaneTabLabels(userNamedGroups)).toBe(false);
     expect(paneNeedsPaneTabLabelRefresh(userNamedGroups, "%1")).toBe(false);
+  });
+
+  test("resolves a pane-tab switch when tmux activates a staging window", () => {
+    // The window backing slot-1's inactive "logs" tab (%2) is now active.
+    const windows = [
+      { active: false, name: "bash", paneId: "%1", tabWindow: false },
+      { active: true, name: "logs", paneId: "%2", tabWindow: true },
+    ];
+    expect(resolveStagingTabSwitch(windows, groups)).toEqual({ slotKey: "slot-1", tabIndex: 1 });
+  });
+
+  test("ignores activation of ordinary (non-staging) windows", () => {
+    const windows = [
+      { active: true, name: "bash", paneId: "%1", tabWindow: false },
+      { active: false, name: "logs", paneId: "%2", tabWindow: true },
+    ];
+    expect(resolveStagingTabSwitch(windows, groups)).toBeNull();
+  });
+
+  test("ignores staging windows whose pane is not a known tab", () => {
+    const windows = [{ active: true, name: "orphan", paneId: "%99", tabWindow: true }];
+    expect(resolveStagingTabSwitch(windows, groups)).toBeNull();
   });
 });

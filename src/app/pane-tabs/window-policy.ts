@@ -3,6 +3,7 @@ import type { PaneTabGroup } from "./types.ts";
 
 import { parsePaneWindowIdMap, parseWindowNameMap } from "./queries.ts";
 import { findPaneTabGroupEntriesByWindowId, groupOwnsHostWindowName } from "./selectors.ts";
+import { STAGING_PLACEHOLDER_NAME, TAB_WINDOW_OPTION } from "./tab-window-marker.ts";
 
 interface WindowRenameState {
   explicitWindowName?: string;
@@ -63,30 +64,43 @@ export async function normalizeHiddenTabWindows(
   if (!paneWindowIds) return;
 
   const visibleWindowIds = new Set([...groups.values()].map((group) => group.windowId));
-  const hiddenWindowIds = new Set<string>();
+  // Label each staging window after its parked tab so tmux's native
+  // choose-tree shows a meaningful name instead of a placeholder.
+  const hiddenWindowLabels = new Map<string, string>();
 
   for (const group of groups.values()) {
     for (let index = 0; index < group.tabs.length; index++) {
       if (index === group.activeIndex) continue;
-      const windowId = paneWindowIds.get(group.tabs[index]!.paneId);
+      const tab = group.tabs[index]!;
+      const windowId = paneWindowIds.get(tab.paneId);
       if (!windowId || visibleWindowIds.has(windowId)) continue;
-      hiddenWindowIds.add(windowId);
+      hiddenWindowLabels.set(windowId, tab.userLabel ?? tab.label);
     }
   }
 
-  await Promise.all(
-    [...hiddenWindowIds].map(async (windowId) => {
+  await Promise.all([
+    ...[...hiddenWindowLabels].map(async ([windowId, label]) => {
       try {
-        await client.renameWindow(windowId, "_hmx_tab");
+        await client.renameWindow(windowId, label.length > 0 ? label : STAGING_PLACEHOLDER_NAME);
       } catch {}
       try {
         await client.disableAutomaticRename(windowId);
       } catch {}
       try {
+        await client.runCommand(`set-option -w -t ${windowId} ${TAB_WINDOW_OPTION} 1`);
+      } catch {}
+      try {
         await client.runCommand(`set-option -w -t ${windowId} window-status-format ''`);
       } catch {}
     }),
-  );
+    // A window that just became a visible host must shed the staging marker so
+    // it is no longer filtered out of Honeymux's window lists.
+    ...[...visibleWindowIds].map(async (windowId) => {
+      try {
+        await client.runCommand(`set-option -wu -t ${windowId} ${TAB_WINDOW_OPTION}`);
+      } catch {}
+    }),
+  ]);
 }
 
 export async function resolveHostWindowRenameState(

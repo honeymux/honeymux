@@ -189,8 +189,12 @@ describe("pane tab window policy", () => {
 
     await normalizeHiddenTabWindows(client as never, groups);
 
-    expect(client.renameWindow).toHaveBeenCalledWith("@9", "_hmx_tab");
+    // The staging window is labeled after its parked tab (so tmux choose-tree
+    // shows "logs"), marked, and hidden; the visible host sheds the marker.
+    expect(client.renameWindow).toHaveBeenCalledWith("@9", "logs");
     expect(client.disableAutomaticRename).toHaveBeenCalledWith("@9");
+    expect(client.runCommand).toHaveBeenCalledWith("set-option -w -t @9 @hmx-tab-window 1");
     expect(client.runCommand).toHaveBeenCalledWith("set-option -w -t @9 window-status-format ''");
+    expect(client.runCommand).toHaveBeenCalledWith("set-option -wu -t @1 @hmx-tab-window");
   });
 });

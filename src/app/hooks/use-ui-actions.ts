@@ -18,6 +18,7 @@ import {
 } from "../../util/honeybeam-animation.ts";
 import { writeTerminalOutput } from "../../util/terminal-output.ts";
 import { CLEAR_SCREEN_AND_SCROLLBACK } from "../../util/terminal-sequences.ts";
+import { STAGING_PLACEHOLDER_NAME } from "../pane-tabs/tab-window-marker.ts";
 import { refreshAttachedTmuxClient } from "../runtime/tmux-client-resync.ts";
 import {
   PANE_TAB_STATE_OPTION,
@@ -73,6 +74,7 @@ export function summarizeSessionInfo(
     paneTabActive: Set<string>;
     paneTabMembers: Set<string>;
     paneWindowIds: Map<string, string>;
+    tabWindows: Set<string>;
     windowNames: Map<string, string>;
     windowPanes: Map<string, number>;
   },
@@ -98,9 +100,9 @@ export function summarizeSessionInfo(
     return { paneTabsEnabled: sessionInfo.paneTabMembers.size, panes, windows };
   }
 
-  const internalWindowIds = new Set<string>();
+  const internalWindowIds = new Set(sessionInfo.tabWindows);
   for (const [windowId, windowName] of sessionInfo.windowNames) {
-    if (windowName.startsWith("_hmx_")) internalWindowIds.add(windowId);
+    if (windowName === STAGING_PLACEHOLDER_NAME) internalWindowIds.add(windowId);
   }
 
   let windows = 0;

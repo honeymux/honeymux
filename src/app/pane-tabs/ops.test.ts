@@ -43,6 +43,18 @@ class FakePaneTabClient {
 
   listPanesInWindow = mock(async (windowId: string) => this.listPanesByWindow.get(windowId) ?? []);
 
+  listWindowsResult: Array<{
+    active: boolean;
+    id: string;
+    index: number;
+    layout: string;
+    name: string;
+    paneId: string;
+    tabWindow: boolean;
+  }> = [];
+
+  listWindows = mock(async () => this.listWindowsResult);
+
   matchResponses: Array<{ match: (command: string) => boolean; response: string }> = [];
 
   newDetachedWindowResult = { paneId: "%9", windowId: "@9" };
@@ -176,7 +188,7 @@ describe("pane tab ops", () => {
     expect(group?.activeIndex).toBe(1);
     expect(group?.tabs.map((tab) => `${tab.paneId}:${tab.label}`)).toEqual(["%1:bash", "%9:htop"]);
     expect(group?.restoreAutomaticRename).toBe(true);
-    expect(client.newDetachedWindow).toHaveBeenCalledWith("_hmx_tab");
+    expect(client.newDetachedWindow).toHaveBeenCalledWith("__hmx_tab");
     expect(client.swapPane).toHaveBeenCalledWith("%1", "%9");
     expect(client.sentCommands).toContain("set-option -w -t %9 pane-border-status off");
     expect(client.sentCommands).toContain("set-option -p -t %9 remain-on-exit on");
@@ -316,7 +328,9 @@ describe("pane tab ops", () => {
 
     await ops.doSwitchTab("slot-1", 1);
 
-    expect(client.swapPane).toHaveBeenCalledWith("%1", "%2");
+    // The swap and host select run as one atomic chain so a choose-tree
+    // redirect lands on the host without flashing the old tab.
+    expect(client.runCommandChain).toHaveBeenCalledWith(["swap-pane -s '%1' -t '%2'", "select-window -t '@1'"]);
     expect(client.refreshPtyClient).toHaveBeenCalledTimes(1);
     expect(groupsRef.current.get("slot-1")?.activeIndex).toBe(1);
     expect(groupsRef.current.get("slot-1")?.windowId).toBe("@1");
@@ -350,7 +364,7 @@ describe("pane tab ops", () => {
     const chainArg = (client.runWindowSwapChain.mock.calls[0]?.[0] ?? []) as string[];
     expect(chainArg).toContain("swap-window -s @2 -t @1");
     expect(chainArg).toContain("select-window -t @2");
-    expect(chainArg).toContain("rename-window -t @1 _hmx_tab");
+    expect(chainArg).toContain("set-option -w -t @1 @hmx-tab-window 1");
     expect(chainArg.some((c) => c.startsWith("rename-window -t @2 "))).toBe(true);
     expect(client.setPaneBorderStatus).toHaveBeenCalledWith("%2", "top");
     expect(client.setPaneBorderStatus).toHaveBeenCalledWith("%1", "off");
@@ -752,8 +766,9 @@ describe("pane tab ops", () => {
       ],
       windowId: "@9",
     });
-    expect(client.renameWindow).toHaveBeenCalledWith("@20", "_hmx_tab");
+    expect(client.renameWindow).toHaveBeenCalledWith("@20", "Claude");
     expect(client.disableAutomaticRename).toHaveBeenCalledWith("@20");
+    expect(client.sentCommands).toContain("set-option -w -t @20 @hmx-tab-window 1");
     expect(client.sentCommands).toContain("set-option -w -t @20 window-status-format ''");
   });
 
@@ -965,8 +980,9 @@ describe("pane tab ops", () => {
 
     expect(groupsRef.current.has("slot-shadow")).toBe(false);
     expect(groupsRef.current.get("slot-live")?.tabs.map((tab) => tab.paneId)).toEqual(["%2", "%6"]);
-    expect(client.renameWindow).toHaveBeenCalledWith("@20", "_hmx_tab");
+    expect(client.renameWindow).toHaveBeenCalledWith("@20", "bash");
     expect(client.disableAutomaticRename).toHaveBeenCalledWith("@20");
+    expect(client.sentCommands).toContain("set-option -w -t @20 @hmx-tab-window 1");
   });
 
   test("doValidate prefers the dead active pane's actual window over stale group.windowId", async () => {
@@ -1172,15 +1188,22 @@ describe("pane tab ops", () => {
     expect(emitLayoutChange).toHaveBeenCalledTimes(1);
   });
 
-  test("doBootstrapUngroupedPanes only bootstraps panes from the current session", async () => {
+  test("doBootstrapUngroupedPanes skips panes from other sessions and staging windows", async () => {
     const { client, groupsRef, ops } = createHarness({ currentSessionName: "alpha" });
     client.respond(
       "list-panes -a -F ' #{session_name}\t#{pane_id}\t#{pane_dead}\t#{window_id}\t#{pane_width}\t#{pane_height}\t#{pane_active}\t#{@hmx-remote-host}'",
-      " alpha\t%1\t0\t@1\t80\t24\t1\t\n beta\t%2\t0\t@2\t70\t20\t1\t",
+      " alpha\t%1\t0\t@1\t80\t24\t1\t\n beta\t%2\t0\t@2\t70\t20\t1\t\n alpha\t%3\t0\t@3\t80\t24\t0\t",
     );
-    client.respond("list-windows -F '#{window_id} #{window_name}'", "@1 main\n@2 other");
+    // @3 backs an inactive tab, so its pane must not be bootstrapped into a
+    // spurious single-tab group even though it is in the current session.
+    client.listWindowsResult = [
+      { active: true, id: "@1", index: 0, layout: "", name: "main", paneId: "%1", tabWindow: false },
+      { active: false, id: "@2", index: 1, layout: "", name: "other", paneId: "%2", tabWindow: false },
+      { active: false, id: "@3", index: 2, layout: "", name: "claude", paneId: "%3", tabWindow: true },
+    ];
     client.paneCommands.set("%1", "bash");
     client.paneCommands.set("%2", "top");
+    client.paneCommands.set("%3", "claude");
 
     await ops.doBootstrapUngroupedPanes();
 

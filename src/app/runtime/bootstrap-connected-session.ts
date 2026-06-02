@@ -16,6 +16,7 @@ import { AgentSessionStore } from "../../agents/session-store.ts";
 import { TeamService } from "../../agents/teams/index.ts";
 import { DEFAULT_SCHEME, getNextSessionColor } from "../../themes/theme.ts";
 import { loadConfig } from "../../util/config.ts";
+import { isManagedTabWindow } from "../pane-tabs/tab-window-marker.ts";
 import { syncActivePaneRef } from "./active-pane-sync.ts";
 import { buildHookSnifferEntry } from "./hook-sniffer-entry.ts";
 
@@ -212,7 +213,7 @@ export function bootstrapConnectedSession({
 
       const initialWindows = await client.listWindows();
       applyPendingRenames(initialWindows);
-      const visibleWindows = initialWindows.filter((w) => !w.name.startsWith("_hmx_"));
+      const visibleWindows = initialWindows.filter((w) => !isManagedTabWindow(w));
       setWindows(visibleWindows);
       const activeWin = visibleWindows.find((w) => w.active);
       if (activeWin) {

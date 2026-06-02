@@ -10,6 +10,7 @@ const makeWindow = (id: string, name: string, active = false) => ({
   layout: "",
   name,
   paneId: `%${id.slice(1)}`,
+  tabWindow: false,
 });
 
 describe("tab-bar model", () => {

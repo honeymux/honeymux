@@ -6,6 +6,7 @@ import {
   groupOwnsHostWindowName,
   paneNeedsPaneTabLabelRefresh,
 } from "./selectors.ts";
+import { STAGING_PLACEHOLDER_NAME } from "./tab-window-marker.ts";
 
 export const PANE_TAB_DEAD_SUBSCRIPTION = "hmx-pane-tab-dead";
 export const PANE_TAB_LABEL_SUBSCRIPTION = "hmx-pane-tab-labels";
@@ -45,7 +46,10 @@ export function applyExternalWindowRename(
   windowId: string,
   name: string,
 ): Map<string, PaneTabGroup> | null {
-  if (name.startsWith("_hmx_")) return null;
+  // A staging window relabeled to a placeholder is never a user rename of a
+  // host window; ignore it.  (Label renames go to non-host windows post-commit
+  // and fall through the host lookup below.)
+  if (name === STAGING_PLACEHOLDER_NAME) return null;
 
   const entries = findPaneTabGroupEntriesByWindowId(groups, windowId).filter(([, group]) =>
     groupOwnsHostWindowName(group),
