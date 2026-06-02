@@ -139,18 +139,18 @@ describe("TmuxControlClient.getSessionInfo", () => {
     const sendCommand = mock(async (command: string) => {
       if (
         command ===
-        `list-windows -t ${quoteTmuxArg("name", "wefwef")} -F ' #{window_id}\t#{window_panes}\t#{window_name}'`
+        `list-windows -t ${quoteTmuxArg("name", "wefwef")} -F ' #{window_id}\t#{window_panes}\t#{window_name}\t#{@hmx-tab-window}'`
       ) {
         return [
-          " @1\t3\tbash",
-          " @2\t1\t_hmx_tab",
-          " @3\t1\t_hmx_tab",
-          " @4\t1\t_hmx_tab",
-          " @5\t1\t_hmx_tab",
-          " @6\t1\t_hmx_tab",
-          " @7\t1\t_hmx_tab",
-          " @8\t1\t_hmx_tab",
-          " @9\t1\t_hmx_tab",
+          " @1\t3\tbash\t",
+          " @2\t1\tshell\t1",
+          " @3\t1\tshell\t1",
+          " @4\t1\tshell\t1",
+          " @5\t1\tshell\t1",
+          " @6\t1\tshell\t1",
+          " @7\t1\tshell\t1",
+          " @8\t1\tshell\t1",
+          " @9\t1\tshell\t1",
         ].join("\n");
       }
       if (
@@ -183,6 +183,8 @@ describe("TmuxControlClient.getSessionInfo", () => {
     expect(info.paneTabMembers.size).toBe(10);
     expect(info.paneTabActive.size).toBe(2);
     expect(info.paneWindowIds.get("%9")).toBe("@9");
+    expect(info.tabWindows.size).toBe(8);
+    expect(info.tabWindows.has("@1")).toBe(false);
   });
 });
 
@@ -282,10 +284,10 @@ describe("TmuxControlClient new-window cwd inheritance", () => {
 
     (client as unknown as { sendCommand: typeof sendCommand }).sendCommand = sendCommand;
 
-    await client.newDetachedWindow("_hmx_tab");
+    await client.newDetachedWindow("__hmx_tab");
 
     expect(sendCommand).toHaveBeenCalledWith(
-      `new-window -d -n ${quoteTmuxArg("windowName", "_hmx_tab")} -c '#{pane_current_path}' -P -F ' #{window_id} #{pane_id}'`,
+      `new-window -d -n ${quoteTmuxArg("windowName", "__hmx_tab")} -c '#{pane_current_path}' -P -F ' #{window_id} #{pane_id}'`,
     );
   });
 

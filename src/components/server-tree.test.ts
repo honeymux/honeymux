@@ -38,7 +38,7 @@ describe("buildTreeRows", () => {
           },
         ],
         sessions: [{ attached: true, id: "$1", name: "alpha" }],
-        windows: [{ active: true, id: "@1", index: 0, name: "main", sessionName: "alpha" }],
+        windows: [{ active: true, id: "@1", index: 0, name: "main", sessionName: "alpha", tabWindow: false }],
       },
       "alpha",
       paneTabGroups,
@@ -82,7 +82,7 @@ describe("buildTreeRows", () => {
           },
         ],
         sessions: [{ attached: true, id: "$1", name: "alpha" }],
-        windows: [{ active: true, id: "@1", index: 0, name: "main", sessionName: "alpha" }],
+        windows: [{ active: true, id: "@1", index: 0, name: "main", sessionName: "alpha", tabWindow: false }],
       },
       "alpha",
       paneTabGroups,
@@ -108,7 +108,7 @@ describe("buildTreeRows", () => {
           },
         ],
         sessions: [{ attached: true, id: "$1", name: "alpha" }],
-        windows: [{ active: true, id: "@1", index: 0, name: "main", sessionName: "alpha" }],
+        windows: [{ active: true, id: "@1", index: 0, name: "main", sessionName: "alpha", tabWindow: false }],
       },
       "alpha",
       new Map(),
@@ -153,7 +153,9 @@ describe("buildTreeRows", () => {
           },
         ],
         sessions: [{ attached: true, id: "$1", name: "alpha\nbeta" }],
-        windows: [{ active: true, id: "@1", index: 0, name: "main\twin", sessionName: "alpha\nbeta" }],
+        windows: [
+          { active: true, id: "@1", index: 0, name: "main\twin", sessionName: "alpha\nbeta", tabWindow: false },
+        ],
       },
       "alpha\nbeta",
       paneTabGroups,
@@ -196,7 +198,7 @@ describe("buildTreeRows", () => {
           },
         ],
         sessions: [{ attached: true, id: "$1", name: "alpha" }],
-        windows: [{ active: true, id: "@1", index: 0, name: "main", sessionName: "alpha" }],
+        windows: [{ active: true, id: "@1", index: 0, name: "main", sessionName: "alpha", tabWindow: false }],
       },
       "alpha",
       paneTabGroups,
@@ -226,7 +228,7 @@ describe("buildTreeRows", () => {
       {
         panes: [{ active: true, command: "zsh", id: "%5", index: 0, pid: 100, sessionName: "main", windowId: "@1" }],
         sessions: [{ attached: true, id: "$1", name: "main" }],
-        windows: [{ active: true, id: "@1", index: 0, name: "work", sessionName: "main" }],
+        windows: [{ active: true, id: "@1", index: 0, name: "work", sessionName: "main", tabWindow: false }],
       },
       "main",
       paneTabGroups,
@@ -266,7 +268,7 @@ describe("buildTreeRows", () => {
       {
         panes: [{ active: true, command: "zsh", id: "%1", index: 0, pid: 100, sessionName: "main", windowId: "@1" }],
         sessions: [{ attached: true, id: "$1", name: "main" }],
-        windows: [{ active: true, id: "@1", index: 0, name: "work", sessionName: "main" }],
+        windows: [{ active: true, id: "@1", index: 0, name: "work", sessionName: "main", tabWindow: false }],
       },
       "main",
       paneTabGroups,
@@ -298,7 +300,7 @@ describe("buildTreeRows", () => {
       {
         panes: [{ active: true, command: "zsh", id: "%1", index: 0, pid: 100, sessionName: "main", windowId: "@1" }],
         sessions: [{ attached: true, id: "$1", name: "main" }],
-        windows: [{ active: true, id: "@1", index: 0, name: "work", sessionName: "main" }],
+        windows: [{ active: true, id: "@1", index: 0, name: "work", sessionName: "main", tabWindow: false }],
       },
       "main",
       paneTabGroups,
@@ -313,7 +315,7 @@ describe("buildTreeRows", () => {
       {
         panes: [{ active: true, command: "zsh", id: "%5", index: 0, pid: 100, sessionName: "main", windowId: "@1" }],
         sessions: [{ attached: true, id: "$1", name: "main" }],
-        windows: [{ active: true, id: "@1", index: 0, name: "work", sessionName: "main" }],
+        windows: [{ active: true, id: "@1", index: 0, name: "work", sessionName: "main", tabWindow: false }],
       },
       "main",
       new Map(),
@@ -339,12 +341,12 @@ describe("coalesceTreeData", () => {
     const previous = {
       panes: [{ active: true, command: "bash", id: "%1", index: 0, pid: 1, sessionName: "alpha", windowId: "@1" }],
       sessions: [{ attached: true, id: "$1", name: "alpha" }],
-      windows: [{ active: true, id: "@1", index: 0, name: "main", sessionName: "alpha" }],
+      windows: [{ active: true, id: "@1", index: 0, name: "main", sessionName: "alpha", tabWindow: false }],
     };
     const next = {
       panes: [],
       sessions: [{ attached: true, id: "$1", name: "alpha" }],
-      windows: [{ active: true, id: "@2", index: 0, name: "_hmx_tab", sessionName: "alpha" }],
+      windows: [{ active: true, id: "@2", index: 0, name: "editor", sessionName: "alpha", tabWindow: true }],
     };
 
     expect(coalesceTreeData(previous, next)).toBe(previous);
@@ -354,14 +356,14 @@ describe("coalesceTreeData", () => {
     const previous = {
       panes: [{ active: true, command: "bash", id: "%1", index: 0, pid: 1, sessionName: "alpha", windowId: "@1" }],
       sessions: [{ attached: true, id: "$1", name: "alpha" }],
-      windows: [{ active: true, id: "@1", index: 0, name: "main", sessionName: "alpha" }],
+      windows: [{ active: true, id: "@1", index: 0, name: "main", sessionName: "alpha", tabWindow: false }],
     };
     const next = {
       panes: [{ active: true, command: "top", id: "%2", index: 0, pid: 2, sessionName: "alpha", windowId: "@3" }],
       sessions: [{ attached: true, id: "$1", name: "alpha" }],
       windows: [
-        { active: false, id: "@2", index: 1, name: "_hmx_tab", sessionName: "alpha" },
-        { active: true, id: "@3", index: 0, name: "work", sessionName: "alpha" },
+        { active: false, id: "@2", index: 1, name: "editor", sessionName: "alpha", tabWindow: true },
+        { active: true, id: "@3", index: 0, name: "work", sessionName: "alpha", tabWindow: false },
       ],
     };
 
@@ -395,7 +397,7 @@ describe("applyTreePaneFieldUpdate", () => {
         },
       ],
       sessions: [{ attached: true, id: "$1", name: "alpha" }],
-      windows: [{ active: true, id: "@1", index: 0, name: "main", sessionName: "alpha" }],
+      windows: [{ active: true, id: "@1", index: 0, name: "main", sessionName: "alpha", tabWindow: false }],
     };
 
     const next = applyTreePaneFieldUpdate(data, "%1", "title", "Claude Code");
@@ -423,7 +425,7 @@ describe("applyTreePaneFieldUpdate", () => {
         },
       ],
       sessions: [{ attached: true, id: "$1", name: "alpha" }],
-      windows: [{ active: true, id: "@1", index: 0, name: "main", sessionName: "alpha" }],
+      windows: [{ active: true, id: "@1", index: 0, name: "main", sessionName: "alpha", tabWindow: false }],
     };
 
     const commandReset = applyTreePaneFieldUpdate(data, "%1", "command", "");

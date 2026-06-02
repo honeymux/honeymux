@@ -239,7 +239,9 @@ describe("registerSessionEventHandlers", () => {
     registerSessionEventHandlers(client as any, ctx);
 
     await client.emit("window-renamed", "@2", "renamed-pane");
-    client.listWindowsQueue.push([{ active: true, id: "@2", index: 1, layout: "abc", name: "old-name", paneId: "%2" }]);
+    client.listWindowsQueue.push([
+      { active: true, id: "@2", index: 1, layout: "abc", name: "old-name", paneId: "%2", tabWindow: false },
+    ]);
 
     await client.emit("window-add", "@2");
 
@@ -253,8 +255,8 @@ describe("registerSessionEventHandlers", () => {
     registerSessionEventHandlers(client as any, ctx);
 
     client.listWindowsQueue.push([
-      { active: false, id: "@1", index: 1, layout: "abc", name: "one", paneId: "%1" },
-      { active: true, id: "@2", index: 2, layout: "def", name: "two", paneId: "%2" },
+      { active: false, id: "@1", index: 1, layout: "abc", name: "one", paneId: "%1", tabWindow: false },
+      { active: true, id: "@2", index: 2, layout: "def", name: "two", paneId: "%2", tabWindow: false },
     ]);
     client.listPanesInWindowQueue.push([
       { active: false, height: 20, id: "%2", width: 80 },
@@ -267,20 +269,41 @@ describe("registerSessionEventHandlers", () => {
     expect(client.refreshPtyClient).toHaveBeenCalledTimes(1);
   });
 
+  test("ignores session-window-changed when a staging window is active", async () => {
+    const client = new FakeTmuxClient();
+    const { ctx, setWindowsMock } = createContext();
+    registerSessionEventHandlers(client as any, ctx);
+
+    // The user picked a parked tab in tmux's choose-tree, so the active window
+    // is a staging window. The pane-tabs layer redirects this into a tab switch;
+    // the runtime must not sync the tab bar / PTY to the bare parked pane.
+    client.listWindowsQueue.push([
+      { active: false, id: "@1", index: 1, layout: "abc", name: "main", paneId: "%1", tabWindow: false },
+      { active: true, id: "@2", index: 2, layout: "def", name: "logs", paneId: "%2", tabWindow: true },
+    ]);
+
+    await client.emit("session-window-changed");
+
+    expect(setWindowsMock).not.toHaveBeenCalled();
+    expect(client.refreshPtyClient).not.toHaveBeenCalled();
+  });
+
   test("keeps existing windows when window-add sees only staging windows", async () => {
     const client = new FakeTmuxClient();
     const { ctx, windowsRef } = createContext();
-    windowsRef.current = [{ active: true, id: "@1", index: 1, layout: "abc", name: "main", paneId: "%1" }];
+    windowsRef.current = [
+      { active: true, id: "@1", index: 1, layout: "abc", name: "main", paneId: "%1", tabWindow: false },
+    ];
     registerSessionEventHandlers(client as any, ctx);
 
     client.listWindowsQueue.push([
-      { active: false, id: "@2", index: 2, layout: "def", name: "_hmx_tab", paneId: "%2" },
+      { active: false, id: "@2", index: 2, layout: "def", name: "editor", paneId: "%2", tabWindow: true },
     ]);
 
     await client.emit("window-add", "@2");
 
     expect(windowsRef.current).toEqual([
-      { active: true, id: "@1", index: 1, layout: "abc", name: "main", paneId: "%1" },
+      { active: true, id: "@1", index: 1, layout: "abc", name: "main", paneId: "%1", tabWindow: false },
     ]);
   });
 
@@ -291,7 +314,9 @@ describe("registerSessionEventHandlers", () => {
 
     await client.emit("session-changed", "$1", "alpha");
     ctx.sessionRuntime.switchingRef.current.add("beta");
-    client.listWindowsQueue.push([{ active: true, id: "@3", index: 1, layout: "ghi", name: "beta", paneId: "%3" }]);
+    client.listWindowsQueue.push([
+      { active: true, id: "@3", index: 1, layout: "ghi", name: "beta", paneId: "%3", tabWindow: false },
+    ]);
     client.listPanesInWindowQueue.push([
       { active: false, height: 20, id: "%3", width: 80 },
       { active: true, height: 20, id: "%9", width: 80 },

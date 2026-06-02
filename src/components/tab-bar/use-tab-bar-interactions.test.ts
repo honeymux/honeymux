@@ -31,8 +31,8 @@ describe("tab-bar interactions helpers", () => {
 
   test("finds the nearest tab when the click lands one column outside the hit box", () => {
     const windows = [
-      { active: true, id: "@1", index: 0, layout: "", name: "alpha", paneId: "%1" },
-      { active: false, id: "@2", index: 1, layout: "", name: "beta", paneId: "%2" },
+      { active: true, id: "@1", index: 0, layout: "", name: "alpha", paneId: "%1", tabWindow: false },
+      { active: false, id: "@2", index: 1, layout: "", name: "beta", paneId: "%2", tabWindow: false },
     ];
     const displayNames = ["alpha", "beta"];
     const leftReserve = 2;

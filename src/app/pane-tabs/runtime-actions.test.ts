@@ -177,7 +177,8 @@ describe("pane tab runtime actions", () => {
     expect(client.setPaneBorderStatus).toHaveBeenCalledWith("%2", "top");
     expect(client.runWindowSwapChain).toHaveBeenCalledWith([
       "set-option -wu -t @2 window-status-format",
-      "rename-window -t @1 _hmx_tab",
+      "set-option -wu -t @2 @hmx-tab-window",
+      "set-option -w -t @1 @hmx-tab-window 1",
       "set-option -w -t @1 window-status-format ''",
       "rename-window -t @2 'logs'",
       "set-option -w -t @2 automatic-rename off",
@@ -208,7 +209,8 @@ describe("pane tab runtime actions", () => {
 
     expect(client.runWindowSwapChain).toHaveBeenCalledWith([
       "set-option -wu -t @2 window-status-format",
-      "rename-window -t @1 _hmx_tab",
+      "set-option -wu -t @2 @hmx-tab-window",
+      "set-option -w -t @1 @hmx-tab-window 1",
       "set-option -w -t @1 window-status-format ''",
       "swap-window -s @2 -t @1",
       "select-window -t @2",

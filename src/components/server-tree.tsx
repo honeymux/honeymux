@@ -6,6 +6,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { PaneTabGroup } from "../app/pane-tabs/types.ts";
 import type { TmuxControlClient } from "../tmux/control-client.ts";
 
+import { isManagedTabWindow } from "../app/pane-tabs/tab-window-marker.ts";
 import { theme } from "../themes/theme.ts";
 import {
   type PaneOutputTitleParserState,
@@ -72,7 +73,14 @@ interface TreeData {
     windowId: string;
   }>;
   sessions: Array<{ attached: boolean; id: string; name: string }>;
-  windows: Array<{ active: boolean; id: string; index: number; name: string; sessionName: string }>;
+  windows: Array<{
+    active: boolean;
+    id: string;
+    index: number;
+    name: string;
+    sessionName: string;
+    tabWindow: boolean;
+  }>;
 }
 
 type TreePaneField = "command" | "cwd" | "title";
@@ -644,7 +652,7 @@ export function buildTreeRows(
     });
 
     const sessionWindows = windows
-      .filter((w) => w.sessionName === session.name && !w.name.startsWith("_hmx_"))
+      .filter((w) => w.sessionName === session.name && !isManagedTabWindow(w))
       .sort((a, b) => a.index - b.index);
 
     for (let wi = 0; wi < sessionWindows.length; wi++) {
@@ -665,8 +673,8 @@ export function buildTreeRows(
         windowId: win.id,
       });
 
-      // Non-active tab panes live in _hmx_ staging windows (filtered out
-      // above), so no explicit hiding is needed here.
+      // Non-active tab panes live in staging windows (filtered out above via
+      // the @hmx-tab-window marker), so no explicit hiding is needed here.
       const windowPanes = panes
         .filter((p) => p.sessionName === session.name && p.windowId === win.id)
         .sort((a, b) => a.index - b.index);
@@ -846,7 +854,7 @@ function computeTreePrefixSegments(
 
 function countVisibleTreeWindows(data: TreeData | null): number {
   if (!data) return 0;
-  return data.windows.filter((window) => !window.name.startsWith("_hmx_")).length;
+  return data.windows.filter((window) => !isManagedTabWindow(window)).length;
 }
 
 /** Find the tab group a pane belongs to (the Map is keyed by slotKey, not paneId). */

@@ -370,12 +370,19 @@ export class TmuxControlClient extends EventEmitter {
       windowId: string;
     }>;
     sessions: TmuxSession[];
-    windows: Array<{ active: boolean; id: string; index: number; name: string; sessionName: string }>;
+    windows: Array<{
+      active: boolean;
+      id: string;
+      index: number;
+      name: string;
+      sessionName: string;
+      tabWindow: boolean;
+    }>;
   }> {
     const [sessionsOut, windowsOut, panesOut] = await Promise.all([
       this.sendCommand("list-sessions -F '#{session_id}\t#{session_name}\t#{session_attached}\t#{@hmx-color}'"),
       this.sendCommand(
-        "list-windows -a -F '#{session_name}\t#{window_id}\t#{window_index}\t#{window_name}\t#{window_active}'",
+        "list-windows -a -F '#{session_name}\t#{window_id}\t#{window_index}\t#{window_name}\t#{window_active}\t#{@hmx-tab-window}'",
       ),
       // Tab-separated because pane_current_path and pane_title can contain spaces.
       this.sendCommand(
@@ -447,12 +454,13 @@ export class TmuxControlClient extends EventEmitter {
     paneTabActive: Set<string>;
     paneTabMembers: Set<string>;
     paneWindowIds: Map<string, string>;
+    tabWindows: Set<string>;
     windowNames: Map<string, string>;
     windowPanes: Map<string, number>;
   }> {
     const [windowsOutput, panesOutput] = await Promise.all([
       this.sendCommand(
-        `list-windows -t ${quoteTmuxArg("name", name)} -F ' #{window_id}\t#{window_panes}\t#{window_name}'`,
+        `list-windows -t ${quoteTmuxArg("name", name)} -F ' #{window_id}\t#{window_panes}\t#{window_name}\t#{@hmx-tab-window}'`,
       ),
       this.sendCommand(
         "list-panes -a -F ' #{session_name}\t#{pane_id}\t#{window_id}\t#{@hmx-pane-tab-member}\t#{@hmx-pane-tab-active}'",
@@ -606,7 +614,7 @@ export class TmuxControlClient extends EventEmitter {
    */
   async listWindows(): Promise<TmuxWindow[]> {
     const output = await this.sendCommand(
-      `list-windows -F '#{window_id}\t#{window_index}\t#{window_name}\t#{window_active}\t#{pane_id}\t#{window_layout}'`,
+      `list-windows -F '#{window_id}\t#{window_index}\t#{window_name}\t#{window_active}\t#{pane_id}\t#{window_layout}\t#{@hmx-tab-window}'`,
     );
     return parseListWindowsOutput(output);
   }

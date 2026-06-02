@@ -34,6 +34,7 @@ interface TmuxSessionInfo {
   paneTabActive: Set<string>;
   paneTabMembers: Set<string>;
   paneWindowIds: Map<string, string>;
+  tabWindows: Set<string>;
   windowNames: Map<string, string>;
   windowPanes: Map<string, number>;
 }
@@ -68,6 +69,7 @@ interface TmuxTreeWindow {
   index: number;
   name: string;
   sessionName: string;
+  tabWindow: boolean;
 }
 
 interface TmuxWindowPaneInfo {
@@ -167,6 +169,7 @@ export function parseFullTreeOutputs(
       index,
       name: parts[3] ?? "",
       sessionName,
+      tabWindow: parts[5] === "1",
     });
   }
 
@@ -304,6 +307,7 @@ export function parseListWindowsOutput(output: string): TmuxWindow[] {
         layout: parts[5]!,
         name: parts[2]!,
         paneId: parts[4]!,
+        tabWindow: parts[6] === "1",
       };
     });
 }
@@ -361,13 +365,15 @@ export function parseSessionInfoOutputs(
 ): TmuxSessionInfo {
   const windowPanes = new Map<string, number>();
   const windowNames = new Map<string, string>();
+  const tabWindows = new Set<string>();
   for (const line of windowsOutput.split("\n")) {
     const trimmed = line.trim();
     if (!trimmed) continue;
-    const [windowId, countStr, windowName = ""] = trimmed.split("\t");
+    const [windowId, countStr, windowName = "", tabWindow = ""] = trimmed.split("\t");
     if (!windowId) continue;
     windowPanes.set(windowId, parseInt(countStr ?? "0", 10) || 0);
     windowNames.set(windowId, windowName);
+    if (tabWindow === "1") tabWindows.add(windowId);
   }
 
   const paneWindowIds = new Map<string, string>();
@@ -383,7 +389,7 @@ export function parseSessionInfoOutputs(
     if (paneId && active === "1") paneTabActive.add(paneId);
   }
 
-  return { paneTabActive, paneTabMembers, paneWindowIds, windowNames, windowPanes };
+  return { paneTabActive, paneTabMembers, paneWindowIds, tabWindows, windowNames, windowPanes };
 }
 
 export function parseSessionSummaryOutputs(

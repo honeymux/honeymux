@@ -10,6 +10,7 @@ const makeWindow = (name: string, active = false) => ({
   layout: "",
   name,
   paneId: `%0`,
+  tabWindow: false,
 });
 
 describe("buildTabLines width consistency", () => {

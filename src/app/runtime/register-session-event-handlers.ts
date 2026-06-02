@@ -3,6 +3,7 @@ import type { SetupTmuxRuntimeContext } from "./runtime-context.ts";
 
 import { type TmuxControlClient, listSessionNames } from "../../tmux/control-client.ts";
 import { disableInputModesBeforeShutdown, shutdownRenderer } from "../../util/shutdown-renderer.ts";
+import { isManagedTabWindow } from "../pane-tabs/tab-window-marker.ts";
 import { syncActivePaneRef } from "./active-pane-sync.ts";
 import { reportFatalError } from "./fatal-error-handler.ts";
 
@@ -21,9 +22,8 @@ export function registerSessionEventHandlers(
     sessionState: { setActiveIndex, setCurrentSessionName, setSessionKey, setSessions, setWindows },
   } = ctx;
 
-  /** Filter out internal staging windows (e.g. _hmx_staging) from window lists. */
-  const filterStagingWindows = (windows: TmuxWindow[]): TmuxWindow[] =>
-    windows.filter((w) => !w.name.startsWith("_hmx_"));
+  /** Filter out pane-tab staging windows from window lists. */
+  const filterStagingWindows = (windows: TmuxWindow[]): TmuxWindow[] => windows.filter((w) => !isManagedTabWindow(w));
 
   // Buffer renames that arrive for windows not yet in state.
   const pendingRenames = new Map<string, string>();
@@ -80,16 +80,10 @@ export function registerSessionEventHandlers(
   });
 
   client.on("window-renamed", (_windowId: string, name: string) => {
-    if (name.startsWith("_hmx_")) {
-      // Window transitioned to staging — remove it from state so the tab bar
-      // doesn't show a stale entry.  Preserve prev if removal would empty the
-      // list (a subsequent session-window-changed will correct the state).
-      setWindows((prev: TmuxWindow[]) => {
-        const filtered = prev.filter((w) => w.id !== _windowId);
-        return filtered.length > 0 ? filtered : prev;
-      });
-      return;
-    }
+    // Staging windows are hidden via the @hmx-tab-window marker and re-list on
+    // session-window-changed, so a rename to a staging window's tab label that
+    // arrives here is for a window not in the visible set and is simply
+    // buffered below (never promoted into the tab bar).
     setWindows((prev: TmuxWindow[]) => {
       const found = prev.some((w) => w.id === _windowId);
       if (!found) {
@@ -103,7 +97,13 @@ export function registerSessionEventHandlers(
   // Active window changed in tmux — sync our tab index and force redraw.
   client.on("session-window-changed", async () => {
     try {
-      const updated = filterStagingWindows(await client.listWindows());
+      const all = await client.listWindows();
+      // A staging window can become active when the user picks a parked tab in
+      // tmux's native choose-tree; the pane-tabs layer redirects that into a
+      // proper tab switch, so don't sync the tab bar / active pane to the bare
+      // parked pane in the meantime.
+      if (all.some((window) => window.active && isManagedTabWindow(window))) return;
+      const updated = filterStagingWindows(all);
       // Guard: don't clear the tab bar if the snapshot is transiently empty
       // (all windows are staging during a pane-tab switch).
       if (updated.length === 0) return;

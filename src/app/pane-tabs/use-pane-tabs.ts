@@ -22,7 +22,12 @@ import { type PaneTabInteractionsApi, usePaneTabInteractions } from "./interacti
 import { buildPaneCycleModel } from "./navigation.ts";
 import { createPaneTabOpQueue } from "./op-queue.ts";
 import { type PaneTabOps, createPaneTabOps } from "./ops.ts";
-import { findPaneTabGroupByPaneId, findPaneTabGroupForWindow, hasRefreshablePaneTabLabels } from "./selectors.ts";
+import {
+  findPaneTabGroupByPaneId,
+  findPaneTabGroupForWindow,
+  hasRefreshablePaneTabLabels,
+  resolveStagingTabSwitch,
+} from "./selectors.ts";
 
 export type { PaneTabGroup } from "./types.ts";
 
@@ -233,6 +238,24 @@ export function usePaneTabs({
     [enqueuePaneTabOp],
   );
 
+  // tmux can activate a staging window directly — e.g. the user picks a parked
+  // tab from the native choose-tree (prefix+w). Left alone, that window would
+  // take over the client as a bare pane, bypassing the hmx layout. Redirect it
+  // into a real tab switch so the parked tab is promoted into its slot instead.
+  const handleStagingWindowSelected = useCallback(async () => {
+    const client = clientRef.current;
+    if (!client) return;
+    let windows: Awaited<ReturnType<TmuxControlClient["listWindows"]>>;
+    try {
+      windows = await client.listWindows();
+    } catch {
+      return;
+    }
+    const target = resolveStagingTabSwitch(windows, groupsRef.current);
+    if (!target) return;
+    await handleSwitchPaneTab(target.slotKey, target.tabIndex);
+  }, [clientRef, groupsRef, handleSwitchPaneTab]);
+
   const navigatePaneCycle = useCallback(
     async (delta: -1 | 1) => {
       const client = clientRef.current;
@@ -412,11 +435,18 @@ export function usePaneTabs({
     if (!enabled || !connected) return;
     if (restoredSessionRef.current === currentSessionName) return;
     restoredSessionRef.current = currentSessionName;
-    queuePaneTabOp(async (paneTabOps) => {
-      await paneTabOps.doRestore();
-      await paneTabOps.doBootstrapUngroupedPanes();
-    });
-  }, [connected, currentSessionName, enabled, queuePaneTabOp]);
+    void (async () => {
+      await enqueuePaneTabOp(async (paneTabOps) => {
+        await paneTabOps.doRestore();
+        await paneTabOps.doBootstrapUngroupedPanes();
+      }, undefined);
+      // Selecting a parked tab from another session's choose-tree switches
+      // sessions and lands here before this session's groups exist, so the
+      // session-window-changed redirect finds nothing. Re-check now that the
+      // groups are restored to complete the cross-session tab switch.
+      await handleStagingWindowSelected();
+    })();
+  }, [connected, currentSessionName, enabled, enqueuePaneTabOp, handleStagingWindowSelected]);
 
   useEffect(() => {
     if (!enabled || !connected) return;
@@ -436,7 +466,9 @@ export function usePaneTabs({
       });
       const cleanupSubscriptions = registerPaneTabFormatSubscriptions(client);
       const cleanupHandlers = registerPaneTabTmuxEventHandlers(client, handlers);
+      client.on("session-window-changed", handleStagingWindowSelected);
       cleanup = () => {
+        client.off("session-window-changed", handleStagingWindowSelected);
         cleanupHandlers();
         cleanupSubscriptions();
       };
@@ -459,6 +491,7 @@ export function usePaneTabs({
     commitGroups,
     connected,
     enabled,
+    handleStagingWindowSelected,
     queueBootstrapUngroupedPanes,
     queueLabelRefresh,
     runtimeKey,

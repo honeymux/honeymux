@@ -1,5 +1,7 @@
 import type { PaneTabGroup } from "./types.ts";
 
+import { isManagedTabWindow } from "./tab-window-marker.ts";
+
 export function findPaneTabGroupByPaneId(groups: Map<string, PaneTabGroup>, paneId: string): PaneTabGroup | undefined {
   return findPaneTabGroupEntryByPaneId(groups, paneId)?.[1];
 }
@@ -49,4 +51,23 @@ export function paneNeedsPaneTabLabelRefresh(groups: Map<string, PaneTabGroup>, 
     if (group.tabs.some((tab) => tab.paneId === paneId && !tab.userLabel)) return true;
   }
   return false;
+}
+
+/**
+ * When tmux directly activates a staging window (e.g. the user picks a parked
+ * tab from the native choose-tree), resolve the pane-tab switch that promotes
+ * that parked tab into its slot. Returns null when the active window is not a
+ * staging window or its pane isn't a known inactive tab.
+ */
+export function resolveStagingTabSwitch(
+  windows: Array<{ active: boolean; name: string; paneId: string; tabWindow: boolean }>,
+  groups: Map<string, PaneTabGroup>,
+): { slotKey: string; tabIndex: number } | null {
+  const active = windows.find((window) => window.active);
+  if (!active || !isManagedTabWindow(active)) return null;
+  const group = findPaneTabGroupByPaneId(groups, active.paneId);
+  if (!group) return null;
+  const tabIndex = group.tabs.findIndex((tab) => tab.paneId === active.paneId);
+  if (tabIndex < 0 || tabIndex === group.activeIndex) return null;
+  return { slotKey: group.slotKey, tabIndex };
 }

@@ -12,6 +12,7 @@ import {
   setPaneFormatForTabs,
   uninstallExitHook,
 } from "./pane-effects.ts";
+import { TAB_WINDOW_OPTION } from "./tab-window-marker.ts";
 import { planNewTabGroup } from "./transitions.ts";
 import { resolveHostWindowRenameState } from "./window-policy.ts";
 
@@ -74,6 +75,13 @@ interface MaterializePaneTabsOptions {
   refreshBorderLines?: boolean;
   resizeHeight?: number;
   resizeWidth?: number;
+  /**
+   * Window to select atomically with the swap. When set, the swap-pane and
+   * the select-window run as a single tmux command chain so the client
+   * redraws once — used when the caller is not already on the host window
+   * (e.g. a choose-tree tab redirect) to avoid a transient old-tab frame.
+   */
+  selectWindowId?: string;
   setTopBorder?: boolean;
   tabActiveIndex: number;
   tabs: PaneTab[];
@@ -88,10 +96,8 @@ interface MaterializeWindowTabSwitchOptions {
   currentWindowId: string;
   /**
    * Name to apply to the target (promoted) window as part of the atomic
-   * swap.  When omitted, the window keeps whatever name it already has —
-   * callers that pass undefined must be comfortable with a transient
-   * `_hmx_tab` label appearing in status line and tree views until some
-   * later sync step renames the window.
+   * swap.  When omitted, the window keeps whatever name it already has — its
+   * prior staging label — until a later sync step renames it.
    */
   newTargetWindowName?: string;
   slotHeight: number;
@@ -313,6 +319,7 @@ export async function materializePaneTabs({
   refreshBorderLines,
   resizeHeight,
   resizeWidth,
+  selectWindowId,
   setTopBorder,
   tabActiveIndex,
   tabs,
@@ -338,7 +345,17 @@ export async function materializePaneTabs({
   // must wait until incomingPaneId is in the visible window.
   await setPaneFormatForTabs(client, incomingPaneId, tabs, tabActiveIndex, resizeWidth ?? 80, borderLinesRef.current);
 
-  await client.swapPane(visiblePaneId, incomingPaneId);
+  if (selectWindowId) {
+    // Chain the swap and the host select so tmux applies both before
+    // redrawing the client — the user moves straight from the staging window
+    // to the host with the new tab in place, never seeing the old tab.
+    await client.runCommandChain([
+      `swap-pane -s ${quoteTmuxArg("srcPaneId", visiblePaneId)} -t ${quoteTmuxArg("dstPaneId", incomingPaneId)}`,
+      `select-window -t ${quoteTmuxArg("windowId", selectWindowId)}`,
+    ]);
+  } else {
+    await client.swapPane(visiblePaneId, incomingPaneId);
+  }
 
   if (setTopBorder) {
     try {
@@ -378,16 +395,18 @@ export async function materializeWindowTabSwitch({
     await client.setPaneBorderStatus(targetPaneId, "top");
   } catch {}
 
-  // Perform the window-status-format flip, both renames, and the swap as a
-  // single atomic tmux command chain.  tmux buffers the resulting
+  // Flip the staging marker, status-format, the promoted rename, and the swap
+  // as a single atomic tmux command chain.  tmux buffers the resulting
   // %window-renamed / %session-window-changed notifications until the whole
   // block completes, so the tab bar and server tree observe only the final
-  // state — the promoted window never appears with its transient _hmx_tab
-  // name, and the currently-visible window never appears duplicated while
-  // intermediate renames are in flight.
+  // state — the demoted window is marked staging (and thus filtered out)
+  // before it can appear duplicated, and the promoted window appears already
+  // bearing its real name.  The demoted window keeps its prior label until a
+  // later normalize step relabels it after its now-parked tab.
   const chain: string[] = [
     `set-option -wu -t ${targetWindowId} window-status-format`,
-    `rename-window -t ${currentWindowId} _hmx_tab`,
+    `set-option -wu -t ${targetWindowId} ${TAB_WINDOW_OPTION}`,
+    `set-option -w -t ${currentWindowId} ${TAB_WINDOW_OPTION} 1`,
     `set-option -w -t ${currentWindowId} window-status-format ''`,
   ];
   if (newTargetWindowName != null && newTargetWindowName.length > 0) {

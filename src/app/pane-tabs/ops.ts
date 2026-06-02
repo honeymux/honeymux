@@ -33,6 +33,7 @@ import {
   refreshValidatedWindows,
 } from "./runtime-actions.ts";
 import { findPaneTabGroupByPaneId, findPaneTabGroupEntriesByWindowId, groupOwnsHostWindowName } from "./selectors.ts";
+import { STAGING_PLACEHOLDER_NAME, TAB_WINDOW_OPTION, isManagedTabWindow } from "./tab-window-marker.ts";
 import {
   type TabRemovalPlan,
   planGroupTabRemoval,
@@ -40,12 +41,7 @@ import {
   planReorderTabs,
   planSwitchTab,
 } from "./transitions.ts";
-import {
-  applyAutomaticRenameModeForPane,
-  hydrateAutomaticRenameModes,
-  listPaneWindowIdMap,
-  listWindowNameMap,
-} from "./window-policy.ts";
+import { applyAutomaticRenameModeForPane, hydrateAutomaticRenameModes, listPaneWindowIdMap } from "./window-policy.ts";
 
 export interface PaneTabOps {
   doBootstrapUngroupedPanes: () => Promise<void>;
@@ -420,8 +416,14 @@ export function createPaneTabOps({
     }
 
     const previousGroups = new Map(groupsRef.current);
-    const { paneId: newPaneId, windowId: newWindowId } = await client.newDetachedWindow("_hmx_tab");
+    const { paneId: newPaneId, windowId: newWindowId } = await client.newDetachedWindow(STAGING_PLACEHOLDER_NAME);
 
+    // Mark the freshly created window as staging before yielding so it is
+    // filtered out of Honeymux's window lists the moment %window-add fires;
+    // the placeholder name is the same-tick fast-path until this lands.
+    try {
+      await client.runCommand(`set-option -w -t ${newWindowId} ${TAB_WINDOW_OPTION} 1`);
+    } catch {}
     try {
       await client.disableAutomaticRename(newWindowId);
     } catch {}
@@ -551,6 +553,10 @@ export function createPaneTabOps({
         incomingPaneId: switchPlan.targetPaneId,
         resizeHeight: group.slotHeight,
         resizeWidth: group.slotWidth,
+        // Land on the host window atomically with the swap so a redirect from
+        // another window's choose-tree doesn't flash the old tab. When the
+        // caller is already on the host this is a no-op select.
+        selectWindowId: currentWindowId,
         tabActiveIndex: updatedGroup.activeIndex,
         tabs: updatedGroup.tabs,
         visiblePaneId: switchPlan.currentPaneId,
@@ -561,9 +567,9 @@ export function createPaneTabOps({
     } else {
       // Compute the name the promoted (target) window should carry once the
       // swap finalizes.  Passing it into materializeWindowTabSwitch lets that
-      // helper rename the staging window inside the atomic command chain
+      // helper rename the promoted window inside the atomic command chain
       // that performs the swap, so the tree and tab bar observe only the
-      // final state — no transient _hmx_tab frame.
+      // final state — no transient staging frame.
       const activeTabLabel = updatedGroup.tabs[updatedGroup.activeIndex]?.label;
       const newTargetWindowName = groupOwnsHostWindowName(updatedGroup)
         ? (updatedGroup.explicitWindowName ?? activeTabLabel ?? "shell")
@@ -908,8 +914,8 @@ export function createPaneTabOps({
 
   /**
    * Create single-tab groups for panes in the current session that don't
-   * already belong to a tab group.  Skips panes in internal `_hmx_` windows
-   * (staging windows for inactive tabs) and dead panes.
+   * already belong to a tab group.  Skips panes in staging windows (the
+   * detached windows that park inactive tabs) and dead panes.
    */
   async function doBootstrapUngroupedPanes(): Promise<void> {
     const client = clientRef.current;
@@ -918,8 +924,12 @@ export function createPaneTabOps({
     const paneStateById = await listPaneSnapshot(client);
     if (!paneStateById) return;
 
-    const windowNameMap = await listWindowNameMap(client);
-    if (!windowNameMap) return;
+    let stagingWindowIds: Set<string>;
+    try {
+      stagingWindowIds = new Set((await client.listWindows()).filter(isManagedTabWindow).map((window) => window.id));
+    } catch {
+      return;
+    }
 
     // Collect all pane IDs already covered by a tab group.
     const groupedPaneIds = new Set<string>();
@@ -934,8 +944,7 @@ export function createPaneTabOps({
       if (pane.sessionName !== currentSessionName) continue;
       if (groupedPaneIds.has(pane.paneId)) continue;
       if (pane.remoteHost) continue;
-      const windowName = windowNameMap.get(pane.windowId) ?? "";
-      if (windowName.startsWith("_hmx_")) continue;
+      if (stagingWindowIds.has(pane.windowId)) continue;
       ungrouped.push(pane);
     }
 

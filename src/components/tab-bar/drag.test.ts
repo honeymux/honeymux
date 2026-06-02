@@ -3,9 +3,9 @@ import { describe, expect, it } from "bun:test";
 import { computeDragDisplayState, computeDropIndexForDrag } from "./drag.ts";
 
 const windows = [
-  { active: false, id: "@1", index: 1, layout: "", name: "one", paneId: "%1" },
-  { active: true, id: "@2", index: 2, layout: "", name: "two", paneId: "%2" },
-  { active: false, id: "@3", index: 3, layout: "", name: "three", paneId: "%3" },
+  { active: false, id: "@1", index: 1, layout: "", name: "one", paneId: "%1", tabWindow: false },
+  { active: true, id: "@2", index: 2, layout: "", name: "two", paneId: "%2", tabWindow: false },
+  { active: false, id: "@3", index: 3, layout: "", name: "three", paneId: "%3", tabWindow: false },
 ];
 
 describe("tab-bar drag helpers", () => {
@@ -68,9 +68,9 @@ describe("tab-bar drag helpers", () => {
 
   it("uses terminal cell widths for wide tab labels", () => {
     const wideWindows = [
-      { active: false, id: "@1", index: 1, layout: "", name: "漢字", paneId: "%1" },
-      { active: true, id: "@2", index: 2, layout: "", name: "vim", paneId: "%2" },
-      { active: false, id: "@3", index: 3, layout: "", name: "編譯器", paneId: "%3" },
+      { active: false, id: "@1", index: 1, layout: "", name: "漢字", paneId: "%1", tabWindow: false },
+      { active: true, id: "@2", index: 2, layout: "", name: "vim", paneId: "%2", tabWindow: false },
+      { active: false, id: "@3", index: 3, layout: "", name: "編譯器", paneId: "%3", tabWindow: false },
     ];
 
     expect(computeDropIndexForDrag(wideWindows, 0, 2, 2)).toBe(0);

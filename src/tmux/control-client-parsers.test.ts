@@ -22,9 +22,9 @@ import {
 
 describe("control client parsers", () => {
   test("parses windows and sessions output", () => {
-    expect(parseListWindowsOutput("@1\t0\tmain\t1\t%3\tlayout-1\n@2\t1\ttop\t0\t%7\tlayout-2")).toEqual([
-      { active: true, id: "@1", index: 0, layout: "layout-1", name: "main", paneId: "%3" },
-      { active: false, id: "@2", index: 1, layout: "layout-2", name: "top", paneId: "%7" },
+    expect(parseListWindowsOutput("@1\t0\tmain\t1\t%3\tlayout-1\t\n@2\t1\ttop\t0\t%7\tlayout-2\t1")).toEqual([
+      { active: true, id: "@1", index: 0, layout: "layout-1", name: "main", paneId: "%3", tabWindow: false },
+      { active: false, id: "@2", index: 1, layout: "layout-2", name: "top", paneId: "%7", tabWindow: true },
     ]);
 
     expect(parseListSessionsOutput("$1\talpha\t1\t#ff0\n$2\tbeta\t0\t")).toEqual([
@@ -36,12 +36,13 @@ describe("control client parsers", () => {
   test("parses session info outputs with pane-tab markers", () => {
     const info = parseSessionInfoOutputs(
       "alpha",
-      " @1\t3\tbash\n @2\t1\t_hmx_tab",
+      " @1\t3\tbash\t\n @2\t1\teditor\t1",
       " alpha\t%3\t@1\t1\t1\n alpha\t%4\t@1\t1\t\n alpha\t%5\t@2\t\t\n beta\t%8\t@9\t1\t1",
     );
 
     expect(info.windowPanes.get("@1")).toBe(3);
-    expect(info.windowNames.get("@2")).toBe("_hmx_tab");
+    expect(info.windowNames.get("@2")).toBe("editor");
+    expect([...info.tabWindows]).toEqual(["@2"]);
     expect(info.paneWindowIds.get("%4")).toBe("@1");
     expect([...info.paneTabMembers]).toEqual(["%3", "%4"]);
     expect([...info.paneTabActive]).toEqual(["%3"]);
@@ -57,7 +58,9 @@ describe("control client parsers", () => {
     );
 
     expect(tree.sessions).toEqual([{ attached: true, color: "#f00", id: "$1", name: "alpha" }]);
-    expect(tree.windows).toEqual([{ active: true, id: "@1", index: 0, name: "main", sessionName: "alpha" }]);
+    expect(tree.windows).toEqual([
+      { active: true, id: "@1", index: 0, name: "main", sessionName: "alpha", tabWindow: false },
+    ]);
     expect(tree.panes).toEqual([
       {
         active: true,
@@ -90,7 +93,7 @@ describe("control client parsers", () => {
     // Previously `line.trim().split("\t")` collapsed trailing empties, so a
     // transient staging window with an unset window_active flag produced a
     // row with `name: undefined`, crashing consumers that assumed the typed
-    // shape (e.g. `window.name.startsWith(...)`).
+    // shape (e.g. `isManagedTabWindow` reading `window.name`).
     const tree = parseFullTreeOutputs(
       "$1\talpha\t1\t#f00",
       [
@@ -113,9 +116,9 @@ describe("control client parsers", () => {
     );
 
     expect(tree.windows).toEqual([
-      { active: true, id: "@1", index: 0, name: "main", sessionName: "alpha" },
-      { active: false, id: "@2", index: 1, name: "", sessionName: "alpha" },
-      { active: false, id: "@3", index: 2, name: "name", sessionName: "alpha" },
+      { active: true, id: "@1", index: 0, name: "main", sessionName: "alpha", tabWindow: false },
+      { active: false, id: "@2", index: 1, name: "", sessionName: "alpha", tabWindow: false },
+      { active: false, id: "@3", index: 2, name: "name", sessionName: "alpha", tabWindow: false },
     ]);
     expect(tree.panes.map((p) => p.id)).toEqual(["%3", "%4"]);
   });

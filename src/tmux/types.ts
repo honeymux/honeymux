@@ -51,4 +51,6 @@ export interface TmuxWindow {
   layout: string; // e.g. "bb62,120x38,0,0{60x38,0,0,1,59x38,61,0,2}"
   name: string;
   paneId: string; // e.g. "%1"
+  /** True when this is a pane-tab staging window (`@hmx-tab-window` is set). */
+  tabWindow: boolean;
 }
