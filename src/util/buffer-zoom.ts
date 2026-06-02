@@ -199,13 +199,17 @@ export async function enterBufferZoom({
     // stashed in savedTitle above and restored via OSC 2 on exit.
     writeTerminalOutput("\x1b]2;[[ BUFFER ZOOM ACTIVE ]] · Press Esc to dismiss\x07");
 
-    // Re-push the Kitty keyboard protocol while we own the screen. With flag 8
-    // (report all keys as escape codes) active, Escape arrives unambiguously as
-    // \x1b[27u rather than a bare ESC that could also be the prefix of an
-    // arrow/function-key sequence, so the dismiss key is detected cleanly.
-    // The renderer's copy was disabled before suspend; this is a standalone
-    // push that we pop before resuming.
-    writeTerminalOutput(`\x1b[>${kittyKeyboardFlags}u`);
+    // Push the Kitty keyboard protocol with no enhancement flags (0) while we
+    // own the screen. Crucially we must NOT request flag 8 (report all keys as
+    // escape codes) here: with flag 8, Ghostty forwards Cmd/Super shortcuts
+    // like Cmd+A (select-all) and Cmd+C (copy) to the program as input, and the
+    // terminal clears the active text selection whenever input is sent to the
+    // program — wiping the user's selection the instant they make it. With
+    // enhancements off, those shortcuts stay with the terminal/OS and the
+    // selection survives, so the zoomed buffer can actually be selected and
+    // copied. Escape still arrives as a bare ESC byte, which is all we need to
+    // dismiss. This is a standalone push that we pop before resuming.
+    writeTerminalOutput("\x1b[>0u");
 
     // Show cursor at top-left and start a glow animation by cycling
     // its color through grayscale shades via OSC 12.  A sine wave maps
