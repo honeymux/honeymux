@@ -2,6 +2,26 @@
 
 ## Unreleased
 
+## v0.109.0 - 2026-06-02
+
+- Add review workflow entry shortcut to agents dialog
+- Buffer zoom view is now dismissed via Esc key only
+- Change Enter keypress in the agents dialog to take user to that agent's pane
+- Disable "Convert to remote" option from the dropdown menu on multi-tab panes
+- During profile spawn, settle the workspace with the top-leftmost pane focused
+- Ensure SSH agent forwarding is maintained for remote-backed panes after pane recovery
+- Fix bug with input routing when a pop-up dialog spawned in front of the Quick Terminal
+- Fix bugs that caused false-positive agent hook consent dialogs for remote servers
+- Fix issue preventing correct Cmd+A (Select All) behavior in Ghostty during buffer zoom
+- Fix issue where first agent row wasn't highlighted in the sidebar during review flow entry
+- Fix issue with perm latching during same-window cross-pane access
+- Fix prompt column flickering in zoomed agents view
+- Fix several bugs in the remote pane mirroring implementation, plus related hardening
+- Fix sidebar focus state after review workflow exit
+- Prevent PTY bridge from unnecesasry activation in the zoomed agents view
+- Spawn saved layout profiles via single tmux command chain
+- Write proxy subprocess startup failures to honeymux.log
+
 ## v0.108.2 - 2026-05-25
 
 - Better handling of socket write failures to remote-backed panes when under PTY backpressure
