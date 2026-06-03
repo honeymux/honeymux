@@ -71,6 +71,12 @@ export class TmuxControlClient extends EventEmitter {
    * condition worth surfacing to the user.
    */
   cleanExit = false;
+  /**
+   * The reason string from tmux's `%exit [reason]` line (e.g. `server exited`,
+   * `exited unexpectedly`, `detached`), or null if the stream closed without a
+   * `%exit`. Recorded purely for exit diagnostics.
+   */
+  exitReason: null | string = null;
   private closed = false;
   private lastClientSize: ControlClientSize | null = null;
   private parser: ControlModeParser | null = null;
@@ -1073,8 +1079,9 @@ export class TmuxControlClient extends EventEmitter {
       notifications: {
         onClientSessionChanged: (clientName, sessionId, sessionName) =>
           this.emit("client-session-changed", clientName, sessionId, sessionName),
-        onExit: () => {
+        onExit: (reason) => {
           this.cleanExit = true;
+          this.exitReason = reason;
           this.closed = true;
           // tmux-exit signals a clean protocol-level exit (e.g. last session
           // ended, kill-server). Consumers that need to distinguish this
