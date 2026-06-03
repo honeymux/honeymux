@@ -190,6 +190,46 @@ describe("muxotron focus and agent selection helpers", () => {
       ).toBe("waiting");
     });
 
+    test("perm-latch stays pinned to its agent when another agent's request arrives", () => {
+      // User is latched to Claude and typing; Claude's prompt is now answered
+      // (alive), and Codex has just raised a newer unanswered request.
+      const claude = makeAgent({ paneId: "%5", sessionId: "claude", startedAt: 10, status: "alive" });
+      const codex = makeAgent({ paneId: "%6", sessionId: "codex", startedAt: 50, status: "unanswered" });
+      const base = {
+        activePaneId: "%2",
+        agentSessions: [claude, codex],
+        muxotronFocusActive: true,
+        reviewLatched: false,
+        treeSelectedSession: null,
+        zoomAction: null,
+        zoomSticky: stickyOn,
+      };
+      // Without a pin the live bridge jumps to Codex's new request (the bug).
+      expect(computeInteractiveAgent({ ...base })?.sessionId).toBe("codex");
+      // Pinned to Claude, the bridge holds even though Claude is no longer the
+      // oldest unanswered agent.
+      expect(computeInteractiveAgent({ ...base, pinnedPermSessionId: "claude" })?.sessionId).toBe("claude");
+    });
+
+    test("perm-latch pin releases to the oldest request once the pinned agent ends", () => {
+      // The pinned agent ended; the pin no longer matches a live agent, so the
+      // latch advances to the current oldest unanswered request rather than
+      // sticking to a dead session.
+      const codex = makeAgent({ paneId: "%6", sessionId: "codex", startedAt: 50, status: "unanswered" });
+      expect(
+        computeInteractiveAgent({
+          activePaneId: "%2",
+          agentSessions: [codex],
+          muxotronFocusActive: true,
+          pinnedPermSessionId: "claude",
+          reviewLatched: false,
+          treeSelectedSession: null,
+          zoomAction: null,
+          zoomSticky: stickyOn,
+        })?.sessionId,
+      ).toBe("codex");
+    });
+
     test("fullscreen agents-tree zoom (zoomAgentsView) is a pure viewer — never auto-bridges", () => {
       const unanswered = makeAgent({ paneId: "%5", sessionId: "waiting", startedAt: 10 });
       expect(
