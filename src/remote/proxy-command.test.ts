@@ -4,7 +4,7 @@ import { buildRemoteProxyProcessArgv, isBundledEntryPath } from "./proxy-command
 
 describe("buildRemoteProxyProcessArgv", () => {
   test("source mode: spawns the JSX-free proxy.ts, wrapped to tee crash stderr into honeymux.log", () => {
-    const argv = buildRemoteProxyProcessArgv("%10", "token-123", {
+    const argv = buildRemoteProxyProcessArgv("%10", "token-123", "/run/user/1000/honeymux/hmx-remote-proxy.sock", {
       execPath: "/home/aaron/.bun/bin/bun",
       logPath: "/tmp/honeymux.log",
       mainPath: "/home/aaron/src/honeymux/src/index.tsx",
@@ -21,11 +21,12 @@ describe("buildRemoteProxyProcessArgv", () => {
       "/home/aaron/src/honeymux/src/remote/proxy.ts",
       "%10",
       "token-123",
+      "/run/user/1000/honeymux/hmx-remote-proxy.sock",
     ]);
   });
 
   test("bundled mode: re-enters the installed executable with the flag, same crash-capture wrap", () => {
-    const argv = buildRemoteProxyProcessArgv("%10", "token-123", {
+    const argv = buildRemoteProxyProcessArgv("%10", "token-123", "/run/user/1000/honeymux/hmx-remote-proxy.sock", {
       execPath: "/home/aaron/bin/hmx",
       logPath: "/tmp/honeymux.log",
       mainPath: "/$bunfs/root/hmx-linux-x64",
@@ -40,6 +41,7 @@ describe("buildRemoteProxyProcessArgv", () => {
       "--internal-remote-proxy",
       "%10",
       "token-123",
+      "/run/user/1000/honeymux/hmx-remote-proxy.sock",
     ]);
   });
 });

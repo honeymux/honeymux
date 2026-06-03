@@ -272,9 +272,11 @@ describe("RemoteServerManager remote hook ingress", () => {
     expect(respawnPane).toHaveBeenCalledTimes(1);
     const [paneId, argv] = respawnPane.mock.calls[0]! as unknown as [string, string[]];
     expect(paneId).toBe("%10");
-    const proxyToken = argv.at(-1);
+    // socketPath is the final argv element; the proxy token precedes it.
+    const proxyToken = argv.at(-2);
     expect(proxyToken).toEqual(expect.any(String));
-    expect(argv).toEqual(buildRemoteProxyProcessArgv("%10", proxyToken!));
+    const socketPath = (manager as any).proxyServer.getSocketPath();
+    expect(argv).toEqual(buildRemoteProxyProcessArgv("%10", proxyToken!, socketPath));
   });
 
   it("reports remote conversion availability from connection and mirror state", () => {
@@ -456,6 +458,7 @@ describe("RemoteServerManager remote hook ingress", () => {
     (manager as any).proxyServer = {
       expectProxy,
       forgetProxy,
+      getSocketPath: () => "/run/user/1000/honeymux/hmx-remote-proxy.sock",
     };
 
     (manager as any).clients.set("dev-box", {
@@ -768,7 +771,11 @@ describe("RemoteServerManager remote hook ingress", () => {
 
     const manager = new RemoteServerManager(localClient, [{ host: "dev-box", name: "dev-box" }]);
     const expectProxy = mock((_paneId: string, _token: string) => {});
-    (manager as any).proxyServer = { expectProxy, forgetProxy: mock(() => {}) };
+    (manager as any).proxyServer = {
+      expectProxy,
+      forgetProxy: mock(() => {}),
+      getSocketPath: () => "/run/user/1000/honeymux/hmx-remote-proxy.sock",
+    };
 
     (manager as any).clients.set("dev-box", { isConnected: true });
     (manager as any).mirrors.set("dev-box", {
@@ -792,7 +799,9 @@ describe("RemoteServerManager remote hook ingress", () => {
     expect(respawnPane).toHaveBeenCalledTimes(1);
     const [respawnPaneId, respawnArgv] = respawnPane.mock.calls[0]! as unknown as [string, string[]];
     expect(respawnPaneId).toBe("%10");
-    expect(respawnArgv).toEqual(buildRemoteProxyProcessArgv("%10", expectedToken));
+    expect(respawnArgv).toEqual(
+      buildRemoteProxyProcessArgv("%10", expectedToken, "/run/user/1000/honeymux/hmx-remote-proxy.sock"),
+    );
 
     // %11 has no host, %12 is a different server — neither should be touched.
     expect(Boolean((manager as any).routing.lookup("%11"))).toBe(false);
@@ -1001,7 +1010,8 @@ describe("RemoteServerManager remote hook ingress", () => {
     await manager.convertPane("%10", "dev-box");
 
     const [, argv] = respawnPane.mock.calls[0]! as unknown as [string, string[]];
-    const proxyToken = argv.at(-1)!;
+    // socketPath is the final argv element; the proxy token precedes it.
+    const proxyToken = argv.at(-2)!;
 
     const tokenSet = runCommandArgs.mock.calls
       .map((call: unknown[]) => call[0] as string[])

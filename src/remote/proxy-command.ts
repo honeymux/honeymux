@@ -29,8 +29,13 @@ interface RemoteProxyProcessRuntime {
 export function buildRemoteProxyProcessArgv(
   localPaneId: string,
   proxyToken: string,
+  socketPath: string,
   runtime: RemoteProxyProcessRuntime = currentRemoteProxyProcessRuntime(),
 ): string[] {
+  // socketPath is resolved by honeymux (the listening side) and passed through
+  // verbatim so the spawned proxy connects to exactly the socket honeymux bound,
+  // never re-deriving it from the tmux pane's inherited environment.
+  //
   // Bundled: the binary embeds proxy.ts, so re-enter the binary with the flag —
   // the index.tsx CLI dispatch routes it to the proxy before any heavy work.
   if (isBundledEntryPath(runtime.mainPath)) {
@@ -39,6 +44,7 @@ export function buildRemoteProxyProcessArgv(
       INTERNAL_REMOTE_PROXY_FLAG,
       localPaneId,
       proxyToken,
+      socketPath,
     ]);
   }
 
@@ -48,7 +54,13 @@ export function buildRemoteProxyProcessArgv(
   // directory — so re-entering index.tsx fails in any pane whose cwd is outside
   // this project ("Cannot find module '@emotion/react/jsx-dev-runtime'"). proxy.ts
   // pulls in no JSX/OpenTUI, so it loads identically from any cwd.
-  return wrapWithCrashCapture(runtime.logPath, [runtime.execPath, runtime.proxyScriptPath, localPaneId, proxyToken]);
+  return wrapWithCrashCapture(runtime.logPath, [
+    runtime.execPath,
+    runtime.proxyScriptPath,
+    localPaneId,
+    proxyToken,
+    socketPath,
+  ]);
 }
 
 export function getInternalRemoteProxyFlag(): string {

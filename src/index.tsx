@@ -76,7 +76,7 @@ if (cliArgs.kind === "error") {
 }
 
 if (cliArgs.kind === "internal-remote-proxy") {
-  await runRemoteProxyProcess(cliArgs.localPaneId, cliArgs.proxyToken);
+  await runRemoteProxyProcess(cliArgs.localPaneId, cliArgs.proxyToken, cliArgs.socketPath);
   process.exit(0);
 }
 
