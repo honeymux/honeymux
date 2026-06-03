@@ -19,6 +19,13 @@ interface InteractiveAgentInputs {
   activePaneId: null | string;
   agentSessions: AgentSession[];
   muxotronFocusActive: boolean;
+  /**
+   * sessionId of the agent the perm-latch is already bridged to, if any. Holds
+   * the bridge steady so a newly-arriving permission from a different agent
+   * can't hijack the surface the user is actively typing into. Ignored in
+   * tree-select mode (that path pins via `treeSelectedSession`).
+   */
+  pinnedPermSessionId?: null | string;
   reviewLatched: boolean;
   treeSelectedSession: AgentSession | null;
   zoomAction: KeyAction | null;
@@ -111,6 +118,7 @@ export function computeInteractiveAgent(inputs: InteractiveAgentInputs): AgentSe
     activePaneId,
     agentSessions,
     muxotronFocusActive,
+    pinnedPermSessionId,
     reviewLatched,
     treeSelectedSession,
     zoomAction,
@@ -123,11 +131,16 @@ export function computeInteractiveAgent(inputs: InteractiveAgentInputs): AgentSe
     if (!reviewLatched) return null;
     candidate = treeSelectedSession;
   } else if (muxotronFocusActive && zoomSticky.zoomAgentsView && zoomAction === null) {
-    // Prefer the oldest unanswered agent (so sticky-zoom targets pending
-    // permission prompts), falling back to any live non-dismissed agent in
-    // another pane so the user can still type into idle agents.
     const active = agentSessions.filter((s) => !s.dismissed && s.status !== "ended" && s.paneId !== activePaneId);
+    // Once latched, stay on that agent: a newly-arriving permission from a
+    // different agent must not steal the bridge the user is actively typing
+    // into. The pin holds while its agent stays live; only when the pin is
+    // gone (latch released and re-engaged, or the agent ended) do we pick a
+    // fresh target — the oldest unanswered agent so sticky-zoom lands on a
+    // pending prompt, else any live non-dismissed agent in another pane.
+    const pinned = pinnedPermSessionId ? active.find((s) => s.sessionId === pinnedPermSessionId) : undefined;
     candidate =
+      pinned ??
       active.filter((s) => s.status === "unanswered").sort((a, b) => a.startedAt - b.startedAt)[0] ??
       active.sort((a, b) => a.startedAt - b.startedAt)[0] ??
       null;
@@ -219,6 +232,10 @@ export function useMuxotronFocusAndAgentSelection({
   const [reviewLatched, setReviewLatched] = useState(false);
   reviewLatchedRef.current = reviewLatched;
   agentPreviewRef.current = !!treeSelectedSession && !reviewLatched;
+
+  // sessionId the perm-latch is currently bridged to, held so the target stays
+  // put while the user types instead of jumping to a newer agent's request.
+  const permLatchPinnedSessionIdRef = useRef<null | string>(null);
 
   const [capturedPaneLines, setCapturedPaneLines] = useState<null | string[]>(null);
 
@@ -321,15 +338,23 @@ export function useMuxotronFocusAndAgentSelection({
   };
   reEncodeActiveRef.current = true;
 
+  // The perm-latch (sticky agents-view zoom, no tree selection) is the surface
+  // whose target can drift between agents as their statuses change; pin it.
+  const permLatchActive =
+    !treeSelectedSession && muxotronFocusActive && zoomStickyRef.current.zoomAgentsView && zoomAction === null;
   const interactiveAgent = computeInteractiveAgent({
     activePaneId,
     agentSessions,
     muxotronFocusActive,
+    pinnedPermSessionId: permLatchActive ? permLatchPinnedSessionIdRef.current : null,
     reviewLatched,
     treeSelectedSession,
     zoomAction,
     zoomSticky: zoomStickyRef.current,
   });
+  // Remember the latched agent while engaged; clear on release so the next
+  // engage targets the current oldest request, not a stale pin.
+  permLatchPinnedSessionIdRef.current = permLatchActive ? (interactiveAgent?.sessionId ?? null) : null;
   interactiveAgentRef.current = interactiveAgent;
 
   // Broader "attached" agent: used for PTY bridging / rendering. In preview
