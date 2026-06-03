@@ -6,19 +6,28 @@
  * then receives remote %output data and writes it to stdout (which appears
  * in the local tmux pane).
  *
- * Usage: bun src/remote/proxy.ts <localPaneId> <token>
+ * Usage: bun src/remote/proxy.ts <localPaneId> <token> <socketPath>
+ *
+ * The socket path is supplied by honeymux (which knows exactly where its
+ * RemoteProxyServer is listening) rather than re-derived here: this process is
+ * spawned by tmux `respawn-pane` and inherits the tmux server's frozen
+ * environment, whose XDG_RUNTIME_DIR can differ from honeymux's own. Re-deriving
+ * the path would resolve a different socket and fail every connect.
  */
 import type { Socket } from "bun";
 
 import type { SocketWriteQueue } from "./socket-write-queue.ts";
 
-import { getRemoteProxySocketPath } from "./proxy-server.ts";
 import { TmuxQueryStripper } from "./query-stripper.ts";
 import { createSocketWriteQueue } from "./socket-write-queue.ts";
 
 const MAX_PROXY_INPUT_QUEUE_BYTES = 1024 * 1024;
 
-export async function runRemoteProxyProcess(localPaneId: string, proxyToken: string): Promise<void> {
+export async function runRemoteProxyProcess(
+  localPaneId: string,
+  proxyToken: string,
+  socketPath: string,
+): Promise<void> {
   // The proxy's pty is in canonical mode with echo by default. Raw mode
   // disables kernel-side echo, which is what kept tmux's replies to query
   // escape sequences from being re-rendered as `^[` in the pane.
@@ -36,7 +45,6 @@ export async function runRemoteProxyProcess(localPaneId: string, proxyToken: str
   }
   stdin.resume();
 
-  const socketPath = getRemoteProxySocketPath();
   const queryStripper = new TmuxQueryStripper();
   let activeSocket: Socket<unknown> | null = null;
   let activeSocketWriter: SocketWriteQueue | null = null;
@@ -107,7 +115,7 @@ export async function runRemoteProxyProcess(localPaneId: string, proxyToken: str
 async function main(): Promise<void> {
   const localPaneId = process.argv[2];
   if (!localPaneId) {
-    console.error("Usage: proxy.ts <paneId> <token>");
+    console.error("Usage: proxy.ts <paneId> <token> <socketPath>");
     process.exit(1);
   }
 
@@ -117,7 +125,13 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  await runRemoteProxyProcess(localPaneId, proxyToken);
+  const socketPath = process.argv[4];
+  if (!socketPath) {
+    console.error("Proxy socket path missing");
+    process.exit(1);
+  }
+
+  await runRemoteProxyProcess(localPaneId, proxyToken, socketPath);
 }
 
 if (import.meta.main) {

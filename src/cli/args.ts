@@ -12,6 +12,7 @@ type CliParseResult =
       kind: "internal-remote-proxy";
       localPaneId: string;
       proxyToken: string;
+      socketPath: string;
     }
   | { kind: "version" };
 
@@ -63,10 +64,14 @@ export function parseCliArgs(args: string[]): CliParseResult {
       if (proxyToken === undefined) {
         return { kind: "error", message: `honeymux: option '${internalRemoteProxyFlag}' requires a proxy token` };
       }
-      if (args[i + 3] !== undefined) {
-        return { kind: "error", message: `honeymux: unexpected argument '${args[i + 3]}'` };
+      const socketPath = args[i + 3];
+      if (socketPath === undefined) {
+        return { kind: "error", message: `honeymux: option '${internalRemoteProxyFlag}' requires a socket path` };
       }
-      return { kind: "internal-remote-proxy", localPaneId, proxyToken };
+      if (args[i + 4] !== undefined) {
+        return { kind: "error", message: `honeymux: unexpected argument '${args[i + 4]}'` };
+      }
+      return { kind: "internal-remote-proxy", localPaneId, proxyToken, socketPath };
     }
 
     if (parsingOptions && arg === "--server") {

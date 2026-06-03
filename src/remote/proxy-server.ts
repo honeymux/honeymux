@@ -60,6 +60,15 @@ export class RemoteProxyServer extends EventEmitter {
     this.pendingTokens.delete(paneId);
   }
 
+  /**
+   * The Unix socket path this server listens on. Callers pass it to spawned
+   * proxy processes so they connect to exactly this socket rather than
+   * re-deriving the path from their own (tmux-inherited) environment.
+   */
+  getSocketPath(): string {
+    return this.socketPath;
+  }
+
   /** Send remote %output bytes to the proxy for a specific local pane. */
   sendOutput(localPaneId: string, data: Uint8Array): void {
     const socket = this.proxyConnections.get(localPaneId);

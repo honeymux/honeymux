@@ -225,7 +225,10 @@ export class RemoteServerManager extends EventEmitter {
       await this.updatePaneBorder(localPaneId, serverName);
 
       // Respawn the local pane with the proxy process
-      await this.localClient.respawnPane(localPaneId, buildRemoteProxyProcessArgv(localPaneId, proxyToken));
+      await this.localClient.respawnPane(
+        localPaneId,
+        buildRemoteProxyProcessArgv(localPaneId, proxyToken, this.proxyServer.getSocketPath()),
+      );
     } catch (error) {
       this.proxyServer.forgetProxy(localPaneId);
       releaseRouting();
@@ -379,7 +382,10 @@ export class RemoteServerManager extends EventEmitter {
         await this.setLocalPaneOption(localPaneId, "@hmx-remote-pane", remotePaneId);
         await this.setLocalPaneOption(localPaneId, "@hmx-remote-token", newToken);
         await this.updatePaneBorder(localPaneId, serverName);
-        await this.localClient.respawnPane(localPaneId, buildRemoteProxyProcessArgv(localPaneId, newToken));
+        await this.localClient.respawnPane(
+          localPaneId,
+          buildRemoteProxyProcessArgv(localPaneId, newToken, this.proxyServer.getSocketPath()),
+        );
         this.emit("pane-converted", localPaneId, serverName);
       } catch (err) {
         this.proxyServer.forgetProxy(localPaneId);

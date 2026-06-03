@@ -45,10 +45,13 @@ describe("parseCliArgs", () => {
   });
 
   test("parses the internal remote proxy mode", () => {
-    expect(parseCliArgs(["--internal-remote-proxy", "%10", "token-123"])).toEqual({
+    expect(
+      parseCliArgs(["--internal-remote-proxy", "%10", "token-123", "/run/user/1000/honeymux/hmx-remote-proxy.sock"]),
+    ).toEqual({
       kind: "internal-remote-proxy",
       localPaneId: "%10",
       proxyToken: "token-123",
+      socketPath: "/run/user/1000/honeymux/hmx-remote-proxy.sock",
     });
   });
 
@@ -63,6 +66,13 @@ describe("parseCliArgs", () => {
     expect(parseCliArgs(["--internal-remote-proxy", "%10"])).toEqual({
       kind: "error",
       message: "honeymux: option '--internal-remote-proxy' requires a proxy token",
+    });
+  });
+
+  test("rejects a missing internal remote proxy socket path", () => {
+    expect(parseCliArgs(["--internal-remote-proxy", "%10", "token-123"])).toEqual({
+      kind: "error",
+      message: "honeymux: option '--internal-remote-proxy' requires a socket path",
     });
   });
 
