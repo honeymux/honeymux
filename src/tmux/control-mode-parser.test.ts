@@ -12,7 +12,7 @@ import {
 function createParserHarness() {
   const pendingQueue: ControlModePendingCommand[] = [];
   const onReady = mock(() => {});
-  const onExit = mock(() => {});
+  const onExit = mock((_reason: string) => {});
   const onWindowAdd = mock((_windowId: string) => {});
   const onPaneOutputBytes = mock((_paneId: string, _data: Uint8Array) => {});
   const onSessionRenamed = mock((_sessionId: string, _sessionName: string) => {});
@@ -28,9 +28,9 @@ function createParserHarness() {
     isClosed: () => closed,
     notifications: {
       onClientSessionChanged,
-      onExit: () => {
+      onExit: (reason) => {
         closed = true;
-        onExit();
+        onExit(reason);
       },
       onPaneOutput,
       onPaneOutputBytes,
@@ -172,6 +172,16 @@ describe("ControlModeParser", () => {
     parser.parseLine("%exit");
 
     expect(onExit).toHaveBeenCalledTimes(1);
+    expect(onExit).toHaveBeenCalledWith("");
+  });
+
+  test("captures the %exit reason when tmux supplies one", () => {
+    const { onExit, parser } = createParserHarness();
+
+    parser.parseLine("%exit server exited");
+
+    expect(onExit).toHaveBeenCalledTimes(1);
+    expect(onExit).toHaveBeenCalledWith("server exited");
   });
 
   test("rejects oversized responses and resynchronizes at the terminator", () => {

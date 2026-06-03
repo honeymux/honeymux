@@ -5,7 +5,7 @@ export interface ControlModePendingCommand {
 
 interface ControlModeNotificationHandlers {
   onClientSessionChanged?: (clientName: string, sessionId: string, sessionName: string) => void;
-  onExit?: () => void;
+  onExit?: (reason: string) => void;
   onLayoutChange?: (windowId: string, layoutString: string) => void;
   onPaneOutput?: (paneId: string, data: string) => void;
   onPaneOutputBytes?: (paneId: string, data: Uint8Array) => void;
@@ -311,7 +311,11 @@ export class ControlModeParser {
     }
 
     if (line.startsWith("%exit")) {
-      this.options.notifications?.onExit?.();
+      // tmux sends `%exit [reason]` — e.g. `server exited`, `exited
+      // unexpectedly`, `detached`. Preserve the reason so exit diagnostics can
+      // tell an orderly server shutdown apart from losing just our session.
+      const reason = line.slice("%exit".length).trim();
+      this.options.notifications?.onExit?.(reason);
       return;
     }
 
