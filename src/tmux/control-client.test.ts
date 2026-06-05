@@ -4,6 +4,7 @@ import {
   TmuxClientClosedError,
   TmuxControlClient,
   isTmuxClientClosedError,
+  isUnexpectedTmuxExit,
   quoteSessionTarget,
 } from "./control-client.ts";
 import { quoteTmuxArg } from "./escape.ts";
@@ -84,6 +85,16 @@ describe("TmuxControlClient connection guards", () => {
     expect(client.cleanExit).toBe(true);
   });
 
+  test("treats `%exit server exited unexpectedly` as a crash, not a clean exit", () => {
+    const client = new TmuxControlClient();
+    const parser = (client as unknown as { createParser: () => { parseLine: (line: string) => void } }).createParser();
+
+    parser.parseLine("%exit server exited unexpectedly");
+
+    expect(client.cleanExit).toBe(false);
+    expect(client.exitReason).toBe("server exited unexpectedly");
+  });
+
   test("rejects mouse flag queries before connect instead of queueing forever", async () => {
     const client = new TmuxControlClient();
 
@@ -102,6 +113,18 @@ describe("TmuxControlClient connection guards", () => {
       expect(error).toBeInstanceOf(TmuxClientClosedError);
       expect(isTmuxClientClosedError(error)).toBe(true);
     }
+  });
+});
+
+describe("isUnexpectedTmuxExit", () => {
+  test("flags an abnormal server exit", () => {
+    expect(isUnexpectedTmuxExit("server exited unexpectedly")).toBe(true);
+  });
+
+  test("treats orderly exit reasons as clean", () => {
+    expect(isUnexpectedTmuxExit("")).toBe(false);
+    expect(isUnexpectedTmuxExit("detached")).toBe(false);
+    expect(isUnexpectedTmuxExit("server exited")).toBe(false);
   });
 });
 

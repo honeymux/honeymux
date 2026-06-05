@@ -64,11 +64,12 @@ export class TmuxClientClosedError extends Error {
  */
 export class TmuxControlClient extends EventEmitter {
   /**
-   * True when tmux sent `%exit` on the control stream (orderly shutdown:
-   * last session ended, kill-server, etc.). False if the stream closed
-   * without `%exit` (crash, SIGKILL, lost connection). Callers use this
-   * to decide whether "exit" represents a clean teardown or a fatal
-   * condition worth surfacing to the user.
+   * True when tmux exited in an orderly way: a `%exit` with no reason,
+   * `detached`, or a clean `server exited` (last session ended, kill-server).
+   * False when the stream closed with no `%exit` at all, OR when tmux reported
+   * `%exit server exited unexpectedly` — both mean the server died abnormally
+   * (crash / OOM / lost connection). Callers use this to decide whether "exit"
+   * is a clean teardown or a fatal condition worth surfacing to the user.
    */
   cleanExit = false;
   /**
@@ -1080,13 +1081,12 @@ export class TmuxControlClient extends EventEmitter {
         onClientSessionChanged: (clientName, sessionId, sessionName) =>
           this.emit("client-session-changed", clientName, sessionId, sessionName),
         onExit: (reason) => {
-          this.cleanExit = true;
           this.exitReason = reason;
+          this.cleanExit = !isUnexpectedTmuxExit(reason);
           this.closed = true;
-          // tmux-exit signals a clean protocol-level exit (e.g. last session
-          // ended, kill-server). Consumers that need to distinguish this
-          // from an SSH pipe death listen for tmux-exit; the plain exit
-          // event still fires below for callers that don't care which.
+          // tmux-exit fires whenever tmux sends a `%exit` (clean or crash) and
+          // distinguishes a protocol-level exit from an SSH pipe death;
+          // callers that don't need that distinction listen for exit.
           this.emit("tmux-exit");
           this.emit("exit");
         },
@@ -1225,6 +1225,16 @@ export function isTmuxClientClosedError(error: unknown): boolean {
   return (
     error.message === "Client closed" || error.message === "Client destroyed" || error.message === "Connection closed"
   );
+}
+
+/**
+ * tmux's control client emits `%exit <reason>` even when the *server* dies
+ * abnormally — the reason is then `server exited unexpectedly`, vs `detached`
+ * or a clean `server exited`. Treat that as a crash so callers surface it
+ * instead of mistaking the `%exit` line itself for an orderly shutdown.
+ */
+export function isUnexpectedTmuxExit(reason: string): boolean {
+  return /unexpectedly/i.test(reason);
 }
 
 export function listPanePidsByIdSync(): Map<string, number> {

@@ -294,12 +294,16 @@ export function registerSessionEventHandlers(
       // tmux gone or listing failed — fall through to shutdown/fatal below
     }
 
-    // No remaining sessions. If the control stream closed without `%exit`,
-    // tmux crashed or lost its connection — surface the fatal dialog.
-    // Otherwise (tmux sent `%exit`) this is a clean shutdown.
+    // No remaining sessions. A crash — the stream closing with no `%exit`, or
+    // tmux reporting `server exited unexpectedly` — is fatal and surfaced to
+    // the user; an orderly `%exit` (detached / clean server shutdown) is not.
     if (!client.cleanExit) {
       const handled = reportFatalError({
-        error: new Error("tmux control stream closed without orderly %exit (server crash or lost connection)"),
+        error: new Error(
+          client.exitReason
+            ? `tmux server exited abnormally: ${client.exitReason}`
+            : "tmux control stream closed without orderly %exit (server crash or lost connection)",
+        ),
         kind: "tmux server unreachable",
         sessionName: attachedSession ?? undefined,
       });
