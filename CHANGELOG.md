@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## v0.109.1 - 2026-06-07
+
+- During agent perm latching, pin the bridge so it can't be overtaken by another agent's incoming permission hook
+- Fix socket path issue that would sometimes prevent successful remote pane conversion
+- Implement more comprehensive detection for tmux server crashes
+- Show tab labels in tmux choose-tree
+
 ## v0.109.0 - 2026-06-02
 
 - Add review workflow entry shortcut to agents dialog
