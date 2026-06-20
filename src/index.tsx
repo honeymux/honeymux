@@ -34,7 +34,7 @@ import {
 } from "./util/instance-lock.ts";
 import { log } from "./util/log.ts";
 import { disableInputModesBeforeShutdown, shutdownRenderer } from "./util/shutdown-renderer.ts";
-import { setTermCaps } from "./util/terminal-caps.ts";
+import { resolveColortermEnv, setTermCaps } from "./util/terminal-caps.ts";
 import { setTerminalName, terminalBaseName } from "./util/terminal-detect.ts";
 import { isLocaleUtf8, setTerminalIsUtf8, terminalIsUtf8 } from "./util/terminal-encoding.ts";
 import { setTerminalOutputRenderer } from "./util/terminal-output.ts";
@@ -235,6 +235,15 @@ if (process.env["HMX_HARNESS_TERM_NAME"]) {
 }
 if (probe.kittyKeyboard) probe.caps.set("KittyKbd", "");
 setTermCaps(probe.caps);
+// OpenTUI (>= 0.2.12) emits 256-color output unless $COLORTERM advertises
+// truecolor. SSH does not forward COLORTERM, so OpenTUI silently degrades to
+// 256-color — every truecolor cell quantizes to the nearest palette entry, and
+// with a non-default host palette (base-palette override) white maps to index
+// 15 and renders as the wrong hue. Honeymux emits 24-bit color and relies on
+// the terminal to down-map (see CLAUDE.md), so advertise truecolor to OpenTUI.
+// Set BEFORE createCliRenderer.
+const colorterm = resolveColortermEnv(process.env["COLORTERM"]);
+if (colorterm) process.env["COLORTERM"] = colorterm;
 setTerminalIsUtf8(probe.isUtf8);
 initTheme(
   themeName,
